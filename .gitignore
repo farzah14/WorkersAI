@@ -27,3 +27,8 @@ supabase/.temp/
 # OS/editor noise
 .DS_Store
 Thumbs.db
+
+# Local dev artifacts
+.playwright-mcp/
+dev-server.log
+worker.log
