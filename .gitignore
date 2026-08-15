@@ -1,0 +1,29 @@
+.worktrees/
+
+# Local secrets
+.env
+.env.*
+!.env.example
+
+# Node / Next.js
+node_modules/
+.next/
+coverage/
+playwright-report/
+test-results/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+dist/
+
+# Supabase local state
+supabase/.temp/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
