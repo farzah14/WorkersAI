@@ -1,0 +1,6 @@
+services:
+  worker:
+    build: ./apps/worker
+    env_file: .env
+    command: ["uv", "run", "python", "-m", "jobmatch_worker.main"]
+    restart: unless-stopped

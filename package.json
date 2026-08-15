@@ -1,0 +1,11 @@
+{
+  "name": "jobmatch-saas",
+  "private": true,
+  "packageManager": "pnpm@10.34.5",
+  "scripts": {
+    "web:dev": "pnpm --dir apps/web dev",
+    "web:test": "pnpm --dir apps/web test",
+    "worker:test": "cd apps/worker && uv run pytest",
+    "check": "pnpm --dir apps/web lint && pnpm --dir apps/web typecheck && cd apps/worker && uv run ruff check . && uv run mypy jobmatch_worker && uv run pytest"
+  }
+}
