@@ -1,5 +1,6 @@
 import asyncio
 import shutil
+import sys
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -17,13 +18,16 @@ from jobmatch_worker.queue import claim_next_item, complete_item, fail_item, ret
 def _storage_client(settings: Settings) -> httpx.AsyncClient:
     return httpx.AsyncClient(
         base_url=f"{settings.supabase_url}/storage/v1",
-        headers={"Authorization": f"Bearer {settings.supabase_service_role_key}"},
+        headers={
+            "Authorization": f"Bearer {settings.supabase_service_role_key}",
+            "apikey": settings.supabase_service_role_key,
+        },
         timeout=60.0,
     )
 
 
-async def _download_cv(client: httpx.AsyncClient, path: str, dest: Path) -> None:
-    response = await client.get(f"/object/{path}")
+async def _download_cv(client: httpx.AsyncClient, bucket: str, path: str, dest: Path) -> None:
+    response = await client.get(f"/object/{bucket}/{path}")
     response.raise_for_status()
     dest.write_bytes(response.content)
 
@@ -45,7 +49,7 @@ async def _set_cv_failed(conn: AsyncConnection[Any], cv_id: str, error: str) -> 
     await conn.execute(
         """
         update public.cvs
-        set extraction_status = 'failed', last_error = %s
+        set extraction_status = 'failed', extraction_error = %s
         where id = %s
         """,
         (error, cv_id),
@@ -76,7 +80,7 @@ async def handle_extract_cv(
         try:
             async with _storage_client(settings) as client:
                 local = Path(tmp_dir) / cv["original_name"]
-                await _download_cv(client, cv["storage_path"], local)
+                await _download_cv(client, settings.cv_bucket, cv["storage_path"], local)
                 text = extract_cv_text(local)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -84,7 +88,7 @@ async def handle_extract_cv(
         storage_path = cv["storage_path"]
         if not cv["retain_original"]:
             async with _storage_client(settings) as client:
-                await client.delete(f"/object/{storage_path}")
+                await client.delete(f"/object/{settings.cv_bucket}/{storage_path}")
             storage_path = None
 
         await _set_cv_extracted(conn, cv_id, text, storage_path)
@@ -124,4 +128,6 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(main())
