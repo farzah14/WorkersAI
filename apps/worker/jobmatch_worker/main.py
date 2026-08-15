@@ -119,6 +119,7 @@ async def handle_extract_cv(
         await _set_cv_failed(conn, cv_id, str(exc))
         await complete_item(conn, str(item["id"]))
     except Exception as exc:  # noqa: BLE001 - heterogeneous transient failures
+        await conn.rollback()
         attempt = int(item.get("attempts") or 0)
         if attempt >= settings.max_attempts:
             await _set_cv_failed(conn, cv_id, "extraction failed")

@@ -4,9 +4,10 @@ import logging
 from typing import Any
 
 from psycopg import AsyncConnection
+from psycopg.errors import UniqueViolation
 from psycopg.types.json import Jsonb
 
-from jobmatch_worker.ai.base import PermanentAiError
+from jobmatch_worker.ai.base import AiProvider, PermanentAiError
 from jobmatch_worker.ai.nvidia import NvidiaProvider
 from jobmatch_worker.ai.ollama import OllamaProvider
 from jobmatch_worker.ai.openrouter import OpenRouterProvider
@@ -20,9 +21,9 @@ logger = logging.getLogger(__name__)
 PROFILE_EXTRACT_OPERATION = "profile_extract"
 
 
-def build_ai_providers(settings: Settings) -> list[Any]:
+def build_ai_providers(settings: Settings) -> list[AiProvider]:
     """Build the ordered AI provider list, skipping providers without credentials."""
-    providers: list[Any] = []
+    providers: list[AiProvider] = []
     for name in (p.strip() for p in settings.ai_provider_order.split(",") if p.strip()):
         if name == "nvidia" and settings.nvidia_api_key and settings.nvidia_model:
             providers.append(
@@ -78,14 +79,6 @@ async def handle_extract_candidate_profile(
         await fail_item(conn, str(item["id"]), "cv has no extracted text")
         return
 
-    version_row = await conn.execute(
-        "select coalesce(max(version), 0) as current_version "
-        "from public.candidate_profiles where cv_id = %s",
-        (cv_id,),
-    )
-    version_result = await version_row.fetchone()
-    next_version = int((version_result or {}).get("current_version") or 0) + 1
-
     providers = build_ai_providers(settings)
     if not providers:
         await fail_item(conn, str(item["id"]), "no AI providers configured")
@@ -94,27 +87,41 @@ async def handle_extract_candidate_profile(
     router = AiRouter(providers, operation=PROFILE_EXTRACT_OPERATION, audit=audit)
     try:
         try:
+            version_row = await conn.execute(
+                "select coalesce(max(version), 0) as current_version "
+                "from public.candidate_profiles where cv_id = %s",
+                (cv_id,),
+            )
+            version_result = await version_row.fetchone()
+            next_version = int((version_result or {}).get("current_version") or 0) + 1
+
             profile = await extract_candidate_profile(cv["extracted_text"], router)
+
+            await conn.execute(
+                """
+                insert into public.candidate_profiles
+                    (user_id, cv_id, version, profile, confirmed_at)
+                values (%s, %s, %s, %s, null)
+                """,
+                (cv["user_id"], cv_id, next_version, Jsonb(profile.model_dump(mode="json"))),
+            )
+            await complete_item(conn, str(item["id"]))
         except PermanentAiError as exc:
             await fail_item(conn, str(item["id"]), str(exc))
-            return
+        except UniqueViolation as exc:
+            await conn.rollback()
+            attempt = int(item.get("attempts") or 0)
+            if attempt >= settings.max_attempts:
+                await fail_item(conn, str(item["id"]), "profile extraction failed")
+            else:
+                await retry_item(conn, str(item["id"]), f"concurrent profile insert: {exc}", attempt)
         except Exception as exc:  # noqa: BLE001 - heterogeneous transient failures
+            await conn.rollback()
             attempt = int(item.get("attempts") or 0)
             if attempt >= settings.max_attempts:
                 await fail_item(conn, str(item["id"]), "profile extraction failed")
             else:
                 await retry_item(conn, str(item["id"]), str(exc), attempt)
-            return
-
-        await conn.execute(
-            """
-            insert into public.candidate_profiles
-                (user_id, cv_id, version, profile, confirmed_at)
-            values (%s, %s, %s, %s, null)
-            """,
-            (cv["user_id"], cv_id, next_version, Jsonb(profile.model_dump(mode="json"))),
-        )
-        await complete_item(conn, str(item["id"]))
     finally:
         await router.aclose()
 

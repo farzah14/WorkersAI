@@ -96,14 +96,27 @@ class FakeCursor:
 
 
 class FakeConn:
-    def __init__(self, responses: list[dict[str, Any] | None] | None = None) -> None:
+    def __init__(
+        self,
+        responses: list[dict[str, Any] | None] | None = None,
+        *,
+        errors: dict[str, Exception] | None = None,
+    ) -> None:
         self.responses = list(responses or [])
+        self.errors = dict(errors or {})
         self.executed: list[tuple[str, Any]] = []
+        self.rolled_back = False
 
     async def execute(self, sql: str, params: Any = None) -> FakeCursor:
         self.executed.append((sql, params))
+        for fragment, exc in self.errors.items():
+            if fragment in sql:
+                raise exc
         row = self.responses.pop(0) if self.responses else None
         return FakeCursor(row)
+
+    async def rollback(self) -> None:
+        self.rolled_back = True
 
 
 def _settings(max_attempts: int = 3) -> SimpleNamespace:
@@ -181,6 +194,8 @@ def test_profile_system_prompt_states_data_only_rules() -> None:
     assert "credentials" in lowered
     assert "conservatively" in lowered
     assert "json schema" in lowered
+    assert "instructions" in lowered
+    assert "ignore" in lowered
     assert '"target_roles"' in prompt
 
 
@@ -291,6 +306,52 @@ async def test_profile_handler_fails_on_permanent_provider_error(
     failed = [params for sql, params in conn.executed if "status = 'failed'" in sql]
     assert len(failed) == 1
     assert "unauthorized" in failed[0][0]
+
+
+@pytest.mark.asyncio
+async def test_profile_handler_retries_on_unique_version_conflict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from psycopg.errors import UniqueViolation
+
+    monkeypatch.setattr(
+        "jobmatch_worker.handlers.profile.build_ai_providers", lambda settings: [FakeProvider()]
+    )
+    conn = FakeConn(
+        [_cv_row(), {"current_version": 0}],
+        errors={"insert into public.candidate_profiles": UniqueViolation("duplicate key")},
+    )
+    await handle_extract_candidate_profile(conn, _item(), _settings())
+
+    requeued = [params for sql, params in conn.executed if "status = 'queued'" in sql]
+    assert len(requeued) == 1
+    assert requeued[0][2] == "item-1"
+    assert conn.rolled_back
+    failed = [params for sql, params in conn.executed if "status = 'failed'" in sql]
+    assert failed == []
+
+
+@pytest.mark.asyncio
+async def test_profile_handler_retries_when_version_query_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from psycopg.errors import OperationalError
+
+    monkeypatch.setattr(
+        "jobmatch_worker.handlers.profile.build_ai_providers", lambda settings: [FakeProvider()]
+    )
+    conn = FakeConn(
+        [_cv_row()],
+        errors={"select coalesce(max(version)": OperationalError("connection lost")},
+    )
+    await handle_extract_candidate_profile(conn, _item(), _settings())
+
+    requeued = [params for sql, params in conn.executed if "status = 'queued'" in sql]
+    assert len(requeued) == 1
+    assert requeued[0][2] == "item-1"
+    assert conn.rolled_back
+    failed = [params for sql, params in conn.executed if "status = 'failed'" in sql]
+    assert failed == []
 
 
 @pytest.mark.asyncio
@@ -433,6 +494,52 @@ async def test_extract_cv_failure_does_not_enqueue_profile(
     enqueued = [params for sql, params in conn.executed if "insert into public.work_items" in sql]
     assert enqueued == []
     assert any("status = 'completed'" in sql for sql, _ in conn.executed)
+
+
+@pytest.mark.asyncio
+async def test_extract_cv_enqueue_failure_requeues_item(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jobmatch_worker import main as worker_main
+
+    cv_id = "cv-1"
+    text = "Ada has 4 years of experience as a Data Engineer."
+
+    class FakeResponse:
+        content = b"fake bytes"
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class FakeStorage:
+        async def get(self, url: str) -> FakeResponse:
+            return FakeResponse()
+
+        async def delete(self, url: str) -> None:
+            return None
+
+        async def __aenter__(self) -> Self:
+            return self
+
+        async def __aexit__(self, *exc: object) -> bool:
+            return False
+
+    monkeypatch.setattr(worker_main, "_storage_client", lambda settings: FakeStorage())
+    monkeypatch.setattr(worker_main, "extract_cv_text", lambda path: text)
+
+    conn = FakeConn(
+        [{"original_name": "ada.pdf", "storage_path": "u1/cv-1/ada.pdf", "retain_original": True}],
+        errors={"insert into public.work_items": RuntimeError("db unavailable")},
+    )
+    item = {"id": "item-1", "kind": "extract_cv", "payload": {"cv_id": cv_id}, "attempts": 0}
+    await worker_main.handle_extract_cv(conn, item, SimpleNamespace(cv_bucket="cvs", max_attempts=3))
+
+    requeued = [params for sql, params in conn.executed if "status = 'queued'" in sql]
+    assert len(requeued) == 1
+    assert requeued[0][2] == "item-1"
+    completed = [sql for sql, _ in conn.executed if "status = 'completed'" in sql]
+    assert completed == []
+    assert conn.rolled_back
 
 
 # --- enqueue helper ---
