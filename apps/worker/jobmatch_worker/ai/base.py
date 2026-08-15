@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
@@ -35,7 +36,7 @@ class StructuredOutputError(RetryableAiError):
 def parse_structured_content(content: str, schema: dict[str, Any]) -> dict[str, Any]:
     try:
         data = json.loads(content)
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, TypeError) as exc:
         raise StructuredOutputError(f"provider returned invalid JSON: {exc}") from exc
     if not isinstance(data, dict):
         raise StructuredOutputError("provider output is not a JSON object")
@@ -44,6 +45,31 @@ def parse_structured_content(content: str, schema: dict[str, Any]) -> dict[str, 
     except jsonschema.ValidationError as exc:
         raise StructuredOutputError(f"provider output failed schema validation: {exc.message}") from exc
     return data
+
+
+def extract_message_content(
+    body: dict[str, Any],
+    *,
+    provider: str,
+    getter: Callable[[dict[str, Any]], Any],
+) -> str:
+    """Extract the provider-specific message content with defensive shape checks.
+
+    A body carrying a provider ``error`` field, a missing/empty ``choices`` or
+    ``message``, or a missing/None content value is treated as a retryable
+    structured-output failure instead of leaking raw KeyError/IndexError/TypeError.
+    """
+    if "error" in body:
+        raise StructuredOutputError(f"{provider} returned an error field in the body")
+    try:
+        content = getter(body)
+    except (KeyError, IndexError, TypeError) as exc:
+        raise StructuredOutputError(
+            f"{provider} returned an unexpected response shape: {type(exc).__name__}"
+        ) from exc
+    if not isinstance(content, str) or not content.strip():
+        raise StructuredOutputError(f"{provider} returned empty or non-string message content")
+    return content
 
 
 class HttpAiProvider:
@@ -85,7 +111,7 @@ class HttpAiProvider:
             raise RetryableAiError(f"{self.name} request timed out") from exc
         except httpx.TransportError as exc:
             raise RetryableAiError(f"{self.name} transport error: {type(exc).__name__}") from exc
-        if response.status_code in (408, 429) or response.status_code >= 500:
+        if response.status_code in (408, 429) or 300 <= response.status_code < 400 or response.status_code >= 500:
             raise RetryableAiError(f"{self.name} HTTP {response.status_code}")
         if 400 <= response.status_code < 500:
             raise PermanentAiError(f"{self.name} HTTP {response.status_code}")
@@ -103,5 +129,6 @@ __all__ = [
     "PermanentAiError",
     "RetryableAiError",
     "StructuredOutputError",
+    "extract_message_content",
     "parse_structured_content",
 ]

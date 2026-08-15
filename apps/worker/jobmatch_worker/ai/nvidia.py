@@ -3,7 +3,12 @@ from typing import Any
 
 import httpx
 
-from jobmatch_worker.ai.base import AiResult, HttpAiProvider, parse_structured_content
+from jobmatch_worker.ai.base import (
+    AiResult,
+    HttpAiProvider,
+    extract_message_content,
+    parse_structured_content,
+)
 
 NIM_DEFAULT_BASE_URL = "https://integrate.api.nvidia.com/v1"
 
@@ -49,7 +54,11 @@ class NvidiaProvider(HttpAiProvider):
             payload=payload,
             headers={"Authorization": f"Bearer {self.api_key}"},
         )
-        content = body["choices"][0]["message"]["content"]
+        content = extract_message_content(
+            body,
+            provider=self.name,
+            getter=lambda b: b["choices"][0]["message"]["content"],
+        )
         data = parse_structured_content(content, schema)
         return AiResult(
             provider=self.name,

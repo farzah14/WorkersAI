@@ -102,6 +102,28 @@ async def test_openrouter_schema_invalid_output_is_structured_output_error(
         await provider.generate_structured(system="s", user="u", schema=SCHEMA)
 
 
+@pytest.mark.asyncio
+async def test_openrouter_error_field_is_retryable_structured_output_error(
+    httpx_mock: HTTPXMock,
+) -> None:
+    httpx_mock.add_response(json={"error": {"message": "refusal", "code": 429}})
+    provider = OpenRouterProvider(api_key="x", model="m", client=httpx.AsyncClient())
+    with pytest.raises(StructuredOutputError) as excinfo:
+        await provider.generate_structured(system="s", user="u", schema=SCHEMA)
+    assert isinstance(excinfo.value, RetryableAiError)
+
+
+@pytest.mark.asyncio
+async def test_openrouter_missing_content_is_retryable_structured_output_error(
+    httpx_mock: HTTPXMock,
+) -> None:
+    httpx_mock.add_response(json={"choices": [{"message": {}}]})
+    provider = OpenRouterProvider(api_key="x", model="m", client=httpx.AsyncClient())
+    with pytest.raises(StructuredOutputError) as excinfo:
+        await provider.generate_structured(system="s", user="u", schema=SCHEMA)
+    assert isinstance(excinfo.value, RetryableAiError)
+
+
 # --- NVIDIA NIM ---
 
 
@@ -168,6 +190,17 @@ async def test_nvidia_invalid_json_is_structured_output_error(httpx_mock: HTTPXM
         await provider.generate_structured(system="s", user="u", schema=SCHEMA)
 
 
+@pytest.mark.asyncio
+async def test_nvidia_empty_choices_is_retryable_structured_output_error(
+    httpx_mock: HTTPXMock,
+) -> None:
+    httpx_mock.add_response(json={"choices": []})
+    provider = NvidiaProvider(api_key="k", model="m", client=httpx.AsyncClient())
+    with pytest.raises(StructuredOutputError) as excinfo:
+        await provider.generate_structured(system="s", user="u", schema=SCHEMA)
+    assert isinstance(excinfo.value, RetryableAiError)
+
+
 # --- Ollama Cloud ---
 
 
@@ -229,6 +262,26 @@ async def test_ollama_schema_invalid_output_is_structured_output_error(
     httpx_mock.add_response(json={"message": {"content": '{"ok": "not-a-bool"}'}})
     provider = OllamaProvider(api_key="k", model="m", client=httpx.AsyncClient())
     with pytest.raises(StructuredOutputError):
+        await provider.generate_structured(system="s", user="u", schema=SCHEMA)
+
+
+@pytest.mark.asyncio
+async def test_ollama_null_content_is_retryable_structured_output_error(
+    httpx_mock: HTTPXMock,
+) -> None:
+    httpx_mock.add_response(json={"message": {"content": None}})
+    provider = OllamaProvider(api_key="k", model="m", client=httpx.AsyncClient())
+    with pytest.raises(StructuredOutputError) as excinfo:
+        await provider.generate_structured(system="s", user="u", schema=SCHEMA)
+    assert isinstance(excinfo.value, RetryableAiError)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [301, 302, 307, 308])
+async def test_openrouter_3xx_is_retryable(httpx_mock: HTTPXMock, status: int) -> None:
+    httpx_mock.add_response(status_code=status)
+    provider = OpenRouterProvider(api_key="x", model="m", client=httpx.AsyncClient())
+    with pytest.raises(RetryableAiError):
         await provider.generate_structured(system="s", user="u", schema=SCHEMA)
 
 

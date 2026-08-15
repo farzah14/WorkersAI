@@ -4,7 +4,12 @@ from typing import Any
 
 import httpx
 
-from jobmatch_worker.ai.base import AiResult, HttpAiProvider, parse_structured_content
+from jobmatch_worker.ai.base import (
+    AiResult,
+    HttpAiProvider,
+    extract_message_content,
+    parse_structured_content,
+)
 
 OLLAMA_CLOUD_BASE_URL = "https://ollama.com/api"
 
@@ -49,7 +54,11 @@ class OllamaProvider(HttpAiProvider):
             payload=payload,
             headers={"Authorization": f"Bearer {self.api_key}"},
         )
-        content = body["message"]["content"]
+        content = extract_message_content(
+            body,
+            provider=self.name,
+            getter=lambda b: b["message"]["content"],
+        )
         data = parse_structured_content(content, schema)
         return AiResult(
             provider=self.name,
