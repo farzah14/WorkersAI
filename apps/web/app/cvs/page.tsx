@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { CvUploadForm } from "@/components/cv-upload-form";
+import { setActiveCv } from "./actions";
 
 export default async function CvsPage() {
   const supabase = await createClient();
@@ -29,9 +30,21 @@ export default async function CvsPage() {
                 {cv.retain_original ? " · original kept" : " · original deleted"}
               </p>
             </div>
-            <time className="text-xs text-gray-400" dateTime={cv.created_at}>
-              {new Date(cv.created_at).toLocaleDateString()}
-            </time>
+            <div className="flex items-center gap-3">
+              <form action={setActiveCv}>
+                <input type="hidden" name="cvId" value={cv.id} />
+                <button
+                  type="submit"
+                  disabled={cv.is_active}
+                  className="rounded border border-gray-300 px-3 py-1 text-sm hover:bg-gray-50 disabled:cursor-default disabled:opacity-50"
+                >
+                  {cv.is_active ? "Active" : "Set active"}
+                </button>
+              </form>
+              <time className="text-xs text-gray-400" dateTime={cv.created_at}>
+                {new Date(cv.created_at).toLocaleDateString()}
+              </time>
+            </div>
           </li>
         ))}
         {(!cvs || cvs.length === 0) && <li className="text-sm text-gray-500">No CVs yet.</li>}
