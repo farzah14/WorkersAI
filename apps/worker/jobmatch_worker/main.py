@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import shutil
 import sys
 import tempfile
@@ -9,10 +10,18 @@ import httpx
 from psycopg import AsyncConnection
 from psycopg_pool import AsyncConnectionPool
 
+from jobmatch_worker.ai.router import PostgresAiAuditRecorder
 from jobmatch_worker.config import Settings
 from jobmatch_worker.cv.extract import UnsupportedScannedPdf, extract_cv_text
 from jobmatch_worker.db import create_pool
-from jobmatch_worker.queue import claim_next_item, complete_item, fail_item, retry_item
+from jobmatch_worker.handlers.profile import handle_extract_candidate_profile
+from jobmatch_worker.queue import (
+    claim_next_item,
+    complete_item,
+    enqueue_item,
+    fail_item,
+    retry_item,
+)
 
 
 def _storage_client(settings: Settings) -> httpx.AsyncClient:
@@ -56,6 +65,18 @@ async def _set_cv_failed(conn: AsyncConnection[Any], cv_id: str, error: str) -> 
     )
 
 
+async def _enqueue_profile_extraction(
+    conn: AsyncConnection[Any], cv_id: str, text: str
+) -> None:
+    content_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
+    await enqueue_item(
+        conn,
+        kind="extract_candidate_profile",
+        dedupe_key=f"extract_candidate_profile:{cv_id}:{content_hash}",
+        payload={"cv_id": cv_id},
+    )
+
+
 async def handle_extract_cv(
     conn: AsyncConnection[Any], item: dict[str, Any], settings: Settings
 ) -> None:
@@ -92,6 +113,7 @@ async def handle_extract_cv(
             storage_path = None
 
         await _set_cv_extracted(conn, cv_id, text, storage_path)
+        await _enqueue_profile_extraction(conn, cv_id, text)
         await complete_item(conn, str(item["id"]))
     except UnsupportedScannedPdf as exc:
         await _set_cv_failed(conn, cv_id, str(exc))
@@ -116,6 +138,10 @@ async def worker_loop(settings: Settings) -> None:
             async with pool.connection() as conn:
                 if item["kind"] == "extract_cv":
                     await handle_extract_cv(conn, item, settings)
+                elif item["kind"] == "extract_candidate_profile":
+                    await handle_extract_candidate_profile(
+                        conn, item, settings, audit=PostgresAiAuditRecorder(pool)
+                    )
                 else:
                     await fail_item(conn, str(item["id"]), f"unknown kind: {item['kind']}")
     finally:

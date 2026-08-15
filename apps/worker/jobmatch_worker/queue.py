@@ -4,6 +4,20 @@ from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
+ENQUEUE_SQL = """
+insert into public.work_items (kind, dedupe_key, payload)
+values (%s, %s, %s)
+on conflict (dedupe_key) do nothing
+"""
+
+
+async def enqueue_item(
+    conn: AsyncConnection[Any], *, kind: str, dedupe_key: str, payload: dict[str, Any]
+) -> None:
+    """Enqueue a work item idempotently; a duplicate dedupe_key is a no-op."""
+    await conn.execute(ENQUEUE_SQL, (kind, dedupe_key, payload))
+
+
 CLAIM_SQL = """
 with candidate as (
   select id
