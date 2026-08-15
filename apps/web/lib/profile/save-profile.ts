@@ -30,6 +30,18 @@ export function isActiveCvConflict(error: SupabaseError | null | undefined): boo
   return error?.code === "23505" && error?.message === "active_cv_conflict";
 }
 
+export function versionRaceError(): SupabaseError {
+  return { code: "23505", message: "profile_version_conflict" };
+}
+
+export function isVersionRace(error: SupabaseError | null | undefined): boolean {
+  return error?.code === "23505" && error?.message === "profile_version_conflict";
+}
+
+function isInsertVersionConflict(error: SupabaseError | null | undefined): boolean {
+  return isUniqueViolation(error) && !isActiveCvConflict(error);
+}
+
 function toSupabaseError(error: { code?: string | null; message: string } | null): SupabaseError | null {
   if (!error) return null;
   return { code: error.code ?? null, message: error.message };
@@ -128,12 +140,21 @@ export async function saveCandidateProfile(
 ): Promise<{ ok: true; version: number } | { ok: false; error: SupabaseError }> {
   const { userId, cvId, profile } = input;
 
-  const versionResult = await repo.nextVersion(cvId);
-  if (versionResult.error) return { ok: false, error: versionResult.error };
-  const version = versionResult.version;
+  const firstVersion = await repo.nextVersion(cvId);
+  if (firstVersion.error) return { ok: false, error: firstVersion.error };
+  let version = firstVersion.version;
 
-  const insertResult = await repo.insertProfile(userId, cvId, version, profile);
-  if (insertResult.error) return { ok: false, error: insertResult.error };
+  let insertResult = await repo.insertProfile(userId, cvId, version, profile);
+  if (insertResult.error && isInsertVersionConflict(insertResult.error)) {
+    const reread = await repo.nextVersion(cvId);
+    if (reread.error) return { ok: false, error: reread.error };
+    version = reread.version;
+    insertResult = await repo.insertProfile(userId, cvId, version, profile);
+  }
+  if (insertResult.error) {
+    if (isInsertVersionConflict(insertResult.error)) return { ok: false, error: versionRaceError() };
+    return { ok: false, error: insertResult.error };
+  }
 
   const activeResult = await makeCvActive(repo, { userId, cvId });
   if (!activeResult.ok) return { ok: false, error: activeResult.error };

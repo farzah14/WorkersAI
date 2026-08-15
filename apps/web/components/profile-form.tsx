@@ -61,9 +61,11 @@ export function ProfileForm({ cvId, initial }: ProfileFormProps) {
       setError(
         data?.error === "active_cv_conflict"
           ? "Another CV is being activated right now. Please try again."
-          : data?.error === "validation_failed"
-            ? "Please fill in target roles and skills."
-            : (data?.error ?? "Could not save your profile."),
+          : data?.error === "save_conflict"
+            ? "Another save happened at the same time. Please try again."
+            : data?.error === "validation_failed"
+              ? "Please check the form fields."
+              : (data?.error ?? "Could not save your profile."),
       );
       return;
     }

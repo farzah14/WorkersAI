@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { saveProfileRequestSchema } from "@/lib/profile/schema";
 import {
   isActiveCvConflict,
+  isVersionRace,
   saveCandidateProfile,
   supabaseProfileRepo,
 } from "@/lib/profile/save-profile";
@@ -77,6 +78,9 @@ export async function POST(request: NextRequest) {
   if (!result.ok) {
     if (isActiveCvConflict(result.error)) {
       return NextResponse.json({ error: "active_cv_conflict" }, { status: 409 });
+    }
+    if (isVersionRace(result.error)) {
+      return NextResponse.json({ error: "save_conflict" }, { status: 409 });
     }
     return NextResponse.json({ error: "save failed" }, { status: 500 });
   }

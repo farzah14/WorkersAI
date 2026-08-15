@@ -4,6 +4,7 @@ import {
   activeCvConflictError,
   isActiveCvConflict,
   isUniqueViolation,
+  isVersionRace,
   makeCvActive,
   saveCandidateProfile,
   type ProfileRepo,
@@ -238,10 +239,10 @@ describe("saveCandidateProfile", () => {
     expect(calls.some((c) => c.startsWith("insertProfile:u1:cv-1:3:"))).toBe(true);
   });
 
-  it("propagates insert failures and skips activation", async () => {
+  it("propagates non-conflict insert failures without retrying and skips activation", async () => {
     const { repo, calls } = fakeRepo({
       async insertProfile() {
-        return { error: { code: "23505", message: "version race" } };
+        return { error: { code: "42P01", message: "no table" } };
       },
     });
     const result = await saveCandidateProfile(repo, {
@@ -250,8 +251,63 @@ describe("saveCandidateProfile", () => {
       profile: baseProfile(),
     });
     expect(result.ok).toBe(false);
-    expect(isActiveCvConflict(result.ok ? null : result.error)).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("42P01");
+    expect(calls.filter((c) => c.startsWith("insertProfile:")).length).toBe(1);
+    expect(calls.filter((c) => c.startsWith("nextVersion:")).length).toBe(1);
     expect(calls.some((c) => c.startsWith("setActive:"))).toBe(false);
+  });
+
+  it("retries the version race once after re-reading max(version) and succeeds", async () => {
+    let nextVersionCalls = 0;
+    let insertCalls = 0;
+    const { repo, calls } = fakeRepo({
+      async nextVersion() {
+        nextVersionCalls += 1;
+        return { version: nextVersionCalls === 1 ? 3 : 4, error: null };
+      },
+      async insertProfile() {
+        insertCalls += 1;
+        if (insertCalls === 1) return { error: { code: "23505", message: "duplicate key value" } };
+        return { error: null };
+      },
+    });
+    const result = await saveCandidateProfile(repo, {
+      userId: "u1",
+      cvId: "cv-1",
+      profile: { ...baseProfile(), seniority: "mid" },
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.version).toBe(4);
+    expect(nextVersionCalls).toBe(2);
+    expect(insertCalls).toBe(2);
+    expect(calls.some((c) => c.startsWith("insertProfile:u1:cv-1:4:"))).toBe(true);
+    expect(calls.some((c) => c.startsWith("setActive:"))).toBe(true);
+  });
+
+  it("returns a user-safe version-race error after two 23505 insert failures without activating", async () => {
+    const { repo, calls } = fakeRepo({
+      async nextVersion() {
+        return { version: 3, error: null };
+      },
+      async insertProfile() {
+        return { error: { code: "23505", message: "duplicate key value" } };
+      },
+    });
+    const result = await saveCandidateProfile(repo, {
+      userId: "u1",
+      cvId: "cv-1",
+      profile: baseProfile(),
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(isVersionRace(result.error)).toBe(true);
+    expect(isActiveCvConflict(result.error)).toBe(false);
+    expect(calls.filter((c) => c.startsWith("insertProfile:")).length).toBe(2);
+    expect(calls.filter((c) => c.startsWith("nextVersion:")).length).toBe(2);
+    expect(calls.some((c) => c.startsWith("setActive:"))).toBe(false);
+    expect(calls.some((c) => c.startsWith("clearActive:"))).toBe(false);
   });
 
   it("returns active_cv_conflict when activation ultimately fails", async () => {
