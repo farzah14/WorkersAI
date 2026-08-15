@@ -136,7 +136,8 @@ class AiRouter:
                         error_code=None,
                     )
                     return result
-                assert error is not None
+                if error is None:
+                    raise RetryableAiError("provider returned no result")
                 if not isinstance(error, RetryableAiError):
                     await self._audit_attempt(
                         provider,
@@ -160,7 +161,7 @@ class AiRouter:
             fallback_from = provider.name
         if last_error is not None:
             raise last_error
-        raise RetryableAiError("no AI providers configured")
+        raise RetryableAiError("all AI providers skipped (circuit open)")
 
     async def aclose(self) -> None:
         for provider in self._providers:

@@ -298,6 +298,45 @@ async def test_audit_error_code_never_contains_exception_message() -> None:
 
 
 @pytest.mark.asyncio
+async def test_router_audits_unexpected_exception_and_reraises_without_fallback() -> None:
+    class ExplodingProvider(FakeProvider):
+        async def generate_structured(
+            self, *, system: str, user: str, schema: dict[str, Any]
+        ) -> AiResult:
+            self.calls += 1
+            raise RuntimeError("bug in adapter")
+
+    nvidia = ExplodingProvider("nvidia")
+    openrouter = FakeProvider("openrouter")
+    audit = FakeAuditRecorder()
+    router = AiRouter(
+        [nvidia, openrouter], operation="profile_extract", audit=audit, retry_jitter_max=0
+    )
+    with pytest.raises(RuntimeError, match="bug in adapter"):
+        await router.generate_structured(system="s", user="u", schema=SCHEMA)
+    assert openrouter.calls == 0
+    assert len(audit.rows) == 1
+    assert audit.rows[0]["status"] == "permanent_failure"
+    assert audit.rows[0]["error_code"] == "RuntimeError"
+    assert audit.rows[0]["provider"] == "nvidia"
+
+
+@pytest.mark.asyncio
+async def test_audit_failure_during_retryable_failure_does_not_block_fallback() -> None:
+    class BrokenAudit:
+        async def record(self, **kwargs: Any) -> None:
+            raise RuntimeError("db down")
+
+    nvidia = FakeProvider("nvidia", retryable=True)
+    openrouter = FakeProvider("openrouter")
+    router = AiRouter(
+        [nvidia, openrouter], operation="profile_extract", audit=BrokenAudit(), retry_jitter_max=0
+    )
+    result = await router.generate_structured(system="s", user="u", schema=SCHEMA)
+    assert result.provider == "openrouter"
+
+
+@pytest.mark.asyncio
 async def test_audit_failure_does_not_crash_operation() -> None:
     class BrokenAudit:
         async def record(self, **kwargs: Any) -> None:
