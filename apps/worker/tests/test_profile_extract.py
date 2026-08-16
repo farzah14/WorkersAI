@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from typing import Any, Self
 
 import pytest
+from psycopg.types.json import Jsonb
 
 from jobmatch_worker.ai.base import (
     AiResult,
@@ -379,7 +380,7 @@ def test_build_ai_providers_skips_missing_credentials(monkeypatch: pytest.Monkey
     monkeypatch.setenv("OPENROUTER_MODEL", "or-model")
     monkeypatch.setenv("OLLAMA_API_KEY", "ok")
     monkeypatch.setenv("OLLAMA_MODEL", "ollama-model")
-    providers = build_ai_providers(Settings())
+    providers = build_ai_providers(Settings(_env_file=None))
     assert [p.name for p in providers] == ["openrouter", "ollama"]
 
 
@@ -392,14 +393,14 @@ def test_build_ai_providers_preserves_order_and_skips_unknown(
     monkeypatch.setenv("OLLAMA_MODEL", "m")
     monkeypatch.setenv("NVIDIA_API_KEY", "nk")
     monkeypatch.setenv("NVIDIA_MODEL", "nm")
-    providers = build_ai_providers(Settings())
+    providers = build_ai_providers(Settings(_env_file=None))
     assert [p.name for p in providers] == ["ollama", "nvidia"]
 
 
 def test_build_ai_providers_empty_without_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_base_env(monkeypatch)
     monkeypatch.setenv("AI_PROVIDER_ORDER", "nvidia,openrouter")
-    assert build_ai_providers(Settings()) == []
+    assert build_ai_providers(Settings(_env_file=None)) == []
 
 
 # --- work-item chaining from extract_cv ---
@@ -451,7 +452,8 @@ async def test_extract_cv_success_enqueues_profile_extraction(
     expected_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
     assert kind == "extract_candidate_profile"
     assert dedupe_key == f"extract_candidate_profile:{cv_id}:{expected_hash}"
-    assert payload == {"cv_id": cv_id}
+    assert isinstance(payload, Jsonb)
+    assert payload.obj == {"cv_id": cv_id}
 
 
 @pytest.mark.asyncio
@@ -556,8 +558,9 @@ async def test_enqueue_item_uses_dedupe_conflict_clause() -> None:
     )
     sql, params = conn.executed[0]
     assert "on conflict (dedupe_key) do nothing" in sql
-    assert params == (
+    assert params[:2] == (
         "extract_candidate_profile",
         "extract_candidate_profile:cv-1:hash",
-        {"cv_id": "cv-1"},
     )
+    assert isinstance(params[2], Jsonb)
+    assert params[2].obj == {"cv_id": "cv-1"}

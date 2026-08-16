@@ -14,7 +14,7 @@ def test_default_ai_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_base_env(monkeypatch)
     monkeypatch.setenv("OLLAMA_API_KEY", "ollama-key")
     monkeypatch.setenv("OLLAMA_MODEL", "llama3.2")
-    settings = Settings()
+    settings = Settings(_env_file=None)
     assert settings.ai_provider_order == "nvidia,openrouter,ollama"
     assert settings.ai_timeout_seconds == 30.0
     assert settings.nvidia_base_url == "https://integrate.api.nvidia.com/v1"
@@ -29,7 +29,7 @@ def test_ollama_in_provider_order_requires_api_key_and_model(
     _set_base_env(monkeypatch)
     monkeypatch.setenv("AI_PROVIDER_ORDER", "nvidia,ollama")
     with pytest.raises(ValidationError):
-        Settings()
+        Settings(_env_file=None)
 
 
 def test_ollama_in_provider_order_passes_with_credentials(
@@ -39,7 +39,7 @@ def test_ollama_in_provider_order_passes_with_credentials(
     monkeypatch.setenv("AI_PROVIDER_ORDER", "nvidia,ollama")
     monkeypatch.setenv("OLLAMA_API_KEY", "ollama-key")
     monkeypatch.setenv("OLLAMA_MODEL", "llama3.2")
-    settings = Settings()
+    settings = Settings(_env_file=None)
     assert settings.ollama_api_key == "ollama-key"
     assert settings.ollama_model == "llama3.2"
 
@@ -49,5 +49,5 @@ def test_ollama_not_required_when_out_of_provider_order(
 ) -> None:
     _set_base_env(monkeypatch)
     monkeypatch.setenv("AI_PROVIDER_ORDER", "nvidia")
-    settings = Settings()
+    settings = Settings(_env_file=None)
     assert settings.ai_provider_order == "nvidia"
