@@ -61,7 +61,14 @@ def _job(*, source_key: str, url: str, title: str) -> DiscoveredJob:
 
 
 @pytest.mark.asyncio
-async def test_discovery_run_keeps_successful_sources_when_one_fails() -> None:
+@pytest.mark.parametrize(
+    ("requirement_extraction_enabled", "expected_requirement_items"),
+    [(False, 0), (True, 4)],
+)
+async def test_discovery_run_keeps_successful_sources_when_one_fails(
+    requirement_extraction_enabled: bool,
+    expected_requirement_items: int,
+) -> None:
     from jobmatch_worker.handlers.discovery import handle_discover_jobs
 
     run_row = {
@@ -113,7 +120,10 @@ async def test_discovery_run_keeps_successful_sources_when_one_fails() -> None:
     await handle_discover_jobs(
         connection,
         {"id": "item-1", "payload": {"search_run_id": "run-1"}},
-        None,
+        SimpleNamespace(
+            max_attempts=3,
+            requirement_extraction_enabled=requirement_extraction_enabled,
+        ),
         connectors=connectors,
     )
 
@@ -147,7 +157,7 @@ async def test_discovery_run_keeps_successful_sources_when_one_fails() -> None:
         if "insert into public.work_items" in query.lower()
         and params[0] == "extract_job_requirements"
     ]
-    assert len(requirement_items) == 4
+    assert len(requirement_items) == expected_requirement_items
 
     failed_source_updates = [
         params

@@ -61,3 +61,4 @@ def test_default_connector_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.brave_search_api_key == ""
     assert settings.greenhouse_board_token == ""
     assert settings.lever_site_name == ""
+    assert settings.requirement_extraction_enabled is False

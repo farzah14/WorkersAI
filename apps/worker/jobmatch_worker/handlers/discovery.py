@@ -462,12 +462,13 @@ async def handle_discover_jobs(
             kept_jobs=kept,
             job_ids=upsert_result.job_ids,
         )
-        await _enqueue_requirement_extraction(
-            conn,
-            run_id=run_id,
-            jobs=kept,
-            job_ids=upsert_result.job_ids,
-        )
+        if getattr(settings, "requirement_extraction_enabled", False):
+            await _enqueue_requirement_extraction(
+                conn,
+                run_id=run_id,
+                jobs=kept,
+                job_ids=upsert_result.job_ids,
+            )
 
         failed_outcomes = [outcome for outcome in outcomes if outcome.status == "failed"]
         retryable_outcomes = [outcome for outcome in outcomes if outcome.retryable]
