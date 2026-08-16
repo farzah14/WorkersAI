@@ -51,3 +51,13 @@ def test_ollama_not_required_when_out_of_provider_order(
     monkeypatch.setenv("AI_PROVIDER_ORDER", "nvidia")
     settings = Settings(_env_file=None)
     assert settings.ai_provider_order == "nvidia"
+
+
+def test_default_connector_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_base_env(monkeypatch)
+    monkeypatch.setenv("OLLAMA_API_KEY", "ollama-key")
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3.2")
+    settings = Settings(_env_file=None)
+    assert settings.brave_search_api_key == ""
+    assert settings.greenhouse_board_token == ""
+    assert settings.lever_site_name == ""

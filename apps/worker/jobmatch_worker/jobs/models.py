@@ -1,5 +1,6 @@
 """Normalized job discovery domain models."""
 
+import urllib.parse
 from datetime import datetime
 from typing import Literal
 
@@ -63,4 +64,32 @@ class DiscoveredJob(BaseModel):
         return self
 
 
-__all__ = ["DiscoveredJob", "EmploymentType", "WorkMode"]
+class DiscoveryCandidateUrl(BaseModel):
+    """A candidate URL found by a search connector, pending a career-page fetch.
+
+    Search-engine snippets are search-result summaries, not job
+    descriptions, so they are carried as optional metadata only and are
+    never promoted to full job descriptions.
+    """
+
+    url: str
+    title: str | None = None
+    snippet: str | None = None
+
+    @field_validator("url", mode="before")
+    @classmethod
+    def _validate_url(cls, value: object) -> str:
+        if not isinstance(value, str):
+            raise TypeError("must be a string")
+        url = value.strip()
+        parsed = urllib.parse.urlsplit(url)
+        if parsed.scheme != "https":
+            raise ValueError("must be an https URL")
+        if not parsed.netloc:
+            raise ValueError("must include a host")
+        if parsed.username or parsed.password:
+            raise ValueError("must not embed credentials")
+        return url
+
+
+__all__ = ["DiscoveredJob", "DiscoveryCandidateUrl", "EmploymentType", "WorkMode"]

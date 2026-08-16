@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     ollama_api_key: str = ""
     ollama_base_url: str = "https://ollama.com/api"
     ollama_model: str = ""
+    brave_search_api_key: str = ""
+    greenhouse_board_token: str = ""
+    lever_site_name: str = ""
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @model_validator(mode="after")
