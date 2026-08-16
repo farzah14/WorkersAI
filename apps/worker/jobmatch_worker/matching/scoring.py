@@ -46,6 +46,10 @@ def verdict_for(score: int, *, critical_gap: bool) -> str:
     return "low_match"
 
 
+def _casefolded(matched: set[str]) -> set[str]:
+    return {value.casefold() for value in matched}
+
+
 def score_dimension(
     requirements: list[JobRequirement],
     matched: set[str],
@@ -61,14 +65,15 @@ def score_dimension(
     """
     if not requirements:
         return 100
-    semantic = semantically_matched or set()
+    semantic = {value.casefold() for value in (semantically_matched or set())}
+    folded = _casefolded(matched)
     total = 0.0
     weight_sum = 0
     for req in requirements:
         weight = CRITICALITY_WEIGHT[req.criticality]
         weight_sum += weight
         key = req.value.casefold()
-        if key in matched:
+        if key in folded:
             quality = EXACT_MATCH_SCORE
         elif key in semantic:
             quality = SEMANTIC_MATCH_SCORE
@@ -83,12 +88,13 @@ def find_critical_gaps(
     matched: set[str],
     semantically_matched: set[str] | None = None,
 ) -> list[JobRequirement]:
-    semantic = semantically_matched or set()
+    folded = _casefolded(matched)
+    semantic = {value.casefold() for value in (semantically_matched or set())}
     return [
         req
         for req in requirements
         if req.criticality == "must"
-        and req.value.casefold() not in matched
+        and req.value.casefold() not in folded
         and req.value.casefold() not in semantic
     ]
 
