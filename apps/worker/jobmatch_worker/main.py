@@ -15,6 +15,10 @@ from jobmatch_worker.config import Settings
 from jobmatch_worker.cv.extract import UnsupportedScannedPdf, extract_cv_text
 from jobmatch_worker.db import create_pool
 from jobmatch_worker.handlers.discovery import handle_discover_jobs
+from jobmatch_worker.handlers.matching import (
+    handle_extract_job_requirements,
+    handle_match_job,
+)
 from jobmatch_worker.handlers.profile import handle_extract_candidate_profile
 from jobmatch_worker.queue import (
     claim_next_item,
@@ -146,6 +150,14 @@ async def worker_loop(settings: Settings) -> None:
                     )
                 elif item["kind"] == "discover_jobs":
                     await handle_discover_jobs(conn, item, settings)
+                elif item["kind"] == "extract_job_requirements":
+                    await handle_extract_job_requirements(
+                        conn, item, settings, audit=PostgresAiAuditRecorder(pool)
+                    )
+                elif item["kind"] == "match_job":
+                    await handle_match_job(
+                        conn, item, settings, audit=PostgresAiAuditRecorder(pool)
+                    )
                 else:
                     await fail_item(conn, str(item["id"]), f"unknown kind: {item['kind']}")
     finally:
