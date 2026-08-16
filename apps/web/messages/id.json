@@ -1,0 +1,145 @@
+{
+  "common": {
+    "appName": "Job Matcher",
+    "save": "Simpan",
+    "cancel": "Batal",
+    "back": "Kembali",
+    "loading": "Memuat…",
+    "retry": "Coba lagi"
+  },
+  "nav": {
+    "dashboard": "Dasbor",
+    "findJobs": "Cari Lowongan",
+    "cvs": "CV Saya",
+    "saved": "Tersimpan",
+    "applications": "Lamaran",
+    "exports": "Ekspor",
+    "settings": "Pengaturan"
+  },
+  "auth": {
+    "signIn": "Masuk",
+    "signOut": "Keluar",
+    "signInRequired": "Silakan masuk untuk melanjutkan."
+  },
+  "cv": {
+    "title": "CV Saya",
+    "uploadCv": "Unggah CV",
+    "active": "Aktif",
+    "delete": "Hapus",
+    "editProfile": "Edit Profil"
+  },
+  "search": {
+    "title": "Temukan Lowongan",
+    "findJobsNow": "Cari Lowongan Sekarang",
+    "region": "Wilayah",
+    "indonesia": "Indonesia",
+    "global": "Global",
+    "searching": "Sedang mencari…"
+  },
+  "processing": {
+    "queued": "Antrean",
+    "running": "Diproses",
+    "completed": "Selesai",
+    "partial": "Sebagian",
+    "failed": "Gagal"
+  },
+  "buckets": {
+    "best": "Terbaik",
+    "strong": "Kuat",
+    "potential": "Potensial",
+    "low": "Rendah"
+  },
+  "dimensions": {
+    "skills": "Keahlian",
+    "experience": "Pengalaman",
+    "seniority": "Jenjang",
+    "education": "Pendidikan",
+    "language": "Bahasa",
+    "location": "Lokasi"
+  },
+  "match": {
+    "title": "Detail Kecocokan",
+    "strengths": "Kelebihan",
+    "gaps": "Kekurangan",
+    "criticalGaps": "Kritis",
+    "otherGaps": "Lainnya",
+    "explanation": "Penjelasan",
+    "recommendations": "Rekomendasi",
+    "verdict": "Penilaian",
+    "viewOriginal": "Lihat Lowongan Asli",
+    "backToDashboard": "Kembali ke dasbor",
+    "scoreBreakdown": "Rincian Skor",
+    "noStrengths": "Tidak ada kelebihan yang tercatat.",
+    "noCriticalGaps": "Tidak ada kekurangan kritis.",
+    "noOtherGaps": "Tidak ada kekurangan lain."
+  },
+  "tracking": {
+    "new": "Baru",
+    "save": "Simpan",
+    "saved": "Tersimpan",
+    "unsave": "Batal Simpan",
+    "markApplied": "Tandai Dilamar",
+    "applied": "Dilamar",
+    "ignored": "Diabaikan",
+    "ignore": "Abaikan",
+    "updateFailed": "Gagal memperbarui status. Coba lagi."
+  },
+  "dashboard": {
+    "heading": "Dasbor Kecocokan",
+    "subheading": "Lihat peringkat lowongan berdasarkan profilmu.",
+    "noMatches": "Belum ada hasil kecocokan.",
+    "noMatchesHint": "Jalankan pencarian lowongan untuk melihat peringkat.",
+    "startSearch": "Cari Lowongan Sekarang",
+    "matchScore": "Skor Kecocokan",
+    "published": "Dipublikasikan",
+    "bestMatches": "Lowongan Terbaik"
+  },
+  "saved": {
+    "heading": "Lowongan Tersimpan",
+    "subheading": "Simpan lowongan yang menarik.",
+    "empty": "Belum ada lowongan tersimpan.",
+    "emptyHint": "Simpan kecocokan dari dasbor untuk melihatnya di sini.",
+    "openDashboard": "Buka Dasbor"
+  },
+  "applications": {
+    "heading": "Lamaran",
+    "subheading": "Semua yang sudah kamu lamar.",
+    "empty": "Belum ada lamaran tercatat.",
+    "emptyHint": "Tandai kecocokan sebagai dilamar untuk mencatatnya.",
+    "openDashboard": "Buka Dasbor",
+    "appliedOn": "Dilamar pada"
+  },
+  "exports": {
+    "title": "Ekspor",
+    "heading": "Ekspor Hasil",
+    "subheading": "Unduh daftar lowongan sebagai Excel atau PDF.",
+    "request": "Buat Ekspor",
+    "xlsx": "Excel",
+    "pdf": "PDF",
+    "scopeAll": "Semua hasil",
+    "scopeCurrentFilters": "Filter saat ini",
+    "scopeBestAndStrong": "Terbaik dan Kuat saja",
+    "statusQueued": "Antrean",
+    "statusProcessing": "Diproses",
+    "statusCompleted": "Selesai",
+    "statusFailed": "Gagal",
+    "empty": "Belum ada ekspor.",
+    "emptyHint": "Buat ekspor pertama untuk mengunduh hasil.",
+    "download": "Unduh"
+  },
+  "settings": {
+    "title": "Pengaturan",
+    "heading": "Pengaturan",
+    "language": "Bahasa",
+    "id": "Bahasa Indonesia",
+    "en": "English",
+    "languageHint": "Pilih bahasa antarmuka."
+  },
+  "errors": {
+    "unauthorized": "Tidak diizinkan.",
+    "validationFailed": "Data tidak valid.",
+    "network": "Koneksi bermasalah. Coba lagi.",
+    "generic": "Terjadi kesalahan.",
+    "notFound": "Tidak ditemukan."
+  }
+}

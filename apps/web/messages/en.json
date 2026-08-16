@@ -1,0 +1,145 @@
+{
+  "common": {
+    "appName": "Job Matcher",
+    "save": "Save",
+    "cancel": "Cancel",
+    "back": "Back",
+    "loading": "Loading…",
+    "retry": "Retry"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "findJobs": "Find Jobs",
+    "cvs": "My CVs",
+    "saved": "Saved",
+    "applications": "Applications",
+    "exports": "Exports",
+    "settings": "Settings"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "signInRequired": "Please sign in to continue."
+  },
+  "cv": {
+    "title": "My CVs",
+    "uploadCv": "Upload CV",
+    "active": "Active",
+    "delete": "Delete",
+    "editProfile": "Edit Profile"
+  },
+  "search": {
+    "title": "Find Jobs",
+    "findJobsNow": "Find Jobs Now",
+    "region": "Region",
+    "indonesia": "Indonesia",
+    "global": "Global",
+    "searching": "Searching…"
+  },
+  "processing": {
+    "queued": "Queued",
+    "running": "Processing",
+    "completed": "Completed",
+    "partial": "Partial",
+    "failed": "Failed"
+  },
+  "buckets": {
+    "best": "Best",
+    "strong": "Strong",
+    "potential": "Potential",
+    "low": "Low"
+  },
+  "dimensions": {
+    "skills": "Skills",
+    "experience": "Experience",
+    "seniority": "Seniority",
+    "education": "Education",
+    "language": "Language",
+    "location": "Location"
+  },
+  "match": {
+    "title": "Match Detail",
+    "strengths": "Strengths",
+    "gaps": "Gaps",
+    "criticalGaps": "Critical",
+    "otherGaps": "Other",
+    "explanation": "Explanation",
+    "recommendations": "Recommendations",
+    "verdict": "Verdict",
+    "viewOriginal": "View original job",
+    "backToDashboard": "Back to dashboard",
+    "scoreBreakdown": "Score Breakdown",
+    "noStrengths": "No strengths recorded.",
+    "noCriticalGaps": "No critical gaps.",
+    "noOtherGaps": "No other gaps."
+  },
+  "tracking": {
+    "new": "New",
+    "save": "Save",
+    "saved": "Saved",
+    "unsave": "Unsave",
+    "markApplied": "Mark Applied",
+    "applied": "Applied",
+    "ignored": "Ignored",
+    "ignore": "Ignore",
+    "updateFailed": "Could not update the job status. Try again."
+  },
+  "dashboard": {
+    "heading": "Match Dashboard",
+    "subheading": "See how jobs rank against your profile.",
+    "noMatches": "No match results yet.",
+    "noMatchesHint": "Run a job search to see ranked results.",
+    "startSearch": "Find Jobs Now",
+    "matchScore": "Match Score",
+    "published": "Published",
+    "bestMatches": "Best Matches"
+  },
+  "saved": {
+    "heading": "Saved Jobs",
+    "subheading": "Keep the promising ones close.",
+    "empty": "No saved jobs yet.",
+    "emptyHint": "Save matches from your dashboard.",
+    "openDashboard": "Open dashboard"
+  },
+  "applications": {
+    "heading": "Applications",
+    "subheading": "Everything you applied to.",
+    "empty": "No applications tracked yet.",
+    "emptyHint": "Mark matches as applied to keep a record.",
+    "openDashboard": "Open dashboard",
+    "appliedOn": "Applied"
+  },
+  "exports": {
+    "title": "Exports",
+    "heading": "Export Results",
+    "subheading": "Download job listings as Excel or PDF.",
+    "request": "Create Export",
+    "xlsx": "Excel",
+    "pdf": "PDF",
+    "scopeAll": "All results",
+    "scopeCurrentFilters": "Current filters",
+    "scopeBestAndStrong": "Best and Strong only",
+    "statusQueued": "Queued",
+    "statusProcessing": "Processing",
+    "statusCompleted": "Completed",
+    "statusFailed": "Failed",
+    "empty": "No exports yet.",
+    "emptyHint": "Create your first export to download results.",
+    "download": "Download"
+  },
+  "settings": {
+    "title": "Settings",
+    "heading": "Settings",
+    "language": "Language",
+    "id": "Bahasa Indonesia",
+    "en": "English",
+    "languageHint": "Choose the interface language."
+  },
+  "errors": {
+    "unauthorized": "Unauthorized.",
+    "validationFailed": "Invalid data.",
+    "network": "Network problem. Try again.",
+    "generic": "Something went wrong.",
+    "notFound": "Not found."
+  }
+}

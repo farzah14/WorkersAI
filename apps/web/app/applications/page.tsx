@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { JobActions } from "@/components/jobs/job-actions";
 import { createClient } from "@/lib/supabase/server";
 
@@ -19,6 +20,7 @@ type AppliedJob = {
 };
 
 export default async function ApplicationsPage() {
+  const t = await getTranslations();
   const supabase = await createClient();
   const {
     data: { user },
@@ -42,18 +44,18 @@ export default async function ApplicationsPage() {
     <main className="min-h-screen bg-[#f4f1ea] px-5 py-10 text-[#15212b] sm:px-8">
       <div className="mx-auto max-w-4xl space-y-8">
         <header className="border-b border-[#d9d5cc] pb-8">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#d9623c]">Applications</p>
-          <h1 className="text-4xl font-semibold tracking-[-0.05em]">Everything you applied to.</h1>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#d9623c]">{t("nav.applications")}</p>
+          <h1 className="text-4xl font-semibold tracking-[-0.05em]">{t("applications.heading")}</h1>
         </header>
 
         {applied.length === 0 && (
           <section className="rounded-3xl border border-[#d9d5cc] bg-white p-8 text-center">
-            <p className="leading-7 text-[#53616a]">No applications tracked yet. Mark matches as applied to keep a record.</p>
+            <p className="leading-7 text-[#53616a]">{t("applications.emptyHint")}</p>
             <Link
               href="/dashboard"
               className="mt-6 inline-flex rounded-full bg-[#15212b] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#263946]"
             >
-              Open dashboard
+              {t("applications.openDashboard")}
             </Link>
           </section>
         )}
@@ -72,7 +74,7 @@ export default async function ApplicationsPage() {
                       {job?.work_mode ? ` · ${job.work_mode}` : ""}
                     </p>
                     <p className="mt-1 text-xs text-[#6d787e]">
-                      {job?.source_name} · applied {item.applied_at?.slice(0, 10) ?? "unknown"}
+                      {job?.source_name} · {t("applications.appliedOn")} {item.applied_at?.slice(0, 10) ?? "unknown"}
                     </p>
                   </div>
                   <div className="flex shrink-0 gap-2">

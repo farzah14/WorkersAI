@@ -6,3 +6,5 @@ allowBuilds:
 
 onlyBuiltDependencies:
   - unrs-resolver
+  - "@swc/core"
+  - "@parcel/watcher"
