@@ -177,7 +177,7 @@ rollback;
 Run before migration:
 ```bash
 supabase db reset
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/core_cv.sql
+supabase db test supabase/tests/core_cv.sql
 ```
 Expected: FAIL because at least one table does not exist.
 
@@ -258,7 +258,7 @@ using (bucket_id = 'cvs' and (storage.foldername(name))[1] = auth.uid()::text);
 Run:
 ```bash
 supabase db reset
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/core_cv.sql
+supabase db test supabase/tests/core_cv.sql
 psql "$DATABASE_URL" -Atc "select relname, relrowsecurity from pg_class where relname in ('profiles','cvs');"
 ```
 Expected: SQL test exits 0 and both tables report `t` for RLS.

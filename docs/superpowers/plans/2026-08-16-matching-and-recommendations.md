@@ -13,7 +13,7 @@
 ## File structure locked by this plan
 
 ```text
-supabase/migrations/202608160004_matching.sql
+supabase/migrations/202608160006_matching.sql
 apps/worker/jobmatch_worker/matching/
 ├── models.py
 ├── prompt.py
@@ -29,7 +29,7 @@ apps/worker/tests/golden/*.json
 ### Task 1: Add cached requirement and match-result schema
 
 **Files:**
-- Create: `supabase/migrations/202608160004_matching.sql`
+- Create: `supabase/migrations/202608160006_matching.sql`
 - Test: `supabase/tests/matching.sql`
 
 - [ ] **Step 1: Write failing schema assertions**
@@ -79,7 +79,7 @@ for select using (auth.uid() = user_id);
 
 ```bash
 supabase db reset
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/matching.sql
+supabase db test supabase/tests/matching.sql
 git add supabase && git commit -m "feat: add requirement cache and match result schema"
 ```
 Expected: PASS.

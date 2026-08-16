@@ -13,7 +13,7 @@
 ## File structure locked by this plan
 
 ```text
-supabase/migrations/202608160003_job_discovery.sql
+supabase/migrations/202608160005_job_discovery.sql
 apps/web/app/find-jobs/page.tsx
 apps/web/app/api/search-runs/route.ts
 apps/worker/jobmatch_worker/jobs/
@@ -29,7 +29,7 @@ apps/worker/jobmatch_worker/handlers/discovery.py
 ### Task 1: Add search profile and job catalog schema
 
 **Files:**
-- Create: `supabase/migrations/202608160003_job_discovery.sql`
+- Create: `supabase/migrations/202608160005_job_discovery.sql`
 - Test: `supabase/tests/job_discovery.sql`
 
 - [ ] **Step 1: Write failing table assertions**
@@ -90,6 +90,7 @@ create table public.jobs (
   company text not null,
   location text,
   country text,
+  region text not null default 'unknown' check (region in ('indonesia','global','unknown')),
   work_mode text,
   employment_type text,
   salary_min numeric,
@@ -102,23 +103,32 @@ create table public.jobs (
   published_at timestamptz,
   first_seen_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now(),
+  last_checked_at timestamptz not null default now(),
   status text not null default 'active' check (status in ('active','expired','unavailable','unknown'))
 );
 
 create table public.job_search_run_jobs (
   search_run_id uuid not null references public.job_search_runs(id) on delete cascade,
-  job_id uuid not null references public.jobs(id) on delete cascade,
+  job_id uuid not null references public.jobs(id) on delete restrict,
   primary key(search_run_id, job_id)
 );
 
 grant select on public.jobs to authenticated;
 revoke all on public.work_items from anon, authenticated;
 ```
+Canonical jobs are shared records, so `job_search_run_jobs.job_id` and `job_provenance.job_id` use `ON DELETE RESTRICT`; deleting a search run cascades its source, join, and provenance rows without deleting the shared job.
 Enable RLS on user-owned tables and owner policies on `search_profiles`/`job_search_runs`/`job_sources`; grant authenticated users `SELECT` on the non-PII global `jobs` catalog; keep `job_matches`, profiles, search runs, CVs, exports, and tracking rows protected by owner RLS. Explicitly revoke browser access to `work_items` and operational `ai_requests` tables.
 
 - [ ] **Step 3: Verify DB reset and tests**
 
-Run `supabase db reset` and SQL assertions; expected PASS.
+Run `supabase db reset` and the TAP-aware test wrapper; expected exit code 0 and PASS.
+
+```bash
+supabase db reset
+scripts/test-db.cmd supabase/tests/job_discovery.sql
+```
+
+`scripts/test-db.cmd` runs `supabase db test <file>` and exits nonzero when pgTAP emits `not ok` or `Failed` lines, so a failing TAP stream cannot silently pass with exit code 0.
 
 - [ ] **Step 4: Commit**
 
@@ -144,7 +154,7 @@ The page pre-populates target roles/seniority-derived preferences from the confi
 
 - [ ] **Step 3: Implement `POST /api/search-runs`**
 
-In one server-side transaction: create a new current `search_profile`, mark prior current profiles false, create `job_search_runs(trigger='manual')`, enqueue `discover_jobs:<run_id>`, and return 202 with run id. Reject requests lacking a confirmed active candidate profile with HTTP 409.
+In one server-side transaction using the server-only Supabase `service_role` client: create a new current `search_profile`, mark prior current profiles false, create `job_search_runs(trigger='manual')`, enqueue `discover_jobs:<run_id>`, and return 202 with run id. Never expose the service-role key to the browser. Reject requests lacking a confirmed active candidate profile with HTTP 409.
 
 - [ ] **Step 4: Test and commit**
 

@@ -22,13 +22,13 @@ apps/web/
 ├── app/onboarding/profile/page.tsx
 ├── app/api/profile/route.ts
 └── lib/profile/schema.ts
-supabase/migrations/202608160002_profiles_ai.sql
+supabase/migrations/202608160004_profiles_ai.sql
 ```
 
 ### Task 1: Add candidate-profile and AI audit schema
 
 **Files:**
-- Create: `supabase/migrations/202608160002_profiles_ai.sql`
+- Create: `supabase/migrations/202608160004_profiles_ai.sql`
 - Test: `supabase/tests/profiles_ai.sql`
 
 - [ ] **Step 1: Write failing table assertions**
@@ -78,7 +78,7 @@ for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 Run:
 ```bash
 supabase db reset
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/profiles_ai.sql
+supabase db test supabase/tests/profiles_ai.sql
 ```
 Expected: PASS.
 

@@ -13,7 +13,7 @@
 ## File structure locked by this plan
 
 ```text
-supabase/migrations/202608160006_hardening.sql
+supabase/migrations/202608160008_hardening.sql
 apps/worker/jobmatch_worker/scheduler.py
 apps/worker/jobmatch_worker/metrics.py
 apps/worker/jobmatch_worker/jobs/freshness.py
@@ -30,7 +30,7 @@ apps/web/e2e/mvp.spec.ts
 ### Task 1: Add idempotency, quotas, and operational metadata
 
 **Files:**
-- Create: `supabase/migrations/202608160006_hardening.sql`
+- Create: `supabase/migrations/202608160008_hardening.sql`
 - Test: `supabase/tests/hardening.sql`
 
 - [ ] **Step 1: Write failing assertions**
@@ -63,7 +63,7 @@ where status='queued';
 
 ```bash
 supabase db reset
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/hardening.sql
+supabase db test supabase/tests/hardening.sql
 git add supabase && git commit -m "feat: add production idempotency and quota schema"
 ```
 

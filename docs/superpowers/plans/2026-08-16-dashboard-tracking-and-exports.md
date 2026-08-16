@@ -13,7 +13,7 @@
 ## File structure locked by this plan
 
 ```text
-supabase/migrations/202608160005_tracking_exports.sql
+supabase/migrations/202608160007_tracking_exports.sql
 apps/web/app/dashboard/page.tsx
 apps/web/app/jobs/[matchId]/page.tsx
 apps/web/app/saved/page.tsx
@@ -30,7 +30,7 @@ apps/worker/jobmatch_worker/exports/{models,excel,pdf,service}.py
 ### Task 1: Add job tracking and export schema
 
 **Files:**
-- Create: `supabase/migrations/202608160005_tracking_exports.sql`
+- Create: `supabase/migrations/202608160007_tracking_exports.sql`
 - Test: `supabase/tests/tracking_exports.sql`
 
 - [ ] **Step 1: Write failing schema assertions**
@@ -76,7 +76,7 @@ Add private storage policies matching first path segment to `auth.uid()` as done
 
 ```bash
 supabase db reset
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f supabase/tests/tracking_exports.sql
+supabase db test supabase/tests/tracking_exports.sql
 git add supabase && git commit -m "feat: add application tracking and export schema"
 ```
 
