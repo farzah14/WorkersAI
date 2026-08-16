@@ -15,7 +15,7 @@ def test_default_ai_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OLLAMA_API_KEY", "ollama-key")
     monkeypatch.setenv("OLLAMA_MODEL", "llama3.2")
     settings = Settings(_env_file=None)
-    assert settings.ai_provider_order == "nvidia,openrouter,ollama"
+    assert settings.ai_provider_order == "nvidia,ollama,openrouter"
     assert settings.ai_timeout_seconds == 30.0
     assert settings.nvidia_base_url == "https://integrate.api.nvidia.com/v1"
     assert settings.openrouter_base_url == "https://openrouter.ai/api/v1"

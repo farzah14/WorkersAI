@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     worker_poll_seconds: float = 1.0
     worker_id: str = "worker-1"
     max_attempts: int = 3
-    ai_provider_order: str = "nvidia,openrouter,ollama"
+    ai_provider_order: str = "nvidia,ollama,openrouter"
     ai_timeout_seconds: float = 30.0
     nvidia_api_key: str = ""
     nvidia_base_url: str = "https://integrate.api.nvidia.com/v1"

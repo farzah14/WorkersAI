@@ -278,7 +278,7 @@ Use states `closed`, `open`, `half_open`. Open after 3 consecutive retryable pro
 
 - [ ] **Step 3: Implement router rules**
 
-Default order comes from env `AI_PROVIDER_ORDER=nvidia,openrouter,ollama`. Each provider receives one immediate call plus at most one retry with jitter for transport/429/5xx errors. Schema validation failure is retryable once on the same provider, then falls back. Invalid CV/input validation errors never enter the router.
+Default order comes from env `AI_PROVIDER_ORDER=nvidia,ollama,openrouter`. Each provider receives one immediate call plus at most one retry with jitter for transport/429/5xx errors. Schema validation failure is retryable once on the same provider, then falls back. Invalid CV/input validation errors never enter the router.
 
 - [ ] **Step 4: Persist AI request metadata**
 

@@ -26,7 +26,7 @@ If a plan conflicts with the approved design, stop and reconcile the plan before
 - Worker: Python 3.12+ using asyncio, psycopg, Pydantic, HTTPX, PyMuPDF, and python-docx.
 - Queue: PostgreSQL-backed durable `work_items` queue using `FOR UPDATE SKIP LOCKED`.
 - AI providers: NVIDIA NIM, OpenRouter, and Ollama Cloud.
-- Default AI fallback order: `nvidia -> openrouter -> ollama`, configurable by operation.
+- Default AI fallback order: `nvidia -> ollama -> openrouter`, configurable by operation.
 - Ollama: cloud API only through `OLLAMA_API_KEY`; no local Ollama runtime in the MVP.
 - Deployment: Vercel + Supabase + one persistent VPS for worker/scheduler only.
 - Testing: Vitest + Playwright for web, pytest for worker, SQL/RLS checks for Supabase.
@@ -148,9 +148,9 @@ Default fallback:
 ```text
 NVIDIA NIM
   -> retryable failure
-OpenRouter
-  -> retryable failure
 Ollama Cloud
+  -> retryable failure
+OpenRouter
 ```
 
 The order is configuration, not business logic.

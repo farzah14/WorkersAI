@@ -19,7 +19,7 @@ The order is configurable by task/operation.
 ## Environment contract
 
 ```dotenv
-AI_PROVIDER_ORDER=nvidia,openrouter,ollama
+AI_PROVIDER_ORDER=nvidia,ollama,openrouter
 AI_TIMEOUT_SECONDS=30
 AI_MAX_RETRIES=1
 
