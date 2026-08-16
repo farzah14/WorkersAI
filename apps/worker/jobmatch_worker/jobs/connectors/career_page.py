@@ -103,6 +103,13 @@ class CareerPageFetcher:
             await self._client.aclose()
 
     async def extract_text(self, url: str) -> str:
+        try:
+            async with asyncio.timeout(self._timeout):
+                return await self._extract_text(url)
+        except TimeoutError as exc:
+            raise SourceUnavailable(self.source_key, "request deadline exceeded") from exc
+
+    async def _extract_text(self, url: str) -> str:
         current = url
         for _ in range(_MAX_REDIRECTS + 1):
             await self._validate_url(current)

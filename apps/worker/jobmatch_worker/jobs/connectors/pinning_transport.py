@@ -12,6 +12,7 @@ and response headers are capped before anything is returned.
 
 import asyncio
 import ipaddress
+import re
 import ssl
 from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
 
@@ -47,11 +48,22 @@ def is_public_address(address: Address) -> bool:
     because it can embed a private IPv4 address that is not visible to
     ``is_global``.
     """
-    if not address.is_global:
+    if (
+        not address.is_global
+        or address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_reserved
+        or address.is_unspecified
+        or address.is_multicast
+    ):
         return False
-    return not (
-        isinstance(address, ipaddress.IPv6Address) and address in _NAT64_NETWORK
-    )
+    if isinstance(address, ipaddress.IPv6Address):
+        if address.is_site_local or address.ipv4_mapped is not None:
+            return False
+        if address in _NAT64_NETWORK:
+            return False
+    return True
 
 
 async def resolve_public_addresses(host: str, resolver: Resolver) -> list[Address]:
@@ -85,6 +97,24 @@ async def _open_connection(
     )
 
 
+async def _close_writer(writer: asyncio.StreamWriter) -> None:
+    """Close a socket even when the request task was cancelled."""
+    writer.close()
+    close_task = asyncio.create_task(writer.wait_closed())
+    try:
+        await asyncio.shield(close_task)
+    except asyncio.CancelledError:
+        try:
+            await close_task
+        except asyncio.CancelledError:
+            pass
+        except Exception:  # noqa: BLE001, S110 - teardown is best effort
+            pass
+        raise
+    except Exception:  # noqa: BLE001, S110 - teardown is best effort
+        pass
+
+
 class PinnedHttpsTransport(httpx.AsyncBaseTransport):
     """Resolve once, validate, and connect to the validated address."""
 
@@ -93,11 +123,11 @@ class PinnedHttpsTransport(httpx.AsyncBaseTransport):
         *,
         resolver: Resolver,
         timeout: float = 10.0,
-        connection_factory: ConnectionFactory = _open_connection,
+        connection_factory: ConnectionFactory | None = None,
     ) -> None:
         self._resolver = resolver
         self._timeout = timeout
-        self._connection_factory = connection_factory
+        self._connection_factory = connection_factory or _open_connection
         self._ssl_context = ssl.create_default_context()
 
     async def handle_async_request(self, request: httpx.Request) -> httpx.Response:
@@ -111,12 +141,7 @@ class PinnedHttpsTransport(httpx.AsyncBaseTransport):
         last_error: Exception | None = None
         for address in addresses[:4]:
             try:
-                reader, writer = await asyncio.wait_for(
-                    self._connection_factory(
-                        str(address), port, self._ssl_context, hostname
-                    ),
-                    self._timeout,
-                )
+                reader, writer = await self._connect(str(address), port, hostname)
             except (TimeoutError, OSError, ssl.SSLError) as exc:
                 last_error = exc
                 continue
@@ -124,9 +149,37 @@ class PinnedHttpsTransport(httpx.AsyncBaseTransport):
                 return await self._exchange(request, reader, writer)
             except (TimeoutError, OSError, ssl.SSLError) as exc:
                 last_error = exc
-                writer.close()
+                await _close_writer(writer)
                 continue
+            except BaseException:
+                await _close_writer(writer)
+                raise
         raise httpx.ConnectError(f"could not connect to {hostname}: {last_error}")
+
+    async def _connect(
+        self,
+        host: str,
+        port: int,
+        server_hostname: str,
+    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        task: asyncio.Future[tuple[asyncio.StreamReader, asyncio.StreamWriter]] = (
+            asyncio.ensure_future(
+                self._connection_factory(host, port, self._ssl_context, server_hostname)
+            )
+        )
+        try:
+            return await asyncio.wait_for(asyncio.shield(task), self._timeout)
+        except (asyncio.CancelledError, TimeoutError, OSError, ssl.SSLError) as error:
+            if not task.done():
+                task.cancel()
+            try:
+                result = await asyncio.shield(task)
+            except asyncio.CancelledError:
+                raise error from None
+            except Exception:  # noqa: BLE001 - preserve the original connection error
+                raise error from None
+            await _close_writer(result[1])
+            raise error from None
 
     async def _exchange(
         self,
@@ -176,6 +229,8 @@ class _ResponseStream(httpx.AsyncByteStream):
         self._chunked = "chunked" in transfer_encoding
         content_length = headers.get("content-length", "")
         self._remaining = int(content_length) if content_length.isdigit() else None
+        self._chunk_remaining: int | None = None
+        self._chunk_done = False
 
     def __aiter__(self) -> AsyncIterator[bytes]:
         return self.aiter_bytes()
@@ -205,11 +260,7 @@ class _ResponseStream(httpx.AsyncByteStream):
         if self._closed:
             return
         self._closed = True
-        try:
-            self._writer.close()
-            await self._writer.wait_closed()
-        except Exception:  # noqa: BLE001, S110 - best-effort teardown
-            pass
+        await _close_writer(self._writer)
 
     async def _read(self, size: int) -> bytes:
         return await asyncio.wait_for(self._reader.read(size), self._timeout)
@@ -235,22 +286,51 @@ class _ResponseStream(httpx.AsyncByteStream):
         return await asyncio.wait_for(self._reader.readuntil(sep), self._timeout)
 
     async def _next_chunk(self) -> bytes:
-        size_line = await self._read_until(b"\r\n")
-        try:
-            size = int(size_line.split(b";", 1)[0].strip(), 16)
-        except ValueError as exc:
-            raise httpx.ProtocolError("malformed chunked encoding") from exc
-        if size == 0:
-            trailer_bytes = 0
-            while trailer_bytes <= _MAX_HEADER_BYTES:
-                line = await self._read_until(b"\r\n")
-                trailer_bytes += len(line)
-                if line in (b"\r\n", b""):
-                    return b""
-            raise httpx.ProtocolError("chunked trailers too large")
+        if self._chunk_done:
+            return b""
+        if self._chunk_remaining is None:
+            size_line = await self._read_until(b"\r\n")
+            size_token = size_line[:-2].split(b";", 1)[0]
+            if not re.fullmatch(rb"[0-9A-Fa-f]+", size_token):
+                raise httpx.ProtocolError("malformed chunked encoding")
+            try:
+                size = int(size_token, 16)
+            except ValueError as exc:
+                raise httpx.ProtocolError("malformed chunked encoding") from exc
+            if size == 0:
+                trailer_bytes = 0
+                while True:
+                    line = await self._read_until(b"\r\n")
+                    trailer_bytes += len(line)
+                    if trailer_bytes > _MAX_HEADER_BYTES:
+                        raise httpx.ProtocolError("chunked trailers too large")
+                    if line in (b"\r\n", b""):
+                        self._chunk_done = True
+                        return b""
+                    _validate_trailer_line(line)
+            self._chunk_remaining = size
+
+        size = min(_READ_CHUNK, self._chunk_remaining)
         data = await self._read_exact(size)
-        await self._read_until(b"\r\n")
+        self._chunk_remaining -= len(data)
+        if self._chunk_remaining == 0:
+            ending = await self._read_exact(2)
+            if ending != b"\r\n":
+                raise httpx.ProtocolError("malformed chunked encoding")
+            self._chunk_remaining = None
         return data
+
+
+def _validate_trailer_line(line: bytes) -> None:
+    if not line.endswith(b"\r\n"):
+        raise httpx.ProtocolError("malformed chunked trailer")
+    name, separator, value = line[:-2].partition(b":")
+    if not separator or not re.fullmatch(
+        rb"[!#$%&'*+\-.^_`|~0-9A-Za-z]+", name
+    ):
+        raise httpx.ProtocolError("malformed chunked trailer")
+    if any(byte < 0x20 and byte != 0x09 for byte in value):
+        raise httpx.ProtocolError("malformed chunked trailer")
 
 
 def _build_request_bytes(request: httpx.Request) -> bytes:

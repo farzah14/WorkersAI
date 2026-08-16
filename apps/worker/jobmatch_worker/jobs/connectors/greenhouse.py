@@ -26,6 +26,7 @@ from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
 from jobmatch_worker.jobs.query import SearchQuery
 
 GREENHOUSE_API_URL = "https://boards-api.greenhouse.io/v1/boards/{board_token}/jobs"
+_MAX_MAPPED_JOBS = 200
 
 
 class GreenhouseConnector:
@@ -71,6 +72,8 @@ class GreenhouseConnector:
         jobs = body.get("jobs") if isinstance(body, dict) else None
         if not isinstance(jobs, list):
             raise SourceDataError(self.source_key, "unexpected response shape")
+        if len(jobs) > _MAX_MAPPED_JOBS:
+            raise SourceDataError(self.source_key, "source result limit exceeded")
 
         result: list[DiscoveredJob | DiscoveryCandidateUrl] = []
         for job in jobs:

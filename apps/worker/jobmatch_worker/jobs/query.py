@@ -34,21 +34,28 @@ class SearchQuery(str):
 
 _MAX_ROLES = 3
 _MAX_LOCATIONS = 2
+_MAX_EXCLUDED_KEYWORDS = 10
+_MAX_TERM_CHARS = 200
+_MAX_INPUT_ITEMS = 50
 _VALID_REGIONS = ("indonesia", "global")
 
 
-def _clean(values: list[str] | tuple[str, ...]) -> list[str]:
+def _clean(values: list[str] | tuple[str, ...], *, limit: int) -> list[str]:
     seen: set[str] = set()
     cleaned: list[str] = []
-    for value in values:
+    for value in values[:_MAX_INPUT_ITEMS]:
         stripped = value.strip()
         if not stripped:
             continue
+        if len(stripped) > _MAX_TERM_CHARS:
+            raise ValueError("search term is too long")
         key = stripped.casefold()
         if key in seen:
             continue
         seen.add(key)
         cleaned.append(stripped)
+        if len(cleaned) >= limit:
+            break
     return cleaned
 
 
@@ -88,15 +95,17 @@ def build_queries(
     if normalized_region not in _VALID_REGIONS:
         raise ValueError(f"unsupported region: {region!r}")
 
-    clean_roles = _clean(roles)
+    clean_roles = _clean(roles, limit=_MAX_ROLES)
     if not clean_roles:
         raise ValueError("at least one non-empty target role is required")
 
-    clean_locations = _clean(locations)[:_MAX_LOCATIONS]
-    clean_exclusions = tuple(_clean(excluded_keywords or []))
+    clean_locations = _clean(locations, limit=_MAX_LOCATIONS)
+    clean_exclusions = tuple(
+        _clean(excluded_keywords or [], limit=_MAX_EXCLUDED_KEYWORDS)
+    )
 
     queries: list[SearchQuery] = []
-    for role in clean_roles[:_MAX_ROLES]:
+    for role in clean_roles:
         location_variants: Iterable[str | None] = clean_locations or [None]
         for location in location_variants:
             parts = [role]

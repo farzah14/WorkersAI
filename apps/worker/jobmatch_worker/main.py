@@ -14,6 +14,7 @@ from jobmatch_worker.ai.router import PostgresAiAuditRecorder
 from jobmatch_worker.config import Settings
 from jobmatch_worker.cv.extract import UnsupportedScannedPdf, extract_cv_text
 from jobmatch_worker.db import create_pool
+from jobmatch_worker.handlers.discovery import handle_discover_jobs
 from jobmatch_worker.handlers.profile import handle_extract_candidate_profile
 from jobmatch_worker.queue import (
     claim_next_item,
@@ -143,6 +144,8 @@ async def worker_loop(settings: Settings) -> None:
                     await handle_extract_candidate_profile(
                         conn, item, settings, audit=PostgresAiAuditRecorder(pool)
                     )
+                elif item["kind"] == "discover_jobs":
+                    await handle_discover_jobs(conn, item, settings)
                 else:
                     await fail_item(conn, str(item["id"]), f"unknown kind: {item['kind']}")
     finally:

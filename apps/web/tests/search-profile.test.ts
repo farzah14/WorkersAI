@@ -15,7 +15,7 @@ vi.mock("@supabase/supabase-js", () => ({
 import { POST } from "@/app/api/search-runs/route";
 
 const validSearchProfile = {
-  candidate_profile_id: "profile-1",
+  candidate_profile_id: "00000000-0000-4000-8000-000000000001",
   region: "indonesia",
   target_roles: ["Data Engineer"],
   locations: ["Jakarta"],
@@ -54,6 +54,21 @@ describe("searchProfileSchema", () => {
     expect(searchProfileSchema.safeParse({ ...validSearchProfile, region: "global" }).success).toBe(true);
   });
 
+  it("requires a UUID candidate profile and bounded currency text", () => {
+    expect(
+      searchProfileSchema.safeParse({
+        ...validSearchProfile,
+        candidate_profile_id: "profile-1",
+      }).success,
+    ).toBe(false);
+    expect(
+      searchProfileSchema.safeParse({
+        ...validSearchProfile,
+        salary_currency: "X".repeat(33),
+      }).success,
+    ).toBe(false);
+  });
+
   it("requires at least one nonblank target role", () => {
     expect(searchProfileSchema.safeParse({ ...validSearchProfile, target_roles: [] }).success).toBe(false);
     expect(searchProfileSchema.safeParse({ ...validSearchProfile, target_roles: [" ", ""] }).success).toBe(false);
@@ -63,6 +78,21 @@ describe("searchProfileSchema", () => {
     expect(searchProfileSchema.safeParse({ ...validSearchProfile, work_modes: ["office"] }).success).toBe(false);
     expect(searchProfileSchema.safeParse({ ...validSearchProfile, employment_types: ["permanent"] }).success).toBe(false);
     expect(searchProfileSchema.safeParse({ ...validSearchProfile, work_modes: ["remote", "on-site"] }).success).toBe(true);
+  });
+
+  it("bounds search arrays and individual terms", () => {
+    expect(
+      searchProfileSchema.safeParse({
+        ...validSearchProfile,
+        target_roles: Array.from({ length: 21 }, (_, index) => `Role ${index}`),
+      }).success,
+    ).toBe(false);
+    expect(
+      searchProfileSchema.safeParse({
+        ...validSearchProfile,
+        excluded_keywords: ["x".repeat(201)],
+      }).success,
+    ).toBe(false);
   });
 
   it("rejects a negative minimum salary", () => {
@@ -132,10 +162,23 @@ describe("POST /api/search-runs", () => {
       "create_manual_search_run",
       expect.objectContaining({
         p_user_id: "user-from-cookie",
-        p_candidate_profile_id: "profile-1",
+        p_candidate_profile_id: "00000000-0000-4000-8000-000000000001",
         p_region: "indonesia",
       }),
     );
+  });
+
+  it("rejects an oversized JSON request body", async () => {
+    setupAuthenticatedUser();
+    const request = makeRequest({
+      ...validSearchProfile,
+      padding: "x".repeat(70_000),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(413);
+    expect(createServiceClientMock).not.toHaveBeenCalled();
   });
 
   it("uses the authenticated user instead of a browser-supplied user id", async () => {

@@ -95,3 +95,18 @@ def test_no_location_produces_role_only_query() -> None:
     q = build_queries(region="global", roles=["Data Engineer"], locations=[])
     assert len(q) == 1
     assert q[0].terms == "Data Engineer"
+
+
+def test_query_builder_caps_excluded_keywords() -> None:
+    q = build_queries(
+        region="global",
+        roles=["Data Engineer"],
+        locations=[],
+        excluded_keywords=[f"exclude-{index}" for index in range(20)],
+    )
+    assert len(q[0].negative_terms) == 10
+
+
+def test_query_builder_rejects_oversized_search_terms() -> None:
+    with pytest.raises(ValueError):
+        build_queries(region="global", roles=["x" * 201], locations=[])

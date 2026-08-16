@@ -13,8 +13,14 @@ export const EMPLOYMENT_TYPES = [
   "freelance",
 ] as const;
 
+const MAX_SEARCH_ARRAY_ITEMS = 20;
+const MAX_SEARCH_TERM_LENGTH = 200;
+
 function normalizeArray(value: unknown): unknown {
   if (!Array.isArray(value)) return value;
+  if (value.length > MAX_SEARCH_ARRAY_ITEMS) {
+    return value.slice(0, MAX_SEARCH_ARRAY_ITEMS + 1);
+  }
 
   const normalized = value
     .map((item) => (typeof item === "string" ? item.trim() : item))
@@ -29,17 +35,20 @@ function emptyStringToUndefined(value: unknown): unknown {
 
 const normalizedTextArray = z.preprocess(
   normalizeArray,
-  z.array(z.string().min(1)),
+  z.array(z.string().min(1).max(MAX_SEARCH_TERM_LENGTH)).max(MAX_SEARCH_ARRAY_ITEMS),
 );
 
 const normalizedOptionalTextArray = z.preprocess(
   normalizeArray,
-  z.array(z.string().min(1)).default([]),
+  z
+    .array(z.string().min(1).max(MAX_SEARCH_TERM_LENGTH))
+    .max(MAX_SEARCH_ARRAY_ITEMS)
+    .default([]),
 );
 
 const optionalText = z.preprocess(
   emptyStringToUndefined,
-  z.string().trim().optional().nullable(),
+  z.string().trim().max(32).optional().nullable(),
 );
 
 const optionalNonNegativeNumber = z.preprocess(
@@ -54,17 +63,17 @@ const optionalNonNegativeNumber = z.preprocess(
 );
 
 export const searchProfileSchema = z.object({
-  candidate_profile_id: z.string().trim().min(1),
+  candidate_profile_id: z.string().uuid(),
   region: z.enum(REGIONS),
   target_roles: normalizedTextArray.pipe(z.array(z.string().min(1)).min(1)),
   locations: normalizedOptionalTextArray,
   work_modes: z.preprocess(
     normalizeArray,
-    z.array(z.enum(WORK_MODES)).default([]),
+    z.array(z.enum(WORK_MODES)).max(MAX_SEARCH_ARRAY_ITEMS).default([]),
   ),
   employment_types: z.preprocess(
     normalizeArray,
-    z.array(z.enum(EMPLOYMENT_TYPES)).default(["full-time"]),
+    z.array(z.enum(EMPLOYMENT_TYPES)).max(MAX_SEARCH_ARRAY_ITEMS).default(["full-time"]),
   ),
   min_salary: optionalNonNegativeNumber,
   salary_currency: optionalText,

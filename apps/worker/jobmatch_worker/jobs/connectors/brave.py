@@ -112,6 +112,8 @@ def _extract_results(source_key: str, body: Any) -> list[dict[str, Any]]:
     results = web.get("results") if isinstance(web, dict) else None
     if not isinstance(results, list):
         raise SourceDataError(source_key, "unexpected response shape")
+    if len(results) > BRAVE_MAX_COUNT:
+        raise SourceDataError(source_key, "source result limit exceeded")
     return [result for result in results if isinstance(result, dict)]
 
 

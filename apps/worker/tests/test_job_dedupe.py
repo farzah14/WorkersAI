@@ -208,6 +208,19 @@ class TestFuzzyDuplicate:
         b = make_normalized(original_url="https://x.example/1")
         assert not is_fuzzy_duplicate(a, b)
 
+    def test_unknown_identity_fields_do_not_fuzzy_match(self) -> None:
+        a = make_normalized(
+            company="Unknown",
+            location=None,
+            original_url="https://x.example/1",
+        )
+        b = make_normalized(
+            company="Unknown",
+            location=None,
+            original_url="https://y.example/2",
+        )
+        assert not is_fuzzy_duplicate(a, b)
+
 
 class TestDedupeJobs:
     def test_exact_duplicate_collapses_and_counts(self) -> None:

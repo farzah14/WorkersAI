@@ -8,6 +8,46 @@ type RpcError = {
   message?: string | null;
 };
 
+const MAX_REQUEST_BYTES = 64 * 1024;
+
+class RequestBodyTooLarge extends Error {}
+
+async function readJsonBody(request: Request): Promise<unknown> {
+  const contentLength = request.headers.get("content-length");
+  if (contentLength) {
+    const parsedLength = Number(contentLength);
+    if (Number.isFinite(parsedLength) && parsedLength > MAX_REQUEST_BYTES) {
+      throw new RequestBodyTooLarge();
+    }
+  }
+
+  if (!request.body) {
+    return JSON.parse(await request.text());
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_REQUEST_BYTES) {
+      await reader.cancel();
+      throw new RequestBodyTooLarge();
+    }
+    chunks.push(value);
+  }
+
+  const body = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    body.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return JSON.parse(new TextDecoder().decode(body));
+}
+
 function isMissingConfirmedActiveProfile(error: RpcError | null): boolean {
   return error?.message === "confirmed_active_profile_required";
 }
@@ -49,8 +89,11 @@ export async function POST(request: Request) {
 
   let body: unknown;
   try {
-    body = await request.json();
-  } catch {
+    body = await readJsonBody(request);
+  } catch (error) {
+    if (error instanceof RequestBodyTooLarge) {
+      return NextResponse.json({ error: "request_too_large" }, { status: 413 });
+    }
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
 

@@ -23,6 +23,8 @@ EmploymentType = Literal[
     "freelance",
 ]
 
+_MAX_URL_LENGTH = 2048
+
 
 class DiscoveredJob(BaseModel):
     """A job discovered from a source connector, normalized before matching.
@@ -57,6 +59,15 @@ class DiscoveredJob(BaseModel):
             raise ValueError("must not be empty")
         return stripped
 
+    @field_validator("original_url")
+    @classmethod
+    def _validate_url_size(cls, value: str) -> str:
+        if len(value) > _MAX_URL_LENGTH:
+            raise ValueError("URL is too long")
+        if any(ord(character) < 0x20 for character in value):
+            raise ValueError("URL contains control characters")
+        return value
+
     @model_validator(mode="after")
     def _check_salary_bounds(self) -> "DiscoveredJob":
         if self.salary_min is not None and self.salary_max is not None and self.salary_min > self.salary_max:
@@ -82,7 +93,14 @@ class DiscoveryCandidateUrl(BaseModel):
         if not isinstance(value, str):
             raise TypeError("must be a string")
         url = value.strip()
-        parsed = urllib.parse.urlsplit(url)
+        if len(url) > _MAX_URL_LENGTH:
+            raise ValueError("URL is too long")
+        if any(ord(character) < 0x20 for character in url):
+            raise ValueError("URL contains control characters")
+        try:
+            parsed = urllib.parse.urlsplit(url)
+        except ValueError as exc:
+            raise ValueError("invalid URL") from exc
         if parsed.scheme != "https":
             raise ValueError("must be an https URL")
         if not parsed.netloc:

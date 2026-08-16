@@ -18,6 +18,12 @@ from rapidfuzz import fuzz
 from jobmatch_worker.jobs.normalize import NormalizedJob, normalize_text
 
 _FUZZY_RATIO_THRESHOLD = 95
+_UNKNOWN_IDENTITY_VALUES = frozenset({"", "-", "n/a", "na", "none", "null", "unknown"})
+
+
+def _reliable_identity(value: str | None) -> str | None:
+    normalized = normalize_text(value) if value else ""
+    return None if normalized in _UNKNOWN_IDENTITY_VALUES else normalized
 
 
 def job_fingerprint(job: NormalizedJob) -> str:
@@ -42,9 +48,13 @@ def is_fuzzy_duplicate(left: NormalizedJob, right: NormalizedJob) -> bool:
     """
     if left.canonical_url == right.canonical_url:
         return False
-    if normalize_text(left.company) != normalize_text(right.company):
+    left_company = _reliable_identity(left.company)
+    right_company = _reliable_identity(right.company)
+    if left_company is None or right_company is None or left_company != right_company:
         return False
-    if (left.location or "") != (right.location or ""):
+    left_location = _reliable_identity(left.location)
+    right_location = _reliable_identity(right.location)
+    if left_location is None or right_location is None or left_location != right_location:
         return False
     ratio = fuzz.token_set_ratio(
         normalize_text(left.title), normalize_text(right.title)
@@ -85,6 +95,7 @@ class UpsertResult:
 
     inserted: int
     duplicates: int
+    job_ids: tuple[str, ...] = ()
 
 
 async def upsert_jobs(
@@ -103,6 +114,7 @@ async def upsert_jobs(
     kept, _ = dedupe_jobs(jobs)
     inserted = 0
     duplicates = 0
+    job_ids: list[str] = []
     for job in kept:
         cursor = await conn.execute(
             """
@@ -138,7 +150,8 @@ async def upsert_jobs(
         )
         row = await cursor.fetchone()
         if row is None:
-            continue
+            raise RuntimeError("job upsert did not return a job id")
+        job_ids.append(str(row["id"]))
         if row["inserted"]:
             inserted += 1
         else:
@@ -151,7 +164,11 @@ async def upsert_jobs(
             """,
             (search_run_id, row["id"]),
         )
-    return UpsertResult(inserted=inserted, duplicates=duplicates)
+    return UpsertResult(
+        inserted=inserted,
+        duplicates=duplicates,
+        job_ids=tuple(job_ids),
+    )
 
 
 __all__ = [

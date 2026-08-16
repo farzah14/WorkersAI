@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
-from jobmatch_worker.jobs.models import DiscoveredJob
+from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
 
 
 def test_discovered_job_accepts_complete_payload() -> None:
@@ -121,6 +121,27 @@ def test_discovered_job_accepts_equal_salary_bounds() -> None:
         salary_max=15000000,
     )
     assert job.salary_min == job.salary_max == 15000000
+
+
+def test_discovered_job_rejects_oversized_or_control_character_url() -> None:
+    base = {
+        "source_name": "Lever",
+        "source_key": "lv-4b",
+        "title": "Data Analyst",
+        "company": "Beta",
+        "description": "Analyze data.",
+    }
+    with pytest.raises(ValidationError):
+        DiscoveredJob(**base, original_url="https://example.com/" + "x" * 2048)
+    with pytest.raises(ValidationError):
+        DiscoveredJob(**base, original_url="https://example.com/jobs/1\nnext")
+
+
+def test_candidate_url_rejects_oversized_or_control_character_url() -> None:
+    with pytest.raises(ValidationError):
+        DiscoveryCandidateUrl(url="https://example.com/" + "x" * 2048)
+    with pytest.raises(ValidationError):
+        DiscoveryCandidateUrl(url="https://example.com/jobs/1\nnext")
 
 
 @pytest.mark.parametrize(

@@ -20,6 +20,7 @@ from jobmatch_worker.jobs.connectors.lever import LeverConnector
 from jobmatch_worker.jobs.connectors.pinning_transport import (
     NonPublicAddressError,
     PinnedHttpsTransport,
+    is_public_address,
 )
 from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
 from jobmatch_worker.jobs.query import SearchQuery
@@ -166,6 +167,26 @@ async def test_brave_maps_results_to_candidates(httpx_mock: HTTPXMock) -> None:
     await connector.aclose()
 
 
+async def test_brave_rejects_more_results_than_requested_cap(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        url=BRAVE_URL_ENCODED,
+        json={
+            "web": {
+                "results": [
+                    {"url": f"https://jobs.example.com/{index}"}
+                    for index in range(21)
+                ]
+            }
+        },
+    )
+    connector = BraveConnector(api_key="test-key", client=httpx.AsyncClient())
+
+    with pytest.raises(SourceDataError, match="result limit"):
+        await connector.search(QUERY)
+
+    await connector.aclose()
+
+
 async def test_brave_500_raises_source_unavailable(httpx_mock: HTTPXMock) -> None:
     httpx_mock.add_response(url=BRAVE_URL_ENCODED, status_code=500)
     httpx_mock.add_response(url=BRAVE_URL_ENCODED, status_code=500)
@@ -260,6 +281,16 @@ async def test_greenhouse_skips_incomplete_jobs(httpx_mock: HTTPXMock) -> None:
     await connector.aclose()
 
 
+async def test_greenhouse_rejects_oversized_posting_list(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(url=GREENHOUSE_URL, json={"jobs": [{} for _ in range(201)]})
+    connector = GreenhouseConnector(board_token="acme", client=httpx.AsyncClient())
+
+    with pytest.raises(SourceDataError, match="result limit"):
+        await connector.search(QUERY)
+
+    await connector.aclose()
+
+
 async def test_greenhouse_500_raises_source_unavailable(httpx_mock: HTTPXMock) -> None:
     httpx_mock.add_response(url=GREENHOUSE_URL, status_code=500)
     httpx_mock.add_response(url=GREENHOUSE_URL, status_code=500)
@@ -307,7 +338,6 @@ async def test_lever_maps_postings(httpx_mock: HTTPXMock) -> None:
     assert "Build reliable data pipelines." in job.description
     assert "Engineering" in job.description
     assert job.published_at == datetime.fromtimestamp(1783000000, tz=UTC)
-
     analyst = jobs[1]
     assert analyst.title == "Data Analyst"
     assert analyst.location is None
@@ -451,6 +481,37 @@ async def test_career_page_rejects_non_html_content_type(httpx_mock: HTTPXMock) 
     assert "content type" in str(excinfo.value)
 
 
+async def test_career_page_enforces_absolute_fetch_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = httpx.AsyncClient()
+    fetcher = CareerPageFetcher(
+        client=client,
+        resolver=_public_resolver,
+        timeout=0.01,
+    )
+
+    async def slow_robots(_url: str) -> bool:
+        await asyncio.sleep(0.05)
+        return True
+
+    async def unexpected_get(_url: str) -> httpx.Response:
+        raise AssertionError("fetch should have timed out before the page request")
+
+    monkeypatch.setattr(fetcher, "_robots_allowed", slow_robots)
+    monkeypatch.setattr(fetcher, "_get", unexpected_get)
+    try:
+        with pytest.raises(SourceUnavailable, match="deadline"):
+            await fetcher.extract_text("https://careers.acme.com/jobs/slow")
+    finally:
+        await client.aclose()
+
+
+async def test_career_page_default_transport_has_connection_factory() -> None:
+    fetcher = CareerPageFetcher(resolver=_public_resolver)
+    transport = fetcher._client._transport  # type: ignore[attr-defined]
+    assert callable(transport._connection_factory)
+    await fetcher.aclose()
+
+
 # --- Connector isolation ---
 
 
@@ -534,6 +595,7 @@ class _FakeWriter:
     def __init__(self) -> None:
         self.written = b""
         self.closed = False
+        self.wait_closed_called = False
 
     def write(self, data: bytes) -> None:
         self.written += data
@@ -545,7 +607,19 @@ class _FakeWriter:
         self.closed = True
 
     async def wait_closed(self) -> None:
-        return None
+        self.wait_closed_called = True
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        ipaddress.ip_address("fec0::1"),
+        ipaddress.ip_address("ff02::1"),
+        ipaddress.ip_address("224.0.0.1"),
+    ],
+)
+def test_public_address_check_rejects_non_unicast(address: object) -> None:
+    assert not is_public_address(address)  # type: ignore[arg-type]
 
 
 async def test_pinned_transport_connects_to_validated_ip_only() -> None:
@@ -705,6 +779,173 @@ async def test_pinned_transport_decodes_large_chunk_across_partial_reads() -> No
 
     assert (await response.aread()) == body
     await client.aclose()
+
+
+async def test_pinned_transport_splits_large_declared_chunks() -> None:
+    body = b"x" * 200_000
+
+    async def factory(
+        host: str, port: int, ssl_context: object, server_hostname: str | None
+    ) -> tuple[_FakeReader, _FakeWriter]:
+        return (
+            _FakeReader(
+                b"HTTP/1.1 200 OK\r\n"
+                b"Transfer-Encoding: chunked\r\n"
+                b"\r\n"
+                + f"{len(body):x}\r\n".encode()
+                + body
+                + b"\r\n0\r\n\r\n"
+            ),
+            _FakeWriter(),
+        )
+
+    transport = PinnedHttpsTransport(
+        resolver=_public_resolver, connection_factory=factory  # type: ignore[arg-type]
+    )
+    response = await transport.handle_async_request(
+        httpx.Request("GET", "https://careers.acme.com/jobs/data-engineer")
+    )
+
+    chunks = [chunk async for chunk in response.aiter_raw()]
+    assert b"".join(chunks) == body
+    assert max(map(len, chunks)) <= 64 * 1024
+
+
+async def test_pinned_transport_closes_writer_when_request_is_cancelled() -> None:
+    blocked = asyncio.Event()
+    writers: list[_FakeWriter] = []
+
+    class _BlockingReader(_FakeReader):
+        async def readuntil(self, _sep: bytes) -> bytes:
+            await blocked.wait()
+            return b""
+
+    async def factory(
+        host: str, port: int, ssl_context: object, server_hostname: str | None
+    ) -> tuple[_BlockingReader, _FakeWriter]:
+        writer = _FakeWriter()
+        writers.append(writer)
+        return _BlockingReader(b""), writer
+
+    transport = PinnedHttpsTransport(
+        resolver=_public_resolver, connection_factory=factory  # type: ignore[arg-type]
+    )
+    task = asyncio.create_task(
+        transport.handle_async_request(
+            httpx.Request("GET", "https://careers.acme.com/jobs/cancel")
+        )
+    )
+    await asyncio.sleep(0)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert writers[0].closed
+    assert writers[0].wait_closed_called
+
+
+async def test_pinned_transport_closes_factory_result_when_cancelled() -> None:
+    started = asyncio.Event()
+    writers: list[_FakeWriter] = []
+
+    async def factory(
+        host: str, port: int, ssl_context: object, server_hostname: str | None
+    ) -> tuple[_FakeReader, _FakeWriter]:
+        writer = _FakeWriter()
+        writers.append(writer)
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            return _FakeReader(b""), writer
+        raise AssertionError("factory should have been cancelled")
+
+    transport = PinnedHttpsTransport(
+        resolver=_public_resolver, connection_factory=factory  # type: ignore[arg-type]
+    )
+    task = asyncio.create_task(
+        transport.handle_async_request(
+            httpx.Request("GET", "https://careers.acme.com/jobs/factory-cancel")
+        )
+    )
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert writers[0].closed
+    assert writers[0].wait_closed_called
+
+
+async def test_pinned_transport_preserves_connection_timeout() -> None:
+    started = asyncio.Event()
+
+    async def factory(
+        host: str, port: int, ssl_context: object, server_hostname: str | None
+    ) -> tuple[_FakeReader, _FakeWriter]:
+        started.set()
+        await asyncio.Event().wait()
+        raise AssertionError("factory should have timed out")
+
+    transport = PinnedHttpsTransport(
+        resolver=_public_resolver,
+        timeout=0.01,
+        connection_factory=factory,  # type: ignore[arg-type]
+    )
+    task = asyncio.create_task(
+        transport.handle_async_request(
+            httpx.Request("GET", "https://careers.acme.com/jobs/timeout")
+        )
+    )
+    await started.wait()
+    with pytest.raises(httpx.ConnectError):
+        await task
+
+
+async def test_pinned_transport_rejects_non_rfc_chunk_size() -> None:
+    async def factory(
+        host: str, port: int, ssl_context: object, server_hostname: str | None
+    ) -> tuple[_FakeReader, _FakeWriter]:
+        return (
+            _FakeReader(
+                b"HTTP/1.1 200 OK\r\n"
+                b"Transfer-Encoding: chunked\r\n"
+                b"\r\n"
+                b"+1\r\nx\r\n0\r\n\r\n"
+            ),
+            _FakeWriter(),
+        )
+
+    transport = PinnedHttpsTransport(
+        resolver=_public_resolver, connection_factory=factory  # type: ignore[arg-type]
+    )
+    response = await transport.handle_async_request(
+        httpx.Request("GET", "https://careers.acme.com/jobs/invalid-chunk")
+    )
+    with pytest.raises(httpx.ProtocolError, match="chunked encoding"):
+        await response.aread()
+
+
+async def test_pinned_transport_rejects_malformed_chunk_trailer() -> None:
+    async def factory(
+        host: str, port: int, ssl_context: object, server_hostname: str | None
+    ) -> tuple[_FakeReader, _FakeWriter]:
+        return (
+            _FakeReader(
+                b"HTTP/1.1 200 OK\r\n"
+                b"Transfer-Encoding: chunked\r\n"
+                b"\r\n"
+                b"0\r\nnot-a-header\r\n\r\n"
+            ),
+            _FakeWriter(),
+        )
+
+    transport = PinnedHttpsTransport(
+        resolver=_public_resolver, connection_factory=factory  # type: ignore[arg-type]
+    )
+    response = await transport.handle_async_request(
+        httpx.Request("GET", "https://careers.acme.com/jobs/invalid-trailer")
+    )
+    with pytest.raises(httpx.ProtocolError, match="trailer"):
+        await response.aread()
 
 
 async def test_pinned_transport_rejects_oversized_header_block() -> None:
