@@ -1,0 +1,20 @@
+{
+  "candidate": {
+    "name": "Sari",
+    "current_role": "Administrative Assistant",
+    "seniority": "junior",
+    "target_roles": ["Office Staff"],
+    "skills": ["Excel"],
+    "experience_years": 1.0,
+    "languages": ["Bahasa Indonesia"],
+    "education": []
+  },
+  "candidate_location": "Bandung, Indonesia",
+  "requirements": [
+    {"category": "skill", "value": "AWS", "criticality": "nice", "evidence": "AWS is a plus"},
+    {"category": "skill", "value": "Java", "criticality": "nice", "evidence": "Java is a plus"},
+    {"category": "seniority", "value": "senior", "criticality": "preferred", "evidence": "Senior preferred"},
+    {"category": "education", "value": "Bachelor's degree", "criticality": "preferred", "evidence": "Degree preferred"}
+  ],
+  "expected_bucket": "low"
+}

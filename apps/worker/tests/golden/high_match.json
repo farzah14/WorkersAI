@@ -1,0 +1,23 @@
+{
+  "candidate": {
+    "name": "Rina",
+    "current_role": "Data Engineer",
+    "seniority": "mid",
+    "target_roles": ["Data Engineer"],
+    "skills": ["Python", "SQL"],
+    "experience_years": 4.0,
+    "languages": ["Bahasa Indonesia"],
+    "education": ["BSc Computer Science"]
+  },
+  "candidate_location": "Jakarta, Indonesia",
+  "requirements": [
+    {"category": "skill", "value": "Python", "criticality": "must", "evidence": "Python required"},
+    {"category": "skill", "value": "SQL", "criticality": "must", "evidence": "SQL required"},
+    {"category": "skill", "value": "AWS", "criticality": "nice", "evidence": "AWS is a plus"},
+    {"category": "experience", "value": "3+ years", "criticality": "must", "evidence": "3+ years required"},
+    {"category": "location", "value": "Jakarta", "criticality": "preferred", "evidence": "Jakarta preferred"},
+    {"category": "language", "value": "Bahasa Indonesia", "criticality": "preferred", "evidence": "Bahasa preferred"},
+    {"category": "seniority", "value": "mid", "criticality": "nice", "evidence": "Mid level"}
+  ],
+  "expected_bucket": "best"
+}
