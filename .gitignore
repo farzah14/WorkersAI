@@ -32,3 +32,5 @@ Thumbs.db
 .playwright-mcp/
 dev-server.log
 worker.log
+
+e2e/.seed-state.json
