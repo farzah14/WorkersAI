@@ -1,4 +1,4 @@
-# Daily Discovery and Production Hardening Implementation Plan
+﻿# Daily Discovery and Production Hardening Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -185,19 +185,19 @@ git add apps/web && git commit -m "feat: add privacy deletion controls"
 - Modify: `apps/worker/jobmatch_worker/main.py`
 - Test: `apps/worker/tests/test_logging_privacy.py`
 
-- [ ] **Step 1: Write failing redaction test**
+- [x] **Step 1: Write failing redaction test**
 
 Provide payload containing `extracted_text`, email, and storage path; assert serialized operational log contains IDs/counts/status but not extracted CV text or signed URLs.
 
-- [ ] **Step 2: Implement structured event logger**
+- [x] **Step 2: Implement structured event logger**
 
 Emit JSON events for queue claim/complete/fail, search-run counters, connector status, AI provider attempt/fallback/latency, matches success/fail, export completion, scheduler-created runs. Allowed identifiers: run/job/work item UUIDs; user id should be hashed in logs unless required for incident response.
 
-- [ ] **Step 3: Add run metrics query**
+- [x] **Step 3: Add run metrics query**
 
 Create a worker/admin query that returns discovered/duplicate/normalized/matched/failed counts and AI calls/fallback counts for a run from database metadata. Do not query raw CV text.
 
-- [ ] **Step 4: Test and commit**
+- [x] **Step 4: Test and commit**
 
 ```bash
 cd apps/worker && uv run pytest tests/test_logging_privacy.py -q
@@ -211,7 +211,7 @@ git add apps/worker && git commit -m "feat: add privacy-safe operational observa
 - Create: `compose.production.yml`
 - Create: `scripts/production-smoke.sh`
 
-- [ ] **Step 1: Create worker image**
+- [x] **Step 1: Create worker image**
 
 `infra/worker/Dockerfile`:
 ```dockerfile
@@ -224,7 +224,7 @@ COPY apps/worker/jobmatch_worker ./jobmatch_worker
 CMD ["uv", "run", "python", "-m", "jobmatch_worker.main"]
 ```
 
-- [ ] **Step 2: Create production Compose with cloud AI configuration**
+- [x] **Step 2: Create production Compose with cloud AI configuration**
 
 Create `compose.production.yml`:
 ```yaml
@@ -246,11 +246,11 @@ services:
 
 `.env.production` is created only on the server and is never committed. It contains database/storage credentials plus `NVIDIA_API_KEY`, `OPENROUTER_API_KEY`, `OLLAMA_API_KEY`, configured model identifiers, and `OLLAMA_BASE_URL=https://ollama.com/api`. Do not add an Ollama service, model volume, model pull, GPU runtime, or port `11434`.
 
-- [ ] **Step 3: Add smoke script**
+- [x] **Step 3: Add smoke script**
 
 `scripts/production-smoke.sh` must `set -euo pipefail`, verify worker and scheduler containers are running, execute one database connectivity query, and print only non-secret status. Live AI provider health checks are opt-in because they can consume quota; ordinary smoke validation must not print keys or provider response bodies.
 
-- [ ] **Step 4: Build and test locally**
+- [x] **Step 4: Build and test locally**
 
 ```bash
 docker compose -f compose.production.yml build
@@ -258,7 +258,7 @@ docker compose -f compose.production.yml config
 ```
 Expected: both commands exit 0 and `docker compose config` contains no `ollama` service.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add infra compose.production.yml scripts
@@ -271,15 +271,15 @@ git commit -m "ops: containerize worker and scheduler"
 - Create: `apps/web/e2e/mvp.spec.ts`
 - Create: `apps/worker/tests/test_ai_contract_live_optional.py`
 
-- [ ] **Step 1: Seed deterministic local fixtures**
+- [x] **Step 1: Seed deterministic local fixtures**
 
 Seed two users to test isolation, a digital PDF and DOCX, fake/disconnected source fixtures for CI, and deterministic fake AI adapter responses. Live provider tests remain opt-in via environment flags and never gate ordinary CI.
 
-- [ ] **Step 2: Cover the 18 design acceptance criteria**
+- [x] **Step 2: Cover the 18 design acceptance criteria**
 
 Playwright/worker integration must verify: email login, Google callback path at contract level, PDF/DOCX upload, schema-valid editable profile, Indonesia/Global preference, manual search, partial source success, normalization/dedup, cached requirements, hybrid match result, bucket grouping, match detail fields, original URL, Save/Applied/Ignore, XLSX/PDF request, daily scheduler, provider fallback, and cross-user data denial.
 
-- [ ] **Step 3: Run full verification**
+- [x] **Step 3: Run full verification**
 
 ```bash
 supabase db reset
@@ -291,7 +291,7 @@ docker compose -f compose.production.yml config
 ```
 Expected: all commands exit 0 with zero failing tests.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/web/e2e apps/worker/tests
