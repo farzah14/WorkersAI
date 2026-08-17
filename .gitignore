@@ -34,3 +34,4 @@ dev-server.log
 worker.log
 
 e2e/.seed-state.json
+e2e/.seed-state.json
