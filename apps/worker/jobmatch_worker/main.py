@@ -3,11 +3,13 @@ import hashlib
 import shutil
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
 import httpx
 from psycopg import AsyncConnection
+from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
 
 from jobmatch_worker.ai.router import PostgresAiAuditRecorder
@@ -21,6 +23,7 @@ from jobmatch_worker.handlers.matching import (
     handle_match_job,
 )
 from jobmatch_worker.handlers.profile import handle_extract_candidate_profile
+from jobmatch_worker.metrics import EventLogger, run_metrics
 from jobmatch_worker.queue import (
     claim_next_item,
     complete_item,
@@ -134,7 +137,8 @@ async def handle_extract_cv(
             await retry_item(conn, str(item["id"]), str(exc), attempt)
 
 
-async def worker_loop(settings: Settings) -> None:
+async def worker_loop(settings: Settings, logger: EventLogger | None = None) -> None:
+    events = logger or EventLogger()
     pool: AsyncConnectionPool = await create_pool(settings)
     try:
         while True:
@@ -142,6 +146,13 @@ async def worker_loop(settings: Settings) -> None:
             if item is None:
                 await asyncio.sleep(settings.worker_poll_seconds)
                 continue
+            started = time.perf_counter()
+            events.emit(
+                "work_item_claimed",
+                work_item_id=item["id"],
+                kind=item["kind"],
+                user_id=item.get("payload", {}).get("user_id"),
+            )
             async with pool.connection() as conn:
                 if item["kind"] == "extract_cv":
                     await handle_extract_cv(conn, item, settings)
@@ -163,6 +174,29 @@ async def worker_loop(settings: Settings) -> None:
                     await handle_generate_export(conn, item, settings)
                 else:
                     await fail_item(conn, str(item["id"]), f"unknown kind: {item['kind']}")
+                async with conn.cursor(row_factory=dict_row) as status_cur:
+                    await status_cur.execute(
+                        "select status, error_code from public.work_items where id = %s",
+                        (item["id"],),
+                    )
+                    status = await status_cur.fetchone()
+            duration_ms = int((time.perf_counter() - started) * 1000)
+            events.emit(
+                "work_item_finished",
+                work_item_id=item["id"],
+                kind=item["kind"],
+                status=status["status"] if status else "unknown",
+                error_code=status["error_code"] if status else None,
+                duration_ms=duration_ms,
+            )
+            if status and status["status"] == "completed" and item["kind"] == "discover_jobs":
+                run_id = item.get("payload", {}).get("search_run_id")
+                if run_id:
+                    async with pool.connection() as conn:
+                        try:
+                            events.emit("run_counters", run_id=run_id, **await run_metrics(conn, run_id))
+                        except KeyError:
+                            events.emit("run_counters_error", run_id=run_id)
     finally:
         await pool.close()
 
