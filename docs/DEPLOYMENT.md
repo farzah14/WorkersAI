@@ -34,6 +34,17 @@ Create/configure:
 - all repository migrations in order.
 - RLS policies and SQL assertions.
 
+Run the pgTAP suites against the linked hosted project from a local psql session (the CLI `db test` runner installs pgtap outside the test session search path on hosted):
+
+```bat
+set PGUSER=postgres.<project-ref>
+set PGPASSWORD=<db-password>
+set PGHOST=aws-0-<region>.pooler.supabase.com
+psql -A -t -v ON_ERROR_STOP=1 -f supabase\tests\core_cv.sql
+```
+
+Expect zero `not ok` lines. Tests are scoped to fixture data and may be rerun on a database that already contains real usage rows.
+
 Keep service-role credentials server-side only.
 
 ## 2. Vercel
