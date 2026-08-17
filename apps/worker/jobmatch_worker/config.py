@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     supabase_url: str
     supabase_service_role_key: str
     cv_bucket: str = "cvs"
+    exports_bucket: str = "exports"
     worker_poll_seconds: float = 1.0
     worker_id: str = "worker-1"
     max_attempts: int = 3

@@ -123,9 +123,10 @@
     "statusProcessing": "Processing",
     "statusCompleted": "Completed",
     "statusFailed": "Failed",
-    "empty": "No exports yet.",
-    "emptyHint": "Create your first export to download results.",
-    "download": "Download"
+"empty": "No exports yet.",
+      "emptyHint": "Create your first export to download results.",
+      "openDashboard": "Open dashboard",
+      "download": "Download"
   },
   "settings": {
     "title": "Settings",

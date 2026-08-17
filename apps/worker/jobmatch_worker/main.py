@@ -14,6 +14,7 @@ from jobmatch_worker.ai.router import PostgresAiAuditRecorder
 from jobmatch_worker.config import Settings
 from jobmatch_worker.cv.extract import UnsupportedScannedPdf, extract_cv_text
 from jobmatch_worker.db import create_pool
+from jobmatch_worker.exports.service import handle_generate_export
 from jobmatch_worker.handlers.discovery import handle_discover_jobs
 from jobmatch_worker.handlers.matching import (
     handle_extract_job_requirements,
@@ -158,6 +159,8 @@ async def worker_loop(settings: Settings) -> None:
                     await handle_match_job(
                         conn, item, settings, audit=PostgresAiAuditRecorder(pool)
                     )
+                elif item["kind"] == "generate_export":
+                    await handle_generate_export(conn, item, settings)
                 else:
                     await fail_item(conn, str(item["id"]), f"unknown kind: {item['kind']}")
     finally:

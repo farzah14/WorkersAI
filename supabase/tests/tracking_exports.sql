@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap;
 
-select plan(25);
+select plan(27);
 
 select is(
     (select count(*) from pg_tables where schemaname = 'public' and tablename = 'user_jobs'),
@@ -86,6 +86,27 @@ select is(
        and position('failed' in pg_get_constraintdef(c.oid)) > 0),
     1::bigint,
     'exports status is bounded to queued/processing/completed/failed'
+);
+select is(
+    (select count(*)
+     from information_schema.columns
+     where table_schema = 'public' and table_name = 'exports'
+       and column_name = 'scope'
+       and is_nullable = 'NO'
+       and column_default = '''all''::text'),
+    1::bigint,
+    'exports scope column exists, non-null, defaults to all'
+);
+select is(
+    (select count(*)
+     from pg_constraint c
+     where c.conrelid = to_regclass('public.exports')
+       and c.contype = 'c'
+       and position('all' in pg_get_constraintdef(c.oid)) > 0
+       and position('current_filters' in pg_get_constraintdef(c.oid)) > 0
+       and position('best_and_strong' in pg_get_constraintdef(c.oid)) > 0),
+    1::bigint,
+    'exports scope is bounded to all/current_filters/best_and_strong'
 );
 select is(
     (select count(*)

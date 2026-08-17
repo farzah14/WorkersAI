@@ -71,6 +71,7 @@ class ExportRow(BaseModel):
     seniority_score: float
     language_score: float
     verdict: str
+    status: str = "new"
     strengths: list[str] = Field(default_factory=list)
     gaps: list[str] = Field(default_factory=list)
     critical_gaps: list[str] = Field(default_factory=list)

@@ -123,9 +123,10 @@
     "statusProcessing": "Diproses",
     "statusCompleted": "Selesai",
     "statusFailed": "Gagal",
-    "empty": "Belum ada ekspor.",
-    "emptyHint": "Buat ekspor pertama untuk mengunduh hasil.",
-    "download": "Unduh"
+"empty": "Belum ada ekspor.",
+      "emptyHint": "Buat ekspor pertama untuk mengunduh hasil.",
+      "openDashboard": "Buka Dasbor",
+      "download": "Unduh"
   },
   "settings": {
     "title": "Pengaturan",
