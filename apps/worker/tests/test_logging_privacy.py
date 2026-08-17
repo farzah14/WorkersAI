@@ -34,6 +34,16 @@ class FakeConnection:
         return FakeCursor(self._rows.pop(0))
 
 
+class SchemaAwareMetricsConnection(FakeConnection):
+    async def execute(self, sql, params=()):
+        normalized = " ".join(sql.split()).lower()
+        if "from public.job_search_runs" in normalized and (
+            "error_code" in normalized or "result_count" in normalized
+        ):
+            raise AssertionError("job_search_runs query used an undefined column")
+        return await super().execute(sql, params)
+
+
 @pytest.fixture
 def caplog_events(caplog):
     caplog.set_level(logging.INFO, logger="jobmatch.events")
@@ -147,7 +157,6 @@ def test_run_metrics_returns_counts_without_cv_text():
         "normalized_count": 38,
         "duplicate_count": 2,
         "failed_count": 1,
-        "result_count": 37,
         "created_at": "2026-08-17T00:00:00+00:00",
         "completed_at": "2026-08-17T00:05:00+00:00",
     }
@@ -163,7 +172,7 @@ def test_run_metrics_returns_counts_without_cv_text():
     assert metrics["normalized"] == 38
     assert metrics["duplicates"] == 2
     assert metrics["failed"] == 1
-    assert metrics["results"] == 37
+    assert metrics["results"] == 36
     assert metrics["matched"] == 36
     assert metrics["semantic_degraded"] == 2
     assert metrics["ai_calls"] == 42
@@ -176,3 +185,23 @@ def test_run_metrics_raises_for_unknown_run():
     conn = FakeConnection([None])
     with pytest.raises(KeyError):
         asyncio.run(run_metrics(conn, "22222222-2222-2222-2222-222222222222"))
+
+
+def test_run_metrics_uses_only_job_search_run_columns():
+    run_row = {
+        "id": "22222222-2222-2222-2222-222222222222",
+        "status": "completed",
+        "discovered_count": 0,
+        "normalized_count": 0,
+        "duplicate_count": 0,
+        "failed_count": 0,
+        "created_at": "2026-08-17T00:00:00+00:00",
+        "completed_at": "2026-08-17T00:05:00+00:00",
+    }
+    conn = SchemaAwareMetricsConnection(
+        [run_row, {"n": 0, "degraded": 0}, {"calls": 0, "fallbacks": 0}]
+    )
+
+    metrics = asyncio.run(run_metrics(conn, run_row["id"]))
+
+    assert metrics["error_code"] is None

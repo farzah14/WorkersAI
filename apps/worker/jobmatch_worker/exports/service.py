@@ -99,7 +99,7 @@ async def _load_export(
 ) -> dict[str, Any] | None:
     row = await conn.execute(
         """
-        select user_id, search_run_id, format, scope, filter_json
+        select user_id, search_run_id, format, scope, filter_json, status
         from public.exports
         where id = %s
         """,

@@ -87,8 +87,8 @@ async def run_metrics(conn: AsyncConnection[Any], run_id: str) -> dict[str, Any]
     """
     run_cursor = await conn.execute(
         """
-        select id, status, error_code, discovered_count, normalized_count,
-               duplicate_count, failed_count, result_count,
+        select id, status, discovered_count, normalized_count,
+               duplicate_count, failed_count,
                created_at, completed_at
         from public.job_search_runs
         where id = %s
@@ -126,12 +126,12 @@ async def run_metrics(conn: AsyncConnection[Any], run_id: str) -> dict[str, Any]
     return {
         "run_id": run["id"],
         "status": run["status"],
-        "error_code": run["error_code"],
+        "error_code": None,
         "discovered": run["discovered_count"],
         "normalized": run["normalized_count"],
         "duplicates": run["duplicate_count"],
         "failed": run["failed_count"],
-        "results": run["result_count"],
+        "results": match_row["n"],
         "matched": match_row["n"],
         "semantic_degraded": match_row["degraded"],
         "ai_calls": ai_row["calls"],

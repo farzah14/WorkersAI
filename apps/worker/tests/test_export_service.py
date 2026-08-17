@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Any
 
 import pytest
 from pydantic import ValidationError
@@ -11,6 +12,7 @@ from jobmatch_worker.exports.models import (
     SearchCriteria,
 )
 from jobmatch_worker.exports.service import (
+    _load_export,
     apply_scope_and_filters,
     candidate_summary_from_profile,
     criteria_from_request,
@@ -96,6 +98,43 @@ def test_storage_path_uses_user_and_export_ids() -> None:
         storage_path_for("user-1", "export-9", "pdf")
         == "user-1/export-9/report.pdf"
     )
+
+
+class ExportQueryCursor:
+    def __init__(self, row: dict[str, Any]) -> None:
+        self.row = row
+
+    async def fetchone(self) -> dict[str, Any]:
+        return self.row
+
+
+class ExportQueryConnection:
+    def __init__(self) -> None:
+        self.query: str | None = None
+
+    async def execute(self, query: str, params: tuple[str]) -> ExportQueryCursor:
+        self.query = query
+        if "status" not in query.lower():
+            raise AssertionError("export query omitted the status column")
+        return ExportQueryCursor(
+            {
+                "user_id": "user-1",
+                "search_run_id": "run-1",
+                "format": "xlsx",
+                "scope": "all",
+                "filter_json": {},
+                "status": "queued",
+            }
+        )
+
+
+async def test_load_export_reads_status_for_worker_idempotency() -> None:
+    conn = ExportQueryConnection()
+
+    export = await _load_export(conn, "export-1")  # type: ignore[arg-type]
+
+    assert export is not None
+    assert export["status"] == "queued"
 
 
 def test_candidate_summary_maps_profile_json() -> None:

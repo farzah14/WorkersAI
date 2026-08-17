@@ -137,6 +137,24 @@ async def handle_extract_cv(
             await retry_item(conn, str(item["id"]), str(exc), attempt)
 
 
+async def _fetch_work_item_status(
+    conn: AsyncConnection[Any], item_id: str
+) -> dict[str, Any] | None:
+    async with conn.cursor(row_factory=dict_row) as status_cur:
+        await status_cur.execute(
+            "select status from public.work_items where id = %s",
+            (item_id,),
+        )
+        row = await status_cur.fetchone()
+        return dict(row) if row else None
+
+
+async def _emit_run_counters(
+    events: EventLogger, conn: AsyncConnection[Any], run_id: str
+) -> None:
+    events.emit("run_counters", **await run_metrics(conn, run_id))
+
+
 async def worker_loop(settings: Settings, logger: EventLogger | None = None) -> None:
     events = logger or EventLogger()
     pool: AsyncConnectionPool = await create_pool(settings)
@@ -174,19 +192,13 @@ async def worker_loop(settings: Settings, logger: EventLogger | None = None) -> 
                     await handle_generate_export(conn, item, settings)
                 else:
                     await fail_item(conn, str(item["id"]), f"unknown kind: {item['kind']}")
-                async with conn.cursor(row_factory=dict_row) as status_cur:
-                    await status_cur.execute(
-                        "select status, error_code from public.work_items where id = %s",
-                        (item["id"],),
-                    )
-                    status = await status_cur.fetchone()
+                status = await _fetch_work_item_status(conn, str(item["id"]))
             duration_ms = int((time.perf_counter() - started) * 1000)
             events.emit(
                 "work_item_finished",
                 work_item_id=item["id"],
                 kind=item["kind"],
                 status=status["status"] if status else "unknown",
-                error_code=status["error_code"] if status else None,
                 duration_ms=duration_ms,
             )
             if status and status["status"] == "completed" and item["kind"] == "discover_jobs":
@@ -194,7 +206,7 @@ async def worker_loop(settings: Settings, logger: EventLogger | None = None) -> 
                 if run_id:
                     async with pool.connection() as conn:
                         try:
-                            events.emit("run_counters", run_id=run_id, **await run_metrics(conn, run_id))
+                            await _emit_run_counters(events, conn, run_id)
                         except KeyError:
                             events.emit("run_counters_error", run_id=run_id)
     finally:
