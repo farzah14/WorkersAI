@@ -1,0 +1,24 @@
+# Production one-VPS deployment: worker + scheduler only.
+# Vercel and Supabase remain managed external services.
+#
+# `.env.production` is created only on the server and is never committed.
+# It must contain DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+# NVIDIA_API_KEY, OPENROUTER_API_KEY, OLLAMA_API_KEY, configured model
+# identifiers, and OLLAMA_BASE_URL=https://ollama.com/api.
+#
+# Do not add an Ollama service, model volume, model pull, GPU runtime,
+# or port 11434 to this file.
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: infra/worker/Dockerfile
+    env_file: .env.production
+    restart: unless-stopped
+  scheduler:
+    build:
+      context: .
+      dockerfile: infra/worker/Dockerfile
+    env_file: .env.production
+    command: ["uv", "run", "--no-dev", "python", "-m", "jobmatch_worker.scheduler"]
+    restart: unless-stopped
