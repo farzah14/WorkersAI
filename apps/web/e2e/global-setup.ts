@@ -4,12 +4,17 @@ import path from "node:path";
 
 const SEED_EMAIL = "e2e@example.test";
 const SEED_PASSWORD = "E2e-password-123";
+const ISOLATION_EMAIL = "e2e-isolation@example.test";
 
 type SeedState = {
   userId: string;
   runId: string;
   bestMatchId: string;
   bestJobUrl: string;
+  otherUserId: string;
+  otherUserMatchId: string;
+  otherUserJobUrl: string;
+  otherUserJobTitle: string;
 };
 
 function loadEnvFile(filePath: string): void {
@@ -31,13 +36,13 @@ function requireEnv(name: string): string {
   return value;
 }
 
-async function upsertSeedUser(client: SupabaseClient): Promise<string> {
+async function upsertSeedUser(client: SupabaseClient, email: string): Promise<string> {
   const { data: { users } } = await client.auth.admin.listUsers({ perPage: 1000 });
-  const existing = users?.find((user) => user.email === SEED_EMAIL);
+  const existing = users?.find((user) => user.email === email);
   if (existing) return existing.id;
 
   const { data, error } = await client.auth.admin.createUser({
-    email: SEED_EMAIL,
+    email,
     password: SEED_PASSWORD,
     email_confirm: true,
   });
@@ -64,7 +69,10 @@ async function resetUserData(client: SupabaseClient, userId: string): Promise<vo
   await client.from("jobs").delete().like("fingerprint", "e2e-fp-%");
 }
 
-async function seedMatches(client: SupabaseClient, userId: string): Promise<SeedState> {
+async function seedMatches(
+  client: SupabaseClient,
+  userId: string,
+): Promise<Omit<SeedState, "otherUserId" | "otherUserMatchId" | "otherUserJobUrl" | "otherUserJobTitle">> {
   const { data: cv, error: cvError } = await client
     .from("cvs")
     .insert({
@@ -87,11 +95,17 @@ async function seedMatches(client: SupabaseClient, userId: string): Promise<Seed
     skills: ["SQL", "Python", "Airflow"],
     experience_years: 5,
     languages: ["English"],
-    education: "Bachelor",
+    education: ["Bachelor"],
   };
   const { data: candidate, error: candidateError } = await client
     .from("candidate_profiles")
-    .insert({ user_id: userId, cv_id: cv.id, version: 1, profile })
+    .insert({
+      user_id: userId,
+      cv_id: cv.id,
+      version: 1,
+      profile,
+      confirmed_at: new Date().toISOString(),
+    })
     .select("id")
     .single();
   if (candidateError || !candidate) throw candidateError ?? new Error("candidate profile insert failed");
@@ -188,10 +202,10 @@ async function seedMatches(client: SupabaseClient, userId: string): Promise<Seed
   for (const job of jobs) {
     const { data: row, error } = await client
       .from("jobs")
-      .insert(job)
+      .upsert(job, { onConflict: "fingerprint" })
       .select("id")
       .single();
-    if (error || !row) throw error ?? new Error("job insert failed");
+    if (error || !row) throw error ?? new Error("job upsert failed");
     insertedJobs.push(row);
   }
 
@@ -277,6 +291,130 @@ async function seedMatches(client: SupabaseClient, userId: string): Promise<Seed
   };
 }
 
+async function seedIsolationUser(client: SupabaseClient, userId: string): Promise<SeedState> {
+  const { data: cv, error: cvError } = await client
+    .from("cvs")
+    .insert({
+      user_id: userId,
+      original_name: "isolation-cv.pdf",
+      mime_type: "application/pdf",
+      is_active: true,
+      extraction_status: "extracted",
+      retain_original: true,
+    })
+    .select("id")
+    .single();
+  if (cvError || !cv) throw cvError ?? new Error("isolation cv insert failed");
+
+  const profile = {
+    name: "Isolation Candidate",
+    current_role: "Frontend Developer",
+    seniority: "mid",
+    target_roles: ["Frontend Developer"],
+    skills: ["React", "TypeScript"],
+    experience_years: 4,
+    languages: ["English"],
+    education: ["Bachelor"],
+  };
+  const { data: candidate, error: candidateError } = await client
+    .from("candidate_profiles")
+    .insert({
+      user_id: userId,
+      cv_id: cv.id,
+      version: 1,
+      profile,
+      confirmed_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (candidateError || !candidate) throw candidateError ?? new Error("isolation profile insert failed");
+
+  const { data: searchProfile, error: searchError } = await client
+    .from("search_profiles")
+    .insert({
+      user_id: userId,
+      candidate_profile_id: candidate.id,
+      region: "indonesia",
+      target_roles: ["Frontend Developer"],
+    })
+    .select("id")
+    .single();
+  if (searchError || !searchProfile) throw searchError ?? new Error("isolation search profile insert failed");
+
+  const { data: run, error: runError } = await client
+    .from("job_search_runs")
+    .insert({
+      user_id: userId,
+      search_profile_id: searchProfile.id,
+      candidate_profile_id: candidate.id,
+      trigger: "manual",
+      status: "completed",
+      discovered_count: 1,
+      normalized_count: 1,
+      completed_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (runError || !run) throw runError ?? new Error("isolation run insert failed");
+
+  const isolationJob = {
+    fingerprint: "e2e-fp-iso-solo",
+    title: "Isolation Private Role",
+    company: "Solo Private",
+    description: "A private role only this user should ever see.",
+    source_name: "e2e",
+    original_url: "https://example.test/jobs/isolation",
+    canonical_url: "https://example.test/jobs/isolation",
+    region: "indonesia",
+    work_mode: "remote",
+    employment_type: "full-time",
+    published_at: new Date().toISOString(),
+    status: "active",
+  };
+  const { data: job, error: jobError } = await client
+    .from("jobs")
+    .upsert(isolationJob, { onConflict: "fingerprint" })
+    .select("id")
+    .single();
+  if (jobError || !job) throw jobError ?? new Error("isolation job upsert failed");
+
+  const { data: match, error: matchError } = await client
+    .from("job_matches")
+    .insert({
+      user_id: userId,
+      search_run_id: run.id,
+      candidate_profile_id: candidate.id,
+      job_id: job.id,
+      overall_score: 95,
+      skills_score: 96,
+      experience_score: 94,
+      education_score: 90,
+      location_score: 92,
+      seniority_score: 93,
+      language_score: 90,
+      strengths: ["React", "TypeScript"],
+      gaps: [],
+      critical_gaps: [],
+      verdict: "highly_recommended",
+      explanation: "Private isolation match.",
+      recommendations: ["Keep going."],
+    })
+    .select("id")
+    .single();
+  if (matchError || !match) throw matchError ?? new Error("isolation match insert failed");
+
+  return {
+    userId,
+    runId: "",
+    bestMatchId: "",
+    bestJobUrl: "",
+    otherUserId: userId,
+    otherUserMatchId: match.id,
+    otherUserJobUrl: isolationJob.original_url,
+    otherUserJobTitle: isolationJob.title,
+  };
+}
+
 export default async function globalSetup(): Promise<void> {
   loadEnvFile(path.resolve(__dirname, "../.env"));
 
@@ -286,9 +424,23 @@ export default async function globalSetup(): Promise<void> {
     { auth: { persistSession: false } },
   );
 
-  const userId = await upsertSeedUser(client);
+  const userId = await upsertSeedUser(client, SEED_EMAIL);
   await resetUserData(client, userId);
-  const state = await seedMatches(client, userId);
+  const state: SeedState = {
+    ...(await seedMatches(client, userId)),
+    otherUserId: "",
+    otherUserMatchId: "",
+    otherUserJobUrl: "",
+    otherUserJobTitle: "",
+  };
+
+  const isolationUserId = await upsertSeedUser(client, ISOLATION_EMAIL);
+  await resetUserData(client, isolationUserId);
+  const isolation = await seedIsolationUser(client, isolationUserId);
+  state.otherUserId = isolation.otherUserId;
+  state.otherUserMatchId = isolation.otherUserMatchId;
+  state.otherUserJobUrl = isolation.otherUserJobUrl;
+  state.otherUserJobTitle = isolation.otherUserJobTitle;
 
   writeFileSync(
     path.resolve(__dirname, ".seed-state.json"),
