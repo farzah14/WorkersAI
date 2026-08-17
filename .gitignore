@@ -33,5 +33,4 @@ Thumbs.db
 dev-server.log
 worker.log
 
-e2e/.seed-state.json
-e2e/.seed-state.json
+apps/web/e2e/.seed-state.json
