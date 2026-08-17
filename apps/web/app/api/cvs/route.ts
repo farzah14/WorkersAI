@@ -9,6 +9,13 @@ function safeFilename(name: string): string {
   return cleaned || "cv";
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isStorageNotFound(error: { message?: string } | null): boolean {
+  if (!error) return false;
+  return /not found|does not exist|nosuchkey/i.test(error.message ?? "");
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createServerClient();
   const {
@@ -73,4 +80,50 @@ export async function POST(request: NextRequest) {
   }
 
   return NextResponse.json({ id: cvRow.id }, { status: 201 });
+}
+
+export async function DELETE(request: Request) {
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  const cvId = new URL(request.url).searchParams.get("cv_id");
+  if (!cvId || !UUID_RE.test(cvId)) {
+    return NextResponse.json({ error: "invalid_cv_id" }, { status: 400 });
+  }
+
+  const { data: cv } = await supabase
+    .from("cvs")
+    .select("id, storage_path")
+    .eq("id", cvId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!cv) return NextResponse.json({ error: "cv_not_found" }, { status: 404 });
+
+  if (cv.storage_path) {
+    const serviceClient = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false } },
+    );
+    const { error: removeError } = await serviceClient.storage
+      .from("cvs")
+      .remove([cv.storage_path]);
+    if (removeError && !isStorageNotFound(removeError)) {
+      return NextResponse.json({ error: "storage_delete_failed" }, { status: 500 });
+    }
+  }
+
+  const { error: updateError } = await supabase
+    .from("cvs")
+    .update({ storage_path: null, retain_original: false })
+    .eq("id", cv.id)
+    .eq("user_id", user.id);
+  if (updateError) {
+    return NextResponse.json({ error: "cv_update_failed" }, { status: 500 });
+  }
+
+  return NextResponse.json({ id: cv.id }, { status: 200 });
 }

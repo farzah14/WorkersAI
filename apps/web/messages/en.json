@@ -123,10 +123,10 @@
     "statusProcessing": "Processing",
     "statusCompleted": "Completed",
     "statusFailed": "Failed",
-"empty": "No exports yet.",
-      "emptyHint": "Create your first export to download results.",
-      "openDashboard": "Open dashboard",
-      "download": "Download"
+    "empty": "No exports yet.",
+    "emptyHint": "Create your first export to download results.",
+    "openDashboard": "Open dashboard",
+    "download": "Download"
   },
   "settings": {
     "title": "Settings",
@@ -134,7 +134,18 @@
     "language": "Language",
     "id": "Bahasa Indonesia",
     "en": "English",
-    "languageHint": "Choose the interface language."
+    "languageHint": "Choose the interface language.",
+    "cvsHeading": "Original CV files",
+    "cvsHint": "Deleting an original file keeps your extracted profile and job history.",
+    "deleteOriginal": "Delete original file",
+    "originalDeleted": "Original file deleted. Profile kept.",
+    "accountHeading": "Delete account",
+    "accountHint": "Permanently removes CVs, exports, and all account data.",
+    "confirmationLabel": "Type DELETE to confirm",
+    "deleteAccount": "Delete my account",
+    "accountDeleted": "Account deleted.",
+    "invalidConfirmation": "Type DELETE to confirm.",
+    "error": "Something went wrong. Try again."
   },
   "errors": {
     "unauthorized": "Unauthorized.",

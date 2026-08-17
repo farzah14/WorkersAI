@@ -123,10 +123,10 @@
     "statusProcessing": "Diproses",
     "statusCompleted": "Selesai",
     "statusFailed": "Gagal",
-"empty": "Belum ada ekspor.",
-      "emptyHint": "Buat ekspor pertama untuk mengunduh hasil.",
-      "openDashboard": "Buka Dasbor",
-      "download": "Unduh"
+    "empty": "Belum ada ekspor.",
+    "emptyHint": "Buat ekspor pertama untuk mengunduh hasil.",
+    "openDashboard": "Buka Dasbor",
+    "download": "Unduh"
   },
   "settings": {
     "title": "Pengaturan",
@@ -134,7 +134,18 @@
     "language": "Bahasa",
     "id": "Bahasa Indonesia",
     "en": "English",
-    "languageHint": "Pilih bahasa antarmuka."
+    "languageHint": "Pilih bahasa antarmuka.",
+    "cvsHeading": "File CV asli",
+    "cvsHint": "Menghapus file asli tetap menyimpan profil hasil ekstraksi dan riwayat lamaran.",
+    "deleteOriginal": "Hapus file asli",
+    "originalDeleted": "File asli dihapus. Profil tetap tersimpan.",
+    "accountHeading": "Hapus akun",
+    "accountHint": "Menghapus permanen CV, ekspor, dan seluruh data akun.",
+    "confirmationLabel": "Ketik DELETE untuk konfirmasi",
+    "deleteAccount": "Hapus akun saya",
+    "accountDeleted": "Akun dihapus.",
+    "invalidConfirmation": "Ketik DELETE untuk konfirmasi.",
+    "error": "Terjadi kesalahan. Coba lagi."
   },
   "errors": {
     "unauthorized": "Tidak diizinkan.",
