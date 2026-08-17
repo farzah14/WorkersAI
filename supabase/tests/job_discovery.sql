@@ -1524,6 +1524,9 @@ where id = '00000000-0000-0000-0000-000000000101';
 update public.candidate_profiles
 set confirmed_at = now()
 where id = '00000000-0000-0000-0000-000000000201';
+
+delete from public.work_items where kind = 'discover_jobs';
+
 select lives_ok(
     $$
       select * from public.create_manual_search_run(
@@ -1542,6 +1545,7 @@ select lives_ok(
     $$,
     'service role can create a manual search run through the RPC'
 );
+
 select is(
     (select case when (select is_current from public.search_profiles where id = '00000000-0000-0000-0000-000000000301') = false
                       and (select count(*) from public.search_profiles

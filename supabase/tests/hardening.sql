@@ -103,17 +103,22 @@ select is(
     'second quota increment in same window returns two'
 );
 select is(
-    (select count(*) from public.api_usage_windows),
+    (select count(*) from public.api_usage_windows
+     where user_id = '00000000-0000-0000-0000-000000000001'),
     1::bigint,
     'quota increments collapse into one window row'
 );
 select is(
-    (select date_trunc('day', window_start) = date_trunc('day', now()) from public.api_usage_windows),
+    (select date_trunc('day', window_start) = date_trunc('day', now())
+     from public.api_usage_windows
+     where user_id = '00000000-0000-0000-0000-000000000001'),
     true,
     'quota window is bucketed to the UTC day'
 );
 select is(
-    (select count(*) from public.api_usage_windows where action = 'export'),
+    (select count(*) from public.api_usage_windows
+     where action = 'export'
+       and user_id = '00000000-0000-0000-0000-000000000001'),
     0::bigint,
     'different action uses a separate window'
 );
