@@ -126,7 +126,8 @@ async def upsert_jobs(
                last_checked_at)
             values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now(), now())
             on conflict (fingerprint) do update
-              set last_seen_at = now(), last_checked_at = now()
+              set last_seen_at = now(), last_checked_at = now(),
+                  status = 'active'
             returning id, (xmax = 0) as inserted
             """,
             (
