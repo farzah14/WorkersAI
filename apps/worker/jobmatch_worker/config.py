@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     worker_poll_seconds: float = 1.0
     worker_id: str = "worker-1"
     max_attempts: int = 3
+    daily_discovery_hour_jakarta: int = 7
+    scheduler_interval_minutes: int = 15
     requirement_extraction_enabled: bool = False
     ai_provider_order: str = "nvidia,ollama,openrouter"
     ai_timeout_seconds: float = 30.0
