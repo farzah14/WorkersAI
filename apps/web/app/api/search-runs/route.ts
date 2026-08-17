@@ -1,6 +1,7 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { searchProfileSchema, type SearchProfile } from "@/lib/search/schema";
+import { consumeQuota, quotaExceededResponse } from "@/lib/rate-limit";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 
 type RpcError = {
@@ -103,6 +104,15 @@ export async function POST(request: Request) {
       { error: "validation_failed", details: parsed.error.flatten() },
       { status: 400 },
     );
+  }
+
+  try {
+    const quota = await consumeQuota(supabase, user.id, "manual_search");
+    if (!quota.allowed) {
+      return quotaExceededResponse(quota.retryAfterSeconds);
+    }
+  } catch {
+    return NextResponse.json({ error: "quota check failed" }, { status: 500 });
   }
 
   const serviceClient = createServiceClient(

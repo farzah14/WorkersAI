@@ -166,6 +166,7 @@ describe("POST /api/exports", () => {
     const exportsChain = { insert: exportsInsert };
     createServerClientMock.mockResolvedValue({
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }) },
+      rpc: vi.fn().mockResolvedValue({ data: 1, error: null }),
       from: vi.fn((table: string) => {
         if (table === "job_search_runs") {
           return {

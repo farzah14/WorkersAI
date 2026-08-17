@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { validateCvFile } from "@/lib/cv/validation";
+import { consumeQuota, quotaExceededResponse } from "@/lib/rate-limit";
 
 function safeFilename(name: string): string {
   const cleaned = name.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 120);
@@ -21,6 +22,15 @@ export async function POST(request: NextRequest) {
 
   const validation = validateCvFile({ type: file.type, size: file.size });
   if (!validation.ok) return NextResponse.json({ error: validation.error }, { status: 400 });
+
+  try {
+    const quota = await consumeQuota(supabase, user.id, "upload_cv");
+    if (!quota.allowed) {
+      return quotaExceededResponse(quota.retryAfterSeconds);
+    }
+  } catch {
+    return NextResponse.json({ error: "quota check failed" }, { status: 500 });
+  }
 
   const originalName = file.name || "cv.pdf";
   const { data: cvRow, error: insertError } = await supabase

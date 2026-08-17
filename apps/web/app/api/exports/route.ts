@@ -1,6 +1,7 @@
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { consumeQuota, quotaExceededResponse } from "@/lib/rate-limit";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 
 const exportScopeSchema = z.enum(["all", "current_filters", "best_and_strong"]);
@@ -96,6 +97,15 @@ export async function POST(request: Request): Promise<NextResponse> {
     .maybeSingle();
   if (!run) {
     return NextResponse.json({ error: "run_not_found" }, { status: 404 });
+  }
+
+  try {
+    const quota = await consumeQuota(supabase, user.id, "export");
+    if (!quota.allowed) {
+      return quotaExceededResponse(quota.retryAfterSeconds);
+    }
+  } catch {
+    return NextResponse.json({ error: "quota check failed" }, { status: 500 });
   }
 
   const { data: exportRow, error: insertError } = await supabase

@@ -40,7 +40,10 @@ function setupAuthenticatedUser(userId = "auth-user") {
     data: { user: { id: userId } },
     error: null,
   });
-  createServerClientMock.mockResolvedValue({ auth: { getUser } });
+  createServerClientMock.mockResolvedValue({
+    auth: { getUser },
+    rpc: vi.fn().mockResolvedValue({ data: 1, error: null }),
+  });
   return getUser;
 }
 
