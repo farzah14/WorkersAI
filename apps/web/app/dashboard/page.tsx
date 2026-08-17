@@ -28,7 +28,8 @@ type MatchWithJob = {
 type StatusRow = { job_id: string; status: MatchRow["status"] };
 
 function toMatchRow(match: MatchWithJob, status: MatchRow["status"]): MatchRow {
-  const job = match.jobs[0];
+  const jobs = Array.isArray(match.jobs) ? match.jobs : [match.jobs];
+  const job = jobs[0];
   return {
     matchId: match.id,
     jobId: match.job_id,

@@ -79,7 +79,8 @@ export default async function JobMatchPage({
   }
 
   const detail = match as unknown as MatchDetail;
-  const job = detail.jobs[0];
+  const jobs = Array.isArray(detail.jobs) ? detail.jobs : [detail.jobs];
+  const job = jobs[0];
 
   const { data: statusRows } = await supabase
     .from("user_jobs")

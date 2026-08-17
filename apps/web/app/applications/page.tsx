@@ -62,7 +62,8 @@ export default async function ApplicationsPage() {
 
         <ul className="space-y-4">
           {applied.map((item) => {
-            const job = item.jobs[0];
+            const jobs = Array.isArray(item.jobs) ? item.jobs : [item.jobs];
+            const job = jobs[0];
             return (
               <li key={item.job_id} className="rounded-2xl border border-[#d9d5cc] bg-white p-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
