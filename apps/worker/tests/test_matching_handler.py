@@ -43,6 +43,14 @@ class _Cursor:
         return self._row
 
 
+class _RowsCursor:
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
+        self._rows = rows
+
+    async def fetchall(self) -> list[dict[str, Any]]:
+        return self._rows
+
+
 class _Connection:
     def __init__(
         self,
@@ -52,12 +60,14 @@ class _Connection:
         job_row: dict[str, Any] | None,
         pending: int = 0,
         failed: int = 0,
+        match_run_ids: list[str] | None = None,
     ) -> None:
         self.run_row = run_row
         self.profile_row = profile_row
         self.job_row = job_row
         self.pending = pending
         self.failed = failed
+        self.match_run_ids = match_run_ids or []
         self.executed: list[tuple[str, tuple[Any, ...]]] = []
 
     async def execute(self, query: str, params: tuple[Any, ...] = ()) -> _Cursor:
@@ -69,6 +79,10 @@ class _Connection:
             return _Cursor(self.profile_row)
         if "from public.jobs" in lowered:
             return _Cursor(self.job_row)
+        if "from public.job_search_run_jobs" in lowered:
+            return _RowsCursor(
+                [{"search_run_id": run_id} for run_id in self.match_run_ids]
+            )
         if "from public.work_items" in lowered:
             if "status in ('queued', 'processing')" in lowered:
                 return _Cursor({"pending": self.pending})
@@ -258,3 +272,40 @@ async def test_extract_job_requirements_handler_persists_cache() -> None:
         if "update public.work_items" in query.lower() and "completed" in query.lower()
     ]
     assert completed_items == [("item-5",)]
+
+
+@pytest.mark.asyncio
+async def test_extract_job_requirements_enqueues_matches_for_related_runs() -> None:
+    from psycopg.types.json import Jsonb
+
+    from jobmatch_worker.handlers.matching import handle_extract_job_requirements
+
+    connection = _Connection(
+        run_row=None,
+        profile_row=None,
+        job_row={"description": "Python required"},
+        match_run_ids=["run-5", "run-6"],
+    )
+
+    await handle_extract_job_requirements(
+        connection,
+        {"id": "item-6", "payload": {"job_id": "job-6", "description_hash": "h6"}},
+        _settings(),
+        router=_FakeRouter(),
+    )
+
+    match_items = [
+        params
+        for query, params in connection.executed
+        if "insert into public.work_items" in query.lower()
+        and params[0] == "match_job"
+    ]
+    assert len(match_items) == 2
+    assert {params[1] for params in match_items} == {
+        "match_job:run-5:job-6:h6",
+        "match_job:run-6:job-6:h6",
+    }
+    payloads = [params[2] for params in match_items]
+    assert all(isinstance(payload, Jsonb) for payload in payloads)
+    assert {payload.obj["search_run_id"] for payload in payloads} == {"run-5", "run-6"}
+    assert {payload.obj["job_id"] for payload in payloads} == {"job-6"}

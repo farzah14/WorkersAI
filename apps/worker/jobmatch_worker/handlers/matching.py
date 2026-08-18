@@ -13,7 +13,7 @@ from jobmatch_worker.matching.requirements import cached_job_requirements
 from jobmatch_worker.matching.semantic import EmbeddingClient, SemanticMatcher
 from jobmatch_worker.matching.service import run_match
 from jobmatch_worker.profiles.models import CandidateProfile
-from jobmatch_worker.queue import complete_item, fail_item, retry_item
+from jobmatch_worker.queue import complete_item, enqueue_item, fail_item, retry_item
 
 MATCH_EXPLAIN_OPERATION = "match_explain"
 REQUIREMENT_EXTRACT_OPERATION = "requirement_extract"
@@ -32,6 +32,20 @@ where id = %s and confirmed_at is not null
 """
 
 _JOB_SELECT_SQL = "select description from public.jobs where id = %s"
+
+_MATCH_RUNS_SQL = """
+select jrj.search_run_id
+from public.job_search_run_jobs jrj
+join public.job_search_runs r on r.id = jrj.search_run_id
+where jrj.job_id = %s
+  and r.status in ('queued', 'processing', 'partial', 'completed')
+  and not exists (
+    select 1
+    from public.job_matches m
+    where m.search_run_id = jrj.search_run_id
+      and m.job_id = jrj.job_id
+  )
+"""
 
 _PENDING_ITEMS_SQL = """
 select count(*) as pending
@@ -54,6 +68,24 @@ update public.job_search_runs
 set status = %s, failed_count = %s, completed_at = now()
 where id = %s
 """
+
+
+async def _enqueue_match_items(
+    conn: AsyncConnection[Any],
+    *,
+    job_id: str,
+    description_hash: str,
+) -> None:
+    cursor = await conn.execute(_MATCH_RUNS_SQL, (job_id,))
+    runs = await cursor.fetchall()
+    for row in runs:
+        run_id = str(row["search_run_id"])
+        await enqueue_item(
+            conn,
+            kind="match_job",
+            dedupe_key=f"match_job:{run_id}:{job_id}:{description_hash}",
+            payload={"search_run_id": run_id, "job_id": job_id},
+        )
 
 
 def build_semantic_matcher(settings: Settings) -> SemanticMatcher:
@@ -106,6 +138,11 @@ async def handle_extract_job_requirements(
                 description_hash=description_hash,
                 job_text=job["description"],
                 router=router,
+            )
+            await _enqueue_match_items(
+                conn,
+                job_id=str(job_id),
+                description_hash=str(description_hash),
             )
             await complete_item(conn, item_id)
         except PermanentAiError as exc:
