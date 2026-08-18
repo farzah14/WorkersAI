@@ -5,6 +5,7 @@ from typing import Any
 
 import pytest
 
+from jobmatch_worker.handlers.discovery import _build_sources
 from jobmatch_worker.jobs.connectors.base import SourceUnavailable
 from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
 
@@ -46,6 +47,23 @@ class _Connector:
         if isinstance(self._result, Exception):
             raise self._result
         return self._result
+
+
+@pytest.mark.asyncio
+async def test_build_sources_uses_tavily_for_web_search() -> None:
+    sources = _build_sources(
+        SimpleNamespace(
+            tavily_api_key="tavily-key",
+            greenhouse_board_token="",
+            lever_site_name="",
+        )
+    )
+
+    assert set(sources) == {"tavily", "greenhouse", "lever"}
+    assert sources["tavily"].source_key == "tavily"
+
+    for source in sources.values():
+        await source.aclose()  # type: ignore[attr-defined]
 
 
 def _job(*, source_key: str, url: str, title: str) -> DiscoveredJob:

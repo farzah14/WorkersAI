@@ -1,5 +1,6 @@
 import asyncio
 import ipaddress
+import json
 import urllib.parse
 from datetime import UTC, datetime
 
@@ -11,6 +12,7 @@ from pytest_httpx import HTTPXMock
 from jobmatch_worker.jobs.connectors.base import (
     SourceConfigError,
     SourceDataError,
+    SourceError,
     SourceUnavailable,
 )
 from jobmatch_worker.jobs.connectors.brave import BraveConnector
@@ -22,6 +24,7 @@ from jobmatch_worker.jobs.connectors.pinning_transport import (
     PinnedHttpsTransport,
     is_public_address,
 )
+from jobmatch_worker.jobs.connectors.tavily import TavilyConnector
 from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
 from jobmatch_worker.jobs.query import SearchQuery
 
@@ -39,6 +42,8 @@ BRAVE_URL_ENCODED = (
 GREENHOUSE_URL = "https://boards-api.greenhouse.io/v1/boards/acme/jobs?content=true"
 
 LEVER_URL = "https://api.lever.co/v0/postings/acme?mode=json"
+
+TAVILY_URL = "https://api.tavily.com/search"
 
 BRAVE_BODY = {
     "web": {
@@ -92,6 +97,22 @@ LEVER_BODY = [
         "createdAt": 1783000001000,
     },
 ]
+
+TAVILY_BODY = {
+    "results": [
+        {
+            "title": "Data Engineer at Acme",
+            "url": "https://careers.acme.com/jobs/data-engineer",
+            "content": "Join our data team in Jakarta.",
+        },
+        {
+            "title": "Insecure copy",
+            "url": "http://insecure.example.com/job",
+            "content": "must be filtered out",
+        },
+        {"title": "Missing URL", "content": "must be filtered out"},
+    ]
+}
 
 
 async def _public_resolver(
@@ -230,6 +251,103 @@ async def test_brave_unexpected_shape_is_data_error(httpx_mock: HTTPXMock) -> No
 
     with pytest.raises(SourceDataError):
         await connector.search(QUERY)
+    await connector.aclose()
+
+
+# --- Tavily Search connector ---
+
+
+async def test_tavily_maps_results_to_candidates(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(url=TAVILY_URL, method="POST", json=TAVILY_BODY)
+    connector = TavilyConnector(api_key="test-key", client=httpx.AsyncClient())
+
+    candidates = await connector.search(QUERY)
+
+    assert len(candidates) == 1
+    assert isinstance(candidates[0], DiscoveryCandidateUrl)
+    assert candidates[0].url == "https://careers.acme.com/jobs/data-engineer"
+    assert candidates[0].title == "Data Engineer at Acme"
+    assert candidates[0].snippet == "Join our data team in Jakarta."
+
+    request = httpx_mock.get_requests()[-1]
+    assert request.method == "POST"
+    assert str(request.url) == TAVILY_URL
+    body = json.loads(request.content)
+    assert body["query"] == QUERY.terms
+    assert body["topic"] == "general"
+    assert body["search_depth"] == "basic"
+    assert body["include_answer"] is False
+    assert body["include_raw_content"] is False
+    assert body["include_images"] is False
+    assert body["api_key"] == "test-key"
+    await connector.aclose()
+
+
+async def test_tavily_missing_api_key_is_config_error() -> None:
+    connector = TavilyConnector(api_key="", client=httpx.AsyncClient())
+
+    with pytest.raises(SourceConfigError) as excinfo:
+        await connector.search(QUERY)
+
+    assert excinfo.value.source_key == "tavily"
+    await connector.aclose()
+
+
+@pytest.mark.parametrize(
+    ("status_code", "error_type"),
+    [
+        (401, SourceConfigError),
+        (403, SourceConfigError),
+        (408, SourceUnavailable),
+        (429, SourceUnavailable),
+        (500, SourceUnavailable),
+    ],
+)
+async def test_tavily_classifies_http_errors(
+    httpx_mock: HTTPXMock,
+    status_code: int,
+    error_type: type[SourceError],
+) -> None:
+    httpx_mock.add_response(url=TAVILY_URL, method="POST", status_code=status_code)
+    connector = TavilyConnector(
+        api_key="test-key", client=httpx.AsyncClient(), retries=0
+    )
+
+    with pytest.raises(error_type) as excinfo:
+        await connector.search(QUERY)
+
+    assert excinfo.value.source_key == "tavily"
+    assert "test-key" not in str(excinfo.value)
+    await connector.aclose()
+
+
+async def test_tavily_non_json_body_is_data_error(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        url=TAVILY_URL,
+        method="POST",
+        text="<html>gateway error</html>",
+    )
+    connector = TavilyConnector(api_key="test-key", client=httpx.AsyncClient())
+
+    with pytest.raises(SourceDataError) as excinfo:
+        await connector.search(QUERY)
+
+    assert excinfo.value.source_key == "tavily"
+    assert "test-key" not in str(excinfo.value)
+    await connector.aclose()
+
+
+async def test_tavily_unexpected_shape_is_data_error(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        url=TAVILY_URL,
+        method="POST",
+        json={"results": "oops"},
+    )
+    connector = TavilyConnector(api_key="test-key", client=httpx.AsyncClient())
+
+    with pytest.raises(SourceDataError):
+        await connector.search(QUERY)
+
     await connector.aclose()
 
 

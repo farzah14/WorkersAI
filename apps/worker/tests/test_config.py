@@ -8,6 +8,7 @@ def _set_base_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@localhost:5432/db")
     monkeypatch.setenv("SUPABASE_URL", "http://localhost:54321")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-key")
+    monkeypatch.delenv("TAVILY_API_KEY", raising=False)
 
 
 def test_default_ai_settings(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -58,7 +59,19 @@ def test_default_connector_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OLLAMA_API_KEY", "ollama-key")
     monkeypatch.setenv("OLLAMA_MODEL", "llama3.2")
     settings = Settings(_env_file=None)
-    assert settings.brave_search_api_key == ""
+    assert settings.tavily_api_key == ""
     assert settings.greenhouse_board_token == ""
     assert settings.lever_site_name == ""
     assert settings.requirement_extraction_enabled is False
+
+
+def test_tavily_api_key_is_loaded_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_base_env(monkeypatch)
+    monkeypatch.setenv("TAVILY_API_KEY", "tavily-key")
+    monkeypatch.setenv("OLLAMA_API_KEY", "ollama-key")
+    monkeypatch.setenv("OLLAMA_MODEL", "llama3.2")
+    settings = Settings(_env_file=None)
+
+    assert settings.tavily_api_key == "tavily-key"

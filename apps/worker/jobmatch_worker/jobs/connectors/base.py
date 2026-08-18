@@ -56,7 +56,7 @@ class SourceConnector(Protocol):
     """Uniform interface for discovery connectors.
 
     Connectors return fully normalized jobs (Greenhouse/Lever) or candidate
-    URLs that still need a career-page fetch (Brave Search). A connector
+    URLs that still need a career-page fetch (web search). A connector
     must raise only ``SourceError`` subclasses and never be affected by
     another connector's failure.
     """
@@ -91,6 +91,50 @@ async def get_json_with_retry(
     last_error: SourceUnavailable | None = None
     for attempt in range(retries + 1):
         request = client.build_request("GET", url, params=params, headers=headers)
+        response: httpx.Response | None = None
+        try:
+            response = await client.send(request, stream=True)
+            status = response.status_code
+            if status in _RETRYABLE_STATUSES or 300 <= status < 400 or status >= 500:
+                last_error = SourceUnavailable(source_key, f"HTTP {status}")
+            elif 400 <= status < 500:
+                raise SourceConfigError(source_key, f"HTTP {status}")
+            else:
+                body = await _read_capped_body(source_key, response, _JSON_MAX_BYTES)
+                return httpx.Response(
+                    status_code=status,
+                    headers=response.headers,
+                    content=body,
+                    request=request,
+                )
+        except (httpx.TimeoutException, httpx.TransportError) as exc:
+            last_error = SourceUnavailable(
+                source_key, f"transport error: {type(exc).__name__}"
+            )
+        finally:
+            if response is not None:
+                await response.aclose()
+        if attempt < retries:
+            await asyncio.sleep(retry_delay)
+    assert last_error is not None
+    raise last_error
+
+
+async def post_json_with_retry(
+    client: httpx.AsyncClient,
+    *,
+    url: str,
+    source_key: str,
+    json_body: dict[str, Any],
+    timeout: float,
+    headers: dict[str, str] | None = None,
+    retries: int = 1,
+    retry_delay: float = 0.05,
+) -> httpx.Response:
+    """POST JSON with the same bounded retry and body-cap policy as GET."""
+    last_error: SourceUnavailable | None = None
+    for attempt in range(retries + 1):
+        request = client.build_request("POST", url, headers=headers, json=json_body)
         response: httpx.Response | None = None
         try:
             response = await client.send(request, stream=True)
@@ -204,5 +248,6 @@ __all__ = [
     "parse_iso_datetime",
     "parse_json",
     "parse_ms_epoch",
+    "post_json_with_retry",
     "strip_html_to_text",
 ]

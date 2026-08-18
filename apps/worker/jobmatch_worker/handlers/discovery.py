@@ -19,10 +19,10 @@ from jobmatch_worker.jobs.connectors.base import (
     SourceError,
     SourceUnavailable,
 )
-from jobmatch_worker.jobs.connectors.brave import BraveConnector
 from jobmatch_worker.jobs.connectors.career_page import CareerPageFetcher
 from jobmatch_worker.jobs.connectors.greenhouse import GreenhouseConnector
 from jobmatch_worker.jobs.connectors.lever import LeverConnector
+from jobmatch_worker.jobs.connectors.tavily import TavilyConnector
 from jobmatch_worker.jobs.dedupe import (
     dedupe_jobs,
     is_fuzzy_duplicate,
@@ -51,6 +51,7 @@ where r.id = %s
 """
 _SOURCE_TYPES = {
     "brave": "search",
+    "tavily": "search",
     "greenhouse": "ats",
     "lever": "ats",
     "career_page": "page",
@@ -84,7 +85,7 @@ def _error_code(error: SourceError) -> str:
 
 def _build_sources(settings: Settings) -> dict[str, SourceConnector]:
     return {
-        "brave": BraveConnector(api_key=settings.brave_search_api_key),
+        "tavily": TavilyConnector(api_key=settings.tavily_api_key),
         "greenhouse": GreenhouseConnector(board_token=settings.greenhouse_board_token),
         "lever": LeverConnector(site_name=settings.lever_site_name),
     }
