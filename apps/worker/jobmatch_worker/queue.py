@@ -23,8 +23,20 @@ CLAIM_SQL = """
 with candidate as (
   select id
   from public.work_items
-  where status = 'queued' and available_at <= now()
-  order by created_at
+  where (
+    (status = 'queued' and available_at <= now())
+    or (
+      status = 'processing'
+      and locked_at <= now() - interval '15 minutes'
+    )
+  )
+  order by
+    case
+      when kind = 'discover_jobs' then 0
+      when kind = 'match_job' then 1
+      else 2
+    end,
+    coalesce(locked_at, created_at)
   for update skip locked
   limit 1
 )
