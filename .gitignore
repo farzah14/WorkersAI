@@ -34,3 +34,6 @@ dev-server.log
 worker.log
 
 apps/web/e2e/.seed-state.json
+
+# Design tool artifacts
+.hallmark/
