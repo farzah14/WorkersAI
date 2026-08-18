@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from psycopg.types.json import Jsonb
 from pydantic import ValidationError
 
 from jobmatch_worker.ai.base import AiResult, PermanentAiError, StructuredOutputError
@@ -166,6 +167,11 @@ async def test_cached_requirements_miss_extracts_and_persists() -> None:
     inserts = [q for q, _ in conn.executed if "insert into public.job_requirements" in q.lower()]
     assert len(inserts) == 1
     assert "on conflict (job_id)" in inserts[0].lower()
+    insert_params = next(
+        params for query, params in conn.executed if "insert into public.job_requirements" in query.lower()
+    )
+    assert isinstance(insert_params[2], Jsonb)
+    assert insert_params[2].obj["requirements"][0]["value"] == "Python"
 
 
 @pytest.mark.asyncio

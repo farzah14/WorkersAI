@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from psycopg.types.json import Jsonb
 
 from jobmatch_worker.ai.base import AiResult
 from jobmatch_worker.matching.models import JobRequirement
@@ -125,6 +126,10 @@ async def test_match_run_persists_upserted_result() -> None:
     ]
     assert len(upserts) == 1
     assert upserts[0][:5] == ("user-1", "run-1", "prof-1", "job-1", 97)
+    assert isinstance(upserts[0][11], Jsonb)
+    assert isinstance(upserts[0][12], Jsonb)
+    assert isinstance(upserts[0][13], Jsonb)
+    assert isinstance(upserts[0][16], Jsonb)
 
 
 @pytest.mark.asyncio
@@ -171,7 +176,12 @@ async def test_second_invocation_upserts_instead_of_duplicating() -> None:
         if "insert into public.job_matches" in query.lower() and "on conflict" in query.lower()
     ]
     assert len(upserts) == 2
-    assert upserts[0] == upserts[1]
+    assert upserts[0][:11] == upserts[1][:11]
+    assert [upserts[0][index].obj for index in (11, 12, 13, 16)] == [
+        upserts[1][index].obj for index in (11, 12, 13, 16)
+    ]
+    assert upserts[0][14:16] == upserts[1][14:16]
+    assert upserts[0][17:] == upserts[1][17:]
     assert first.overall_score == second.overall_score
 
 

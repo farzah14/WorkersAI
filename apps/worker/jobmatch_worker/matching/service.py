@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from psycopg import AsyncConnection
+from psycopg.types.json import Jsonb
 
 from jobmatch_worker.ai.base import PermanentAiError, StructuredOutputError
 from jobmatch_worker.ai.router import AiRouter
@@ -368,12 +369,12 @@ async def run_match(
             outcome.dimension_scores["location"],
             outcome.dimension_scores["seniority"],
             outcome.dimension_scores["language"],
-            outcome.strengths,
-            outcome.gaps,
-            [g.value for g in outcome.critical_gaps],
+            Jsonb(outcome.strengths),
+            Jsonb(outcome.gaps),
+            Jsonb([g.value for g in outcome.critical_gaps]),
             outcome.verdict,
             explanation_result.explanation,
-            explanation_result.recommendations,
+            Jsonb(explanation_result.recommendations),
             outcome.semantic_degraded,
         ),
     )

@@ -8,6 +8,7 @@ current description hash skips the generative call entirely.
 from typing import Any
 
 from psycopg import AsyncConnection
+from psycopg.types.json import Jsonb
 from pydantic import ValidationError
 
 from jobmatch_worker.ai.base import PermanentAiError, StructuredOutputError
@@ -72,7 +73,7 @@ async def cached_job_requirements(
             requirements = excluded.requirements,
             extracted_at = now()
         """,
-        (job_id, description_hash, requirements.model_dump(mode="json")),
+        (job_id, description_hash, Jsonb(requirements.model_dump(mode="json"))),
     )
     return requirements
 
