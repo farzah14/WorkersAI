@@ -50,7 +50,6 @@ join public.search_profiles sp on sp.id = r.search_profile_id
 where r.id = %s
 """
 _SOURCE_TYPES = {
-    "brave": "search",
     "tavily": "search",
     "greenhouse": "ats",
     "lever": "ats",

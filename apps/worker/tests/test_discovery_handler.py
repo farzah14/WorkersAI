@@ -121,12 +121,12 @@ async def test_discovery_run_keeps_successful_sources_when_one_fails(
             ],
         ),
         "lever": _Connector("lever", SourceUnavailable("lever", "timeout")),
-        "brave": _Connector(
-            "brave",
+        "tavily": _Connector(
+            "tavily",
             [
-                _job(source_key="brave", url=duplicate_url, title="Data Engineer"),
+                _job(source_key="tavily", url=duplicate_url, title="Data Engineer"),
                 _job(
-                    source_key="brave",
+                    source_key="tavily",
                     url="https://jobs.example.com/ml-engineer",
                     title="ML Engineer",
                 ),
@@ -167,7 +167,7 @@ async def test_discovery_run_keeps_successful_sources_when_one_fails(
         if "insert into public.job_provenance" in query.lower()
     ]
     assert len(provenance) == 5
-    assert {params[3] for params in provenance} == {"greenhouse", "brave"}
+    assert {params[3] for params in provenance} == {"greenhouse", "tavily"}
 
     requirement_items = [
         params
@@ -194,7 +194,7 @@ async def test_discovery_run_keeps_successful_sources_when_one_fails(
 
 
 @pytest.mark.asyncio
-async def test_brave_candidates_become_jobs_with_brave_provenance() -> None:
+async def test_search_candidates_become_jobs_with_search_provenance() -> None:
     from jobmatch_worker.handlers.discovery import handle_discover_jobs
 
     run_row = {
@@ -219,7 +219,7 @@ async def test_brave_candidates_become_jobs_with_brave_provenance() -> None:
         connection,
         {"id": "item-2", "payload": {"search_run_id": "run-2"}},
         None,
-        connectors={"brave": _Connector("brave", [candidate])},
+        connectors={"tavily": _Connector("tavily", [candidate])},
         fetch_page=fetch_page,
     )
 
@@ -229,7 +229,7 @@ async def test_brave_candidates_become_jobs_with_brave_provenance() -> None:
         if "insert into public.job_provenance" in query.lower()
     ]
     assert len(provenance) == 1
-    assert provenance[0][2:4] == ("search", "brave")
+    assert provenance[0][2:4] == ("search", "tavily")
 
     job_insert = next(
         params
@@ -334,7 +334,7 @@ async def test_candidate_fetch_failure_is_recorded_as_source_failure() -> None:
         connection,
         {"id": "item-5", "payload": {"search_run_id": "run-5"}},
         None,
-        connectors={"brave": _Connector("brave", [candidate])},
+        connectors={"tavily": _Connector("tavily", [candidate])},
         fetch_page=fetch_page,
     )
 

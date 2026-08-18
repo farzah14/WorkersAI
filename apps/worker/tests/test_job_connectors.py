@@ -1,7 +1,6 @@
 import asyncio
 import ipaddress
 import json
-import urllib.parse
 from datetime import UTC, datetime
 
 import httpx
@@ -15,7 +14,6 @@ from jobmatch_worker.jobs.connectors.base import (
     SourceError,
     SourceUnavailable,
 )
-from jobmatch_worker.jobs.connectors.brave import BraveConnector
 from jobmatch_worker.jobs.connectors.career_page import CareerPageFetcher
 from jobmatch_worker.jobs.connectors.greenhouse import GreenhouseConnector
 from jobmatch_worker.jobs.connectors.lever import LeverConnector
@@ -30,38 +28,11 @@ from jobmatch_worker.jobs.query import SearchQuery
 
 QUERY = SearchQuery("Data Engineer Jakarta Indonesia")
 
-BRAVE_URL = "https://api.search.brave.com/res/v1/web/search"
-BRAVE_URL_ENCODED = (
-    BRAVE_URL
-    + "?"
-    + urllib.parse.urlencode(
-        {"q": "Data Engineer Jakarta Indonesia", "count": 10, "safesearch": "moderate"}
-    )
-)
-
 GREENHOUSE_URL = "https://boards-api.greenhouse.io/v1/boards/acme/jobs?content=true"
 
 LEVER_URL = "https://api.lever.co/v0/postings/acme?mode=json"
 
 TAVILY_URL = "https://api.tavily.com/search"
-
-BRAVE_BODY = {
-    "web": {
-        "results": [
-            {
-                "title": "Data Engineer at Acme",
-                "url": "https://careers.acme.com/jobs/data-engineer",
-                "description": "Join our data team in Jakarta.",
-            },
-            {
-                "title": "Insecure copy",
-                "url": "http://insecure.example.com/job",
-                "description": "must be filtered out",
-            },
-            {"title": "Missing URL", "url": "", "description": "must be filtered out"},
-        ]
-    }
-}
 
 GREENHOUSE_BODY = {
     "jobs": [
@@ -162,96 +133,6 @@ def test_source_errors_carry_source_key_and_never_raw_payload() -> None:
     error = SourceUnavailable("brave", "HTTP 500")
     assert error.source_key == "brave"
     assert "brave: HTTP 500" in str(error)
-
-
-# --- Brave Search connector ---
-
-
-async def test_brave_maps_results_to_candidates(httpx_mock: HTTPXMock) -> None:
-    httpx_mock.add_response(url=BRAVE_URL_ENCODED, json=BRAVE_BODY)
-    connector = BraveConnector(api_key="test-key", client=httpx.AsyncClient())
-
-    candidates = await connector.search(QUERY)
-
-    assert isinstance(candidates, list)
-    assert len(candidates) == 1
-    assert isinstance(candidates[0], DiscoveryCandidateUrl)
-    assert candidates[0].url == "https://careers.acme.com/jobs/data-engineer"
-    assert candidates[0].title == "Data Engineer at Acme"
-    assert candidates[0].snippet == "Join our data team in Jakarta."
-
-    request = httpx_mock.get_requests()[-1]
-    assert request.url.params["q"] == "Data Engineer Jakarta Indonesia"
-    assert request.url.params["count"] == "10"
-    assert request.url.params["safesearch"] == "moderate"
-    assert request.headers["x-subscription-token"] == "test-key"
-    await connector.aclose()
-
-
-async def test_brave_rejects_more_results_than_requested_cap(httpx_mock: HTTPXMock) -> None:
-    httpx_mock.add_response(
-        url=BRAVE_URL_ENCODED,
-        json={
-            "web": {
-                "results": [
-                    {"url": f"https://jobs.example.com/{index}"}
-                    for index in range(21)
-                ]
-            }
-        },
-    )
-    connector = BraveConnector(api_key="test-key", client=httpx.AsyncClient())
-
-    with pytest.raises(SourceDataError, match="result limit"):
-        await connector.search(QUERY)
-
-    await connector.aclose()
-
-
-async def test_brave_500_raises_source_unavailable(httpx_mock: HTTPXMock) -> None:
-    httpx_mock.add_response(url=BRAVE_URL_ENCODED, status_code=500)
-    httpx_mock.add_response(url=BRAVE_URL_ENCODED, status_code=500)
-    connector = BraveConnector(api_key="test-key", client=httpx.AsyncClient())
-
-    with pytest.raises(SourceUnavailable) as excinfo:
-        await connector.search(QUERY)
-    assert excinfo.value.source_key == "brave"
-    await connector.aclose()
-
-
-async def test_brave_401_is_config_error(httpx_mock: HTTPXMock) -> None:
-    httpx_mock.add_response(url=BRAVE_URL_ENCODED, status_code=401)
-    connector = BraveConnector(api_key="bad-key", client=httpx.AsyncClient())
-
-    with pytest.raises(SourceConfigError) as excinfo:
-        await connector.search(QUERY)
-    assert excinfo.value.source_key == "brave"
-    await connector.aclose()
-
-
-async def test_brave_missing_api_key_is_config_error() -> None:
-    connector = BraveConnector(api_key="", client=httpx.AsyncClient())
-    with pytest.raises(SourceConfigError):
-        await connector.search(QUERY)
-
-
-async def test_brave_non_json_body_is_data_error(httpx_mock: HTTPXMock) -> None:
-    httpx_mock.add_response(url=BRAVE_URL_ENCODED, text="<html>gateway error</html>")
-    connector = BraveConnector(api_key="test-key", client=httpx.AsyncClient())
-
-    with pytest.raises(SourceDataError) as excinfo:
-        await connector.search(QUERY)
-    assert excinfo.value.source_key == "brave"
-    await connector.aclose()
-
-
-async def test_brave_unexpected_shape_is_data_error(httpx_mock: HTTPXMock) -> None:
-    httpx_mock.add_response(url=BRAVE_URL_ENCODED, json={"web": {"results": "oops"}})
-    connector = BraveConnector(api_key="test-key", client=httpx.AsyncClient())
-
-    with pytest.raises(SourceDataError):
-        await connector.search(QUERY)
-    await connector.aclose()
 
 
 # --- Tavily Search connector ---
@@ -636,21 +517,21 @@ async def test_career_page_default_transport_has_connection_factory() -> None:
 async def test_one_connector_500_does_not_prevent_another_from_returning(
     httpx_mock: HTTPXMock,
 ) -> None:
-    httpx_mock.add_response(url=BRAVE_URL_ENCODED, status_code=500)
-    httpx_mock.add_response(url=BRAVE_URL_ENCODED, status_code=500)
+    httpx_mock.add_response(url=TAVILY_URL, method="POST", status_code=500)
+    httpx_mock.add_response(url=TAVILY_URL, method="POST", status_code=500)
     httpx_mock.add_response(url=GREENHOUSE_URL, json=GREENHOUSE_BODY)
 
-    brave = BraveConnector(api_key="test-key", client=httpx.AsyncClient())
+    tavily = TavilyConnector(api_key="test-key", client=httpx.AsyncClient())
     greenhouse = GreenhouseConnector(board_token="acme", client=httpx.AsyncClient())
 
     with pytest.raises(SourceUnavailable):
-        await brave.search(QUERY)
+        await tavily.search(QUERY)
 
     jobs = await greenhouse.search(QUERY)
     assert len(jobs) == 1
     assert isinstance(jobs[0], DiscoveredJob)
     assert jobs[0].title == "Data Engineer"
-    await brave.aclose()
+    await tavily.aclose()
     await greenhouse.aclose()
 
 
@@ -1302,20 +1183,18 @@ async def test_lever_skips_credentials_url(httpx_mock: HTTPXMock) -> None:
 # --- API JSON body cap ---
 
 
-async def test_brave_oversize_json_body_is_data_error(httpx_mock: HTTPXMock) -> None:
+async def test_tavily_oversize_json_body_is_data_error(httpx_mock: HTTPXMock) -> None:
     oversized = {
-        "web": {
-            "results": [
-                {
-                    "title": "x",
-                    "url": "https://a.example/x",
-                    "description": "y" * (5 * 1024 * 1024),
-                }
-            ]
-        }
+        "results": [
+            {
+                "title": "x",
+                "url": "https://a.example/x",
+                "content": "y" * (5 * 1024 * 1024),
+            }
+        ]
     }
-    httpx_mock.add_response(url=BRAVE_URL_ENCODED, json=oversized)
-    connector = BraveConnector(api_key="test-key", client=httpx.AsyncClient())
+    httpx_mock.add_response(url=TAVILY_URL, method="POST", json=oversized)
+    connector = TavilyConnector(api_key="test-key", client=httpx.AsyncClient())
 
     with pytest.raises(SourceDataError) as excinfo:
         await connector.search(QUERY)
