@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "Job Matcher",
+    "appName": "Hirevia",
     "save": "Simpan",
     "cancel": "Batal",
     "back": "Kembali",
@@ -19,7 +19,46 @@
   "auth": {
     "signIn": "Masuk",
     "signOut": "Keluar",
-    "signInRequired": "Silakan masuk untuk melanjutkan."
+    "signInRequired": "Silakan masuk untuk melanjutkan.",
+    "loginHeading": "Masuk",
+    "loginSubheading": "Akses profil kandidatmu dan jelajahi kecocokan lowongan yang transparan.",
+    "registerHeading": "Create your account",
+    "registerSubheading": "Ubah satu CV digital menjadi profil terstruktur dan temukan lowongan yang relevan.",
+    "emailLabel": "Email",
+    "emailPlaceholder": "nama@example.com",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "••••••••",
+    "passwordMinLengthHint": "Minimal 6 karakter",
+    "signInSubmit": "Sign in",
+    "registerSubmit": "Register",
+    "continueWithGoogle": "Continue with Google",
+    "or": "atau lanjutkan dengan",
+    "noAccountPrompt": "No account yet?",
+    "registerAction": "Register",
+    "haveAccountPrompt": "Already have an account?",
+    "signInAction": "Sign in",
+    "backToHome": "Halaman Utama",
+    "secureBadge": "Akses kandidat terverifikasi",
+    "errorTitle": "Kendala autentikasi",
+    "errors": {
+      "invalidCredentials": "Gagal masuk. Silakan periksa kembali email dan kata sandi kamu.",
+      "signupFailed": "Pendaftaran gagal. Silakan periksa kembali data kamu dan coba lagi.",
+      "oauthFailed": "Autentikasi Google terhenti atau gagal. Silakan coba lagi.",
+      "default": "Autentikasi gagal. Silakan coba lagi."
+    },
+    "proof": {
+      "tag": "Mesin Pencocokan Transparan",
+      "headline": "Pencarian kerja dengan alasan jelas tanpa klaim kosong.",
+      "scoreLabel": "Contoh Kecocokan",
+      "scoreBucket": "Kecocokan kuat",
+      "scoreRole": "Senior Data Analyst",
+      "feature1Title": "Penilaian 6 Dimensi",
+      "feature1Desc": "Keahlian (35%), pengalaman (25%), jenjang (15%), pendidikan, bahasa, dan lokasi dinilai objektif.",
+      "feature2Title": "Privat Sejak Awal",
+      "feature2Desc": "CV digital PDF dan DOCX tersimpan privat dengan kendali hapus file asli di tanganmu.",
+      "feature3Title": "Indonesia & Global",
+      "feature3Desc": "Pencarian modular lowongan lokal Indonesia dan peluang kerja remote global."
+    }
   },
   "cv": {
     "title": "CV Saya",
@@ -146,6 +185,117 @@
     "accountDeleted": "Akun dihapus.",
     "invalidConfirmation": "Ketik DELETE untuk konfirmasi.",
     "error": "Terjadi kesalahan. Coba lagi."
+  },
+  "landing": {
+    "nav": {
+      "primary": "Navigasi utama",
+      "home": "Beranda Hirevia",
+      "howItWorks": "Cara kerja",
+      "whyTrust": "Mengapa skor ini dapat dipercaya",
+      "signIn": "Masuk",
+      "uploadCv": "Sign-Up",
+      "start": "Mulai",
+      "openMenu": "Buka menu",
+      "closeMenu": "Tutup menu"
+    },
+    "hero": {
+      "signal": "Cari kerja dengan alasan yang jelas.",
+      "title": "Temukan pekerjaan—yang sesuai dengan pengalamanmu.",
+      "description": "Ubah satu CV digital menjadi profil yang bisa diedit, pencarian terarah, dan hasil kecocokan yang bisa kamu periksa sebelum melamar.",
+      "uploadCta": "Unggah CV",
+      "howItWorks": "Lihat cara kerja",
+      "metaLabel": "Kontrol pencarian",
+      "metaFormats": "File yang diterima",
+      "metaSearch": "Cakupan pencarian",
+      "metaControl": "Kontrol profil",
+      "metaControlValue": "Bisa kamu edit"
+    },
+    "preview": {
+      "ariaLabel": "Contoh hasil kecocokan",
+      "label": "Bukti Kecocokan Kandidat",
+      "status": "Verified Match",
+      "roleType": "Data & Analytics · Senior Track",
+      "role": "Senior Data Analyst",
+      "bucket": "Best Match",
+      "scoreBadge": "94%",
+      "scoreLabel": "Overall Fit",
+      "description": "Periksa rincian dimensi skor, keahlian terbukti, dan rekomendasi celah yang dapat ditindaklanjuti sebelum melamar.",
+      "skillsLabel": "Keahlian",
+      "skillsValue": "96%",
+      "skillsDetail": "SQL · Python · BigQuery · Looker",
+      "expLabel": "Pengalaman",
+      "expValue": "5 Thn (Min 4)",
+      "locationLabel": "Cakupan",
+      "locationValue": "Indonesia / Remote",
+      "tag1": "Advanced SQL",
+      "tag2": "Data Modeling",
+      "tag3": "BI Pipelines",
+      "tag4": "BigQuery",
+      "recommendationTitle": "Rekomendasi Langkah Nyata",
+      "recommendationBody": "Sertakan proyek transformasi data dbt untuk meningkatkan visibilitas di mata perekrut.",
+      "inspectAction": "Periksa rincian bukti & skor lengkap"
+    },
+    "score": {
+      "title": "Kecocokan bukan hanya satu angka.",
+      "description": "Skor memisahkan sinyal kecocokan agar kamu bisa menentukan apa yang perlu diverifikasi, diperbaiki, atau dilewati.",
+      "tableLabel": "Dimensi skor kecocokan MVP",
+      "dimensionHeader": "Dimensi",
+      "weightHeader": "Bobot",
+      "signalHeader": "Contoh sinyal",
+      "skills": "Keahlian",
+      "experience": "Pengalaman",
+      "seniority": "Jenjang",
+      "education": "Pendidikan",
+      "language": "Bahasa",
+      "location": "Lokasi",
+      "strong": "Kuat",
+      "aligned": "Selaras",
+      "context": "Konteks",
+      "review": "Tinjau"
+    },
+    "workflow": {
+      "title": "Dari dokumen menjadi langkah berikutnya.",
+      "description": "Produk ini mengikuti cara pencarian kerja yang teliti: mulai dari bukti, jaga profil tetap bisa diedit, lalu pilih fokusmu.",
+      "intake": {
+        "label": "Masukkan",
+        "title": "Mulai dari CV yang sudah kamu punya.",
+        "body": "Unggah PDF digital atau DOCX. Sistem mengekstrak strukturnya tanpa memintamu mengulang isi CV di kotak chat."
+      },
+      "review": {
+        "label": "Review",
+        "title": "Jaga profil tetap di tanganmu.",
+        "body": "Tinjau dan edit profil kandidat hasil ekstraksi sebelum pencarian dimulai. Versi yang kamu konfirmasi menjadi sumber kebenaran."
+      },
+      "match": {
+        "label": "Cocokkan",
+        "title": "Lihat lowongan yang layak mendapat waktumu.",
+        "body": "Bandingkan peran relevan dari pencarian Indonesia atau global, lalu simpan, tandai dilamar, abaikan, atau buka lowongan aslinya."
+      },
+      "visualProfile": "Profil kandidat",
+      "visualEditable": "Bisa diedit",
+      "visualMatch": "Kategori kecocokan",
+      "visualStrong": "Kuat"
+    },
+    "trust": {
+      "title": "AI yang berguna harus bisa diperiksa.",
+      "description": "Sistem mempercepat pencarian tanpa mengarang versi kariermu atau mengambil alih keputusan lamaran.",
+      "controlTitle": "Kamu mengonfirmasi profil.",
+      "controlBody": "Ekstraksi AI adalah titik awal. Kamu bisa mengedit profil terstruktur sebelum pencarian pertama.",
+      "privacyTitle": "CV tetap privat.",
+      "privacyBody": "File asli berada di penyimpanan privat, dan kamu bisa memilih untuk menyimpan atau menghapusnya setelah diproses.",
+      "boundaryTitle": "Tidak ada lamaran otomatis.",
+      "boundaryBody": "Hirevia membantu kamu memilih dan melacak. Kamu tetap membuka lowongan kanonis dan menentukan langkah berikutnya."
+    },
+    "cta": {
+      "title": "Mulai dari dokumen yang kamu percaya.",
+      "description": "Buat akun, unggah CV digital, dan tinjau profil sebelum pencarian lowongan apa pun dimulai.",
+      "button": "Buat profil"
+    },
+    "footer": {
+      "tagline": "Pencocokan kerja berbasis AI untuk manusia.",
+      "signIn": "Masuk",
+      "legal": "Privat sejak awal · CV digital saja"
+    }
   },
   "errors": {
     "unauthorized": "Tidak diizinkan.",

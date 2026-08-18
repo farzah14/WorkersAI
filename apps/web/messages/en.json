@@ -1,6 +1,6 @@
 {
   "common": {
-    "appName": "Job Matcher",
+    "appName": "Hirevia",
     "save": "Save",
     "cancel": "Cancel",
     "back": "Back",
@@ -19,7 +19,46 @@
   "auth": {
     "signIn": "Sign in",
     "signOut": "Sign out",
-    "signInRequired": "Please sign in to continue."
+    "signInRequired": "Please sign in to continue.",
+    "loginHeading": "Sign In",
+    "loginSubheading": "Access your candidate profile and explore explainable job matches.",
+    "registerHeading": "Create your account",
+    "registerSubheading": "Turn one digital CV into an inspectable profile and high-signal job matches.",
+    "emailLabel": "Email",
+    "emailPlaceholder": "you@example.com",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "••••••••",
+    "passwordMinLengthHint": "At least 6 characters",
+    "signInSubmit": "Sign in",
+    "registerSubmit": "Register",
+    "continueWithGoogle": "Continue with Google",
+    "or": "or continue with",
+    "noAccountPrompt": "No account yet?",
+    "registerAction": "Register",
+    "haveAccountPrompt": "Already have an account?",
+    "signInAction": "Sign in",
+    "backToHome": "Back to home",
+    "secureBadge": "Verified candidate access",
+    "errorTitle": "Authentication issue",
+    "errors": {
+      "invalidCredentials": "Sign-in failed. Please verify your email and password.",
+      "signupFailed": "Registration failed. Please check your details and try again.",
+      "oauthFailed": "Google sign-in was interrupted or failed. Please try again.",
+      "default": "Authentication failed. Please try again."
+    },
+    "proof": {
+      "tag": "Explainable Match Engine",
+      "headline": "Job search with clear receipts and zero fluff.",
+      "scoreLabel": "Sample Match",
+      "scoreBucket": "Strong match",
+      "scoreRole": "Senior Data Analyst",
+      "feature1Title": "6-Dimension Scoring",
+      "feature1Desc": "Skills (35%), experience (25%), seniority (15%), education, language, and location evaluated objectively.",
+      "feature2Title": "Private by Default",
+      "feature2Desc": "Digital PDF and DOCX CVs stay private with user-controlled original file deletion.",
+      "feature3Title": "Indonesia & Global",
+      "feature3Desc": "Modular discovery across verified domestic postings and international remote opportunities."
+    }
   },
   "cv": {
     "title": "My CVs",
@@ -146,6 +185,117 @@
     "accountDeleted": "Account deleted.",
     "invalidConfirmation": "Type DELETE to confirm.",
     "error": "Something went wrong. Try again."
+  },
+  "landing": {
+    "nav": {
+      "primary": "Primary navigation",
+      "home": "Hirevia home",
+      "howItWorks": "How it works",
+      "whyTrust": "Why trust the score",
+      "signIn": "Sign in",
+      "uploadCv": "Sign-Up",
+      "start": "Start",
+      "openMenu": "Open menu",
+      "closeMenu": "Close menu"
+    },
+    "hero": {
+      "signal": "Job search, with receipts.",
+      "title": "Find work—one that matches your experience.",
+      "description": "Turn one digital CV into an editable profile, a focused search, and match results you can inspect before you apply.",
+      "uploadCta": "Upload your CV",
+      "howItWorks": "See how it works",
+      "metaLabel": "Search controls",
+      "metaFormats": "Accepted files",
+      "metaSearch": "Search scope",
+      "metaControl": "Profile control",
+      "metaControlValue": "You edit it"
+    },
+    "preview": {
+      "ariaLabel": "Illustrative match result",
+      "label": "Candidate Fit Evidence",
+      "status": "Verified Match",
+      "roleType": "Data & Analytics · Senior Track",
+      "role": "Senior Data Analyst",
+      "bucket": "Best Match",
+      "scoreBadge": "94%",
+      "scoreLabel": "Overall Fit",
+      "description": "Inspect granular scoring dimensions, verified strengths, and actionable gap recommendations before applying.",
+      "skillsLabel": "Skills Fit",
+      "skillsValue": "96%",
+      "skillsDetail": "SQL · Python · BigQuery · Looker",
+      "expLabel": "Experience",
+      "expValue": "5 Yrs (4+ Req)",
+      "locationLabel": "Scope",
+      "locationValue": "Indonesia / Remote",
+      "tag1": "Advanced SQL",
+      "tag2": "Data Modeling",
+      "tag3": "BI Pipelines",
+      "tag4": "BigQuery",
+      "recommendationTitle": "Actionable Next Move",
+      "recommendationBody": "Highlight your dbt data transformation projects to maximize recruiter alignment.",
+      "inspectAction": "Inspect full evidence & score breakdown"
+    },
+    "score": {
+      "title": "A match is more than one number.",
+      "description": "The score separates fit signals so you can decide what to verify, improve, or skip.",
+      "tableLabel": "MVP match scoring dimensions",
+      "dimensionHeader": "Dimension",
+      "weightHeader": "Weight",
+      "signalHeader": "Example signal",
+      "skills": "Skills",
+      "experience": "Experience",
+      "seniority": "Seniority",
+      "education": "Education",
+      "language": "Language",
+      "location": "Location",
+      "strong": "Strong",
+      "aligned": "Aligned",
+      "context": "Context",
+      "review": "Review"
+    },
+    "workflow": {
+      "title": "From document to next move.",
+      "description": "The product follows the way a careful job search actually works: start with evidence, keep the profile editable, then choose where to focus.",
+      "intake": {
+        "label": "Intake",
+        "title": "Start with the CV you already have.",
+        "body": "Upload a digital PDF or DOCX. The system extracts structure without asking you to repeat your work in a chat box."
+      },
+      "review": {
+        "label": "Review",
+        "title": "Keep the profile in your hands.",
+        "body": "Review and edit the extracted candidate profile before discovery begins. Your confirmed version becomes the source of truth."
+      },
+      "match": {
+        "label": "Match",
+        "title": "See what deserves your time.",
+        "body": "Compare relevant roles across Indonesia or global searches, then save, apply, ignore, or open the original listing."
+      },
+      "visualProfile": "Candidate profile",
+      "visualEditable": "Editable",
+      "visualMatch": "Match bucket",
+      "visualStrong": "Strong"
+    },
+    "trust": {
+      "title": "Useful AI stays inspectable.",
+      "description": "The system accelerates discovery without inventing a version of your career or taking the application out of your hands.",
+      "controlTitle": "You confirm the profile.",
+      "controlBody": "AI extraction is a starting point. You can edit the structured profile before the first search.",
+      "privacyTitle": "Your CV stays private.",
+      "privacyBody": "Original files live in private storage, with a user choice to retain or delete the original after parsing.",
+      "boundaryTitle": "No automatic applications.",
+      "boundaryBody": "Hirevia helps you decide and track. You still open the canonical listing and choose what happens next."
+    },
+    "cta": {
+      "title": "Start with the document you trust.",
+      "description": "Create your account, upload a digital CV, and review the profile before any job search starts.",
+      "button": "Build your profile"
+    },
+    "footer": {
+      "tagline": "AI job matching for people.",
+      "signIn": "Sign in",
+      "legal": "Private by default · Digital CVs only"
+    }
   },
   "errors": {
     "unauthorized": "Unauthorized.",

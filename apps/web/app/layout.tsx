@@ -18,11 +18,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Job Matcher",
-  description: "AI Job Matcher",
+  title: "Hirevia | Find work—one that matches your experience",
+  description: "Build an editable candidate profile and discover explainable job matches across Indonesia and global roles.",
 };
 
-export default async function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const store = await cookies();
   const cookie = store.get("locale")?.value;
   const locale = cookie === "en" ? "en" : routing.defaultLocale;

@@ -1,0 +1,322 @@
+/* Auth Module Styling · Matching Landing Page Genre (Modern Minimal / Editorial Paper) */
+
+.pageWrapper {
+  height: 100vh;
+  height: 100dvh;
+  width: 100vw;
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  overflow: hidden;
+  position: relative;
+}
+
+/* Top-left action button matching the top-right locale switcher */
+.topBar {
+  position: fixed;
+  top: 1.25rem;
+  left: 1.25rem;
+  z-index: var(--z-raised);
+  display: flex;
+  align-items: center;
+}
+
+.homeButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  min-height: 2rem;
+  background: transparent;
+  border: none;
+  color: var(--color-neutral);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  font-family: var(--font-body);
+  text-decoration: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  transition: all var(--dur-short) var(--ease-out);
+  white-space: nowrap;
+}
+
+.homeButton:hover {
+  background: transparent;
+  color: var(--color-ink);
+  transform: translateX(-3px);
+}
+
+.homeButton:active {
+  transform: translateX(-1px);
+}
+
+.mainContainer {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem var(--page-gutter);
+  box-sizing: border-box;
+}
+
+.cardContainer {
+  width: 100%;
+  max-width: 27rem;
+  margin-inline: auto;
+}
+
+/* Centered Form Card */
+.formCard {
+  border: 1px solid var(--color-rule);
+  border-radius: 1.35rem;
+  background: color-mix(in oklch, var(--color-paper) 92%, #ffffff);
+  box-shadow: 0 16px 40px -12px oklch(22% 0.014 60 / 0.07), var(--shadow-whisper);
+  padding: clamp(1.25rem, 2.75vh, 1.75rem) clamp(1.25rem, 3vw, 2rem);
+  display: flex;
+  flex-direction: column;
+}
+
+.badgeSignal {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  color: var(--color-neutral);
+  font-family: var(--font-outlier);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+}
+
+.signalDot {
+  width: 0.4rem;
+  height: 0.4rem;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.formTitle {
+  margin: 0;
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 2vw + 0.3rem, 1.85rem);
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.formSubtitle {
+  margin: 0.35rem 0 0;
+  color: var(--color-neutral);
+  font-size: var(--text-xs);
+  line-height: 1.4;
+  text-align: center;
+}
+
+/* Error Banner */
+.errorAlert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.625rem;
+  background: oklch(95% 0.06 25);
+  border: 1px solid oklch(85% 0.1 25);
+  color: oklch(35% 0.15 25);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.errorIcon {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.1rem;
+  color: oklch(45% 0.18 25);
+}
+
+.errorTitle {
+  font-weight: 700;
+  margin: 0 0 0.1rem;
+}
+
+.errorDescription {
+  margin: 0;
+  opacity: 0.95;
+}
+
+/* Form Styles */
+.authForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.625rem;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.fieldLabel {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--color-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.fieldHint {
+  color: var(--color-muted);
+  font-weight: 400;
+  font-size: 0.68rem;
+}
+
+.inputControl {
+  width: 100%;
+  min-height: 2.375rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.55rem;
+  border: 1px solid var(--color-rule);
+  background: #ffffff;
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  transition: all var(--dur-short) var(--ease-out);
+  box-shadow: var(--shadow-whisper);
+}
+
+.inputControl::placeholder {
+  color: var(--color-muted);
+  opacity: 0.55;
+}
+
+.inputControl:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px oklch(62% 0.17 35 / 0.16);
+}
+
+.primaryButton {
+  display: inline-flex;
+  width: 100%;
+  min-height: 2.375rem;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-xs);
+  margin-top: 0.25rem;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  border: none;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color var(--dur-short) var(--ease-out), transform var(--dur-micro) var(--ease-out), box-shadow var(--dur-short) var(--ease-out);
+}
+
+.primaryButton:hover {
+  background: var(--color-ink-2);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px oklch(22% 0.014 60 / 0.16);
+}
+
+.primaryButton:active {
+  transform: translateY(1px);
+}
+
+.primaryButton:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin: 0.45rem 0 0.35rem;
+  color: var(--color-muted);
+  font-family: var(--font-outlier);
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.divider::before,
+.divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--color-rule);
+}
+
+.googleButton {
+  display: inline-flex;
+  width: 100%;
+  min-height: 2.375rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.45rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-rule);
+  background: #ffffff;
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: all var(--dur-short) var(--ease-out);
+  box-shadow: var(--shadow-whisper);
+}
+
+.googleButton:hover {
+  background: var(--color-paper-2);
+  border-color: var(--color-rule-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px oklch(22% 0.014 60 / 0.06);
+}
+
+.googleButton:active {
+  transform: translateY(1px);
+}
+
+.googleButton:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 3px;
+}
+
+.cardFooter {
+  margin-top: 0.5rem;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--color-rule);
+  text-align: center;
+  font-size: 0.72rem;
+  color: var(--color-neutral);
+}
+
+.switchLink {
+  color: var(--color-ink);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  transition: color var(--dur-short) var(--ease-out);
+}
+
+.switchLink:hover {
+  color: var(--color-accent);
+}
