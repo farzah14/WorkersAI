@@ -116,7 +116,19 @@ def build_queries(
             if remote and "remote" not in " ".join(parts).casefold():
                 parts.append("remote")
             queries.append(SearchQuery(terms=" ".join(parts), negative_terms=clean_exclusions))
-    return queries
+
+    if remote and clean_locations:
+        existing_terms = {query.terms for query in queries}
+        for role in clean_roles:
+            parts = [role]
+            if normalized_region == "indonesia":
+                parts.append("Indonesia")
+            if "remote" not in " ".join(parts).casefold():
+                parts.append("remote")
+            fallback = SearchQuery(terms=" ".join(parts), negative_terms=clean_exclusions)
+            if fallback.terms not in existing_terms:
+                queries.append(fallback)
+    return queries[:6]
 
 
 __all__ = ["SearchQuery", "build_queries"]

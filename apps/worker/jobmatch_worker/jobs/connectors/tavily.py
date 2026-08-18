@@ -1,5 +1,7 @@
 """Tavily Search API connector producing candidate job URLs."""
 
+import re
+import urllib.parse
 from typing import Any
 
 import httpx
@@ -19,6 +21,9 @@ TAVILY_API_URL = "https://api.tavily.com/search"
 TAVILY_MAX_COUNT = 20
 TAVILY_DEFAULT_COUNT = 10
 TAVILY_SEARCH_DEPTH = "basic"
+_JOB_QUERY_MARKERS = ("job", "jobs", "career", "careers", "vacancy", "hiring")
+_DEMO_HOST_MARKERS = ("leverdemo", "example.com", "example.org", "example.net")
+_DEMO_TITLE_MARKERS = ("synthetic demo", "test posting")
 
 
 class TavilyConnector:
@@ -64,7 +69,7 @@ class TavilyConnector:
             source_key=self.source_key,
             json_body={
                 "api_key": self._api_key,
-                "query": query.terms,
+                "query": _job_query_terms(query),
                 "topic": "general",
                 "search_depth": TAVILY_SEARCH_DEPTH,
                 "max_results": self._count,
@@ -85,11 +90,17 @@ class TavilyConnector:
             if not isinstance(url, str) or not url.strip():
                 continue
             try:
+                title = clean_optional_str(result.get("title"))
+                if not _is_allowed_job_result(url, title):
+                    continue
+                snippet = clean_optional_str(result.get("content"))
+                if _contains_excluded_keyword(title, snippet, query.negative_terms):
+                    continue
                 candidates.append(
                     DiscoveryCandidateUrl(
                         url=url,
-                        title=clean_optional_str(result.get("title")),
-                        snippet=clean_optional_str(result.get("content")),
+                        title=title,
+                        snippet=snippet,
                     )
                 )
             except ValidationError:
@@ -106,6 +117,40 @@ def _extract_results(source_key: str, body: Any) -> list[dict[str, Any]]:
     if len(results) > TAVILY_MAX_COUNT:
         raise SourceDataError(source_key, "source result limit exceeded")
     return [result for result in results if isinstance(result, dict)]
+
+
+def _job_query_terms(query: SearchQuery) -> str:
+    terms = query.terms.strip()
+    if not any(marker in terms.casefold().split() for marker in _JOB_QUERY_MARKERS):
+        terms = f"{terms} jobs"
+    exclusions = [
+        f'-"{keyword.replace(chr(34), "").strip()}"'
+        for keyword in query.negative_terms
+        if keyword.strip()
+    ]
+    return " ".join([terms, *exclusions])
+
+
+def _is_allowed_job_result(url: str, title: str | None) -> bool:
+    parsed = urllib.parse.urlsplit(url)
+    host = (parsed.hostname or "").casefold()
+    title_text = (title or "").casefold()
+    if any(marker in host for marker in _DEMO_HOST_MARKERS):
+        return False
+    if any(marker in title_text for marker in _DEMO_TITLE_MARKERS):
+        return False
+    return parsed.scheme == "https" and bool(host)
+
+
+def _contains_excluded_keyword(
+    title: str | None, snippet: str | None, keywords: tuple[str, ...]
+) -> bool:
+    haystack = " ".join(value for value in (title, snippet) if value).casefold()
+    for keyword in keywords:
+        normalized = keyword.strip().strip('"').casefold()
+        if normalized and re.search(rf"(?<!\w){re.escape(normalized)}(?!\w)", haystack):
+            return True
+    return False
 
 
 __all__ = ["TavilyConnector"]

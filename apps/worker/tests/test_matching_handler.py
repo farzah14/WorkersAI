@@ -5,7 +5,7 @@ from typing import Any
 
 import pytest
 
-from jobmatch_worker.ai.base import AiResult
+from jobmatch_worker.ai.base import AiResult, RetryableAiError
 
 PROFILE_JSON = {
     "name": "Rina",
@@ -79,14 +79,14 @@ class _Connection:
             return _Cursor(self.profile_row)
         if "from public.jobs" in lowered:
             return _Cursor(self.job_row)
-        if "from public.job_search_run_jobs" in lowered:
-            return _RowsCursor(
-                [{"search_run_id": run_id} for run_id in self.match_run_ids]
-            )
         if "from public.work_items" in lowered:
             if "status in ('queued', 'processing')" in lowered:
                 return _Cursor({"pending": self.pending})
             return _Cursor({"failed": self.failed})
+        if "from public.job_search_run_jobs" in lowered:
+            return _RowsCursor(
+                [{"search_run_id": run_id} for run_id in self.match_run_ids]
+            )
         return _Cursor(None)
 
     async def rollback(self) -> None:
@@ -100,6 +100,13 @@ class _FakeRouter:
         if "untrusted" in system:
             return AiResult(provider="fake", model="fake", data=REQUIREMENTS_JSON, latency_ms=1)
         return AiResult(provider="fake", model="fake", data=EXPLANATION_JSON, latency_ms=1)
+
+
+class _FailingRouter:
+    async def generate_structured(
+        self, *, system: str, user: str, schema: dict[str, Any]
+    ) -> AiResult:
+        raise RetryableAiError("nvidia HTTP 429")
 
 
 def _settings(**overrides: Any) -> SimpleNamespace:
@@ -309,3 +316,32 @@ async def test_extract_job_requirements_enqueues_matches_for_related_runs() -> N
     assert all(isinstance(payload, Jsonb) for payload in payloads)
     assert {payload.obj["search_run_id"] for payload in payloads} == {"run-5", "run-6"}
     assert {payload.obj["job_id"] for payload in payloads} == {"job-6"}
+
+
+@pytest.mark.asyncio
+async def test_extract_job_requirements_preserves_provider_reason_after_final_retry() -> None:
+    from jobmatch_worker.handlers.matching import handle_extract_job_requirements
+
+    connection = _Connection(
+        run_row=None,
+        profile_row=None,
+        job_row={"description": "Python required"},
+    )
+
+    await handle_extract_job_requirements(
+        connection,
+        {
+            "id": "item-7",
+            "attempts": 3,
+            "payload": {"job_id": "job-7", "description_hash": "h7"},
+        },
+        _settings(),
+        router=_FailingRouter(),
+    )
+
+    failed_items = [
+        params
+        for query, params in connection.executed
+        if "update public.work_items" in query.lower() and "failed" in query.lower()
+    ]
+    assert failed_items == [("requirement extraction failed: nvidia HTTP 429", "item-7")]

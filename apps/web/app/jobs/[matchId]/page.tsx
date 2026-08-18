@@ -135,8 +135,8 @@ export default async function JobMatchPage({
               {t("match.recommendations")}
             </h3>
             <ul className="mt-4 space-y-3">
-              {detail.recommendations.map((recommendation) => (
-                <li key={recommendation} className="flex gap-3 leading-6 text-[#53616a]">
+              {detail.recommendations.map((recommendation, index) => (
+                <li key={`${recommendation}-${index}`} className="flex gap-3 leading-6 text-[#53616a]">
                   <span aria-hidden="true" className="mt-2.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#d9623c]" />
                   {recommendation}
                 </li>

@@ -18,10 +18,14 @@ JavaScript is never executed and forms are never submitted in the MVP.
 
 import asyncio
 import ipaddress
+import json
+import re
 import socket
 import urllib.parse
 import urllib.robotparser
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass
+from datetime import datetime
 
 import httpx
 from bs4 import BeautifulSoup
@@ -30,7 +34,9 @@ from jobmatch_worker.jobs.connectors.base import (
     SourceConfigError,
     SourceDataError,
     SourceUnavailable,
+    clean_optional_str,
     collapse_whitespace,
+    parse_iso_datetime,
 )
 from jobmatch_worker.jobs.connectors.pinning_transport import (
     NoDnsError,
@@ -38,10 +44,35 @@ from jobmatch_worker.jobs.connectors.pinning_transport import (
     PinnedHttpsTransport,
     is_public_address,
 )
+from jobmatch_worker.jobs.models import WorkMode
 
 CareerPageResolver = Callable[
     [str], Awaitable[Sequence[ipaddress.IPv4Address | ipaddress.IPv6Address]]
 ]
+
+
+@dataclass(frozen=True, slots=True)
+class CareerPageContent:
+    """Visible job-page text plus conservative structured metadata."""
+
+    text: str
+    title: str | None = None
+    company: str | None = None
+    location: str | None = None
+    published_at: datetime | None = None
+    work_mode: WorkMode | None = None
+    is_closed: bool = False
+
+
+@dataclass(frozen=True, slots=True)
+class _JobPostingMetadata:
+    title: str | None = None
+    company: str | None = None
+    location: str | None = None
+    published_at: datetime | None = None
+    work_mode: WorkMode | None = None
+    is_closed: bool = False
+
 
 _MAX_REDIRECTS = 3
 _REDIRECT_STATUSES = frozenset({301, 302, 303, 307, 308})
@@ -103,13 +134,16 @@ class CareerPageFetcher:
             await self._client.aclose()
 
     async def extract_text(self, url: str) -> str:
+        return (await self.extract_content(url)).text
+
+    async def extract_content(self, url: str) -> CareerPageContent:
         try:
             async with asyncio.timeout(self._timeout):
-                return await self._extract_text(url)
+                return await self._extract_content(url)
         except TimeoutError as exc:
             raise SourceUnavailable(self.source_key, "request deadline exceeded") from exc
 
-    async def _extract_text(self, url: str) -> str:
+    async def _extract_content(self, url: str) -> CareerPageContent:
         current = url
         for _ in range(_MAX_REDIRECTS + 1):
             await self._validate_url(current)
@@ -131,7 +165,7 @@ class CareerPageFetcher:
             try:
                 self._assert_html(response)
                 body = await self._read_capped(response)
-                return _visible_text(body, source_key=self.source_key)
+                return _extract_page_content(body, source_key=self.source_key)
             finally:
                 await response.aclose()
         raise SourceDataError(self.source_key, "too many redirects")
@@ -247,4 +281,188 @@ def _visible_text(body: bytes, *, source_key: str) -> str:
     return text
 
 
-__all__ = ["CareerPageFetcher", "CareerPageResolver"]
+def _extract_page_content(body: bytes, *, source_key: str) -> CareerPageContent:
+    soup = BeautifulSoup(body, "html.parser")
+    metadata = _extract_job_posting_metadata(soup)
+    return CareerPageContent(
+        text=_visible_text(body, source_key=source_key),
+        title=metadata.title,
+        company=metadata.company,
+        location=metadata.location,
+        published_at=metadata.published_at,
+        work_mode=metadata.work_mode,
+        is_closed=metadata.is_closed,
+    )
+
+
+def _extract_job_posting_metadata(soup: BeautifulSoup) -> _JobPostingMetadata:
+    is_closed = _is_closed_page(soup)
+    for node in _iter_job_posting_nodes(soup):
+        return _JobPostingMetadata(
+            title=clean_optional_str(node.get("title")),
+            company=_organization_name(node.get("hiringOrganization")),
+            location=_job_location(node.get("jobLocation")),
+            published_at=parse_iso_datetime(node.get("datePosted")),
+            work_mode=_work_mode(node.get("jobLocationType"))
+            or _work_mode(node.get("workplaceType")),
+            is_closed=is_closed,
+        )
+    return _extract_meta_job_metadata(soup, is_closed=is_closed)
+
+
+def _extract_meta_job_metadata(
+    soup: BeautifulSoup, *, is_closed: bool
+) -> _JobPostingMetadata:
+    description = _meta_content(soup, "name", "description") or ""
+    page_title = _meta_content(soup, "property", "og:title") or ""
+    if not page_title and soup.title is not None:
+        page_title = collapse_whitespace(soup.title.get_text(" "))
+
+    title: str | None = None
+    company: str | None = None
+    location: str | None = None
+    summary_match = re.search(
+        r"\bapply\s+for\s+(?P<title>.+?)\s+at\s+(?P<company>[^.]+)\.",
+        description,
+        flags=re.IGNORECASE,
+    )
+    if summary_match:
+        title = clean_optional_str(summary_match.group("title"))
+        company = clean_optional_str(summary_match.group("company"))
+    else:
+        title_match = re.search(
+            r"^(?P<title>.+?)\s+jobs?\s+at\s+(?P<company>[^,|()]+)"
+            r"(?:,\s*(?P<location>[^|()]+))?",
+            page_title,
+            flags=re.IGNORECASE,
+        )
+        if title_match:
+            title = clean_optional_str(title_match.group("title"))
+            company = clean_optional_str(title_match.group("company"))
+            location = clean_optional_str(title_match.group("location"))
+
+    location_match = re.search(
+        r"\bjob\s+location\s*:\s*(?P<location>[^.;|]+)",
+        description,
+        flags=re.IGNORECASE,
+    )
+    if location_match:
+        location = clean_optional_str(location_match.group("location"))
+
+    return _JobPostingMetadata(
+        title=title,
+        company=company,
+        location=location,
+        published_at=_meta_published_at(soup),
+        work_mode=_work_mode_from_text(f"{page_title} {description}"),
+        is_closed=is_closed,
+    )
+
+
+def _meta_content(soup: BeautifulSoup, attribute: str, value: str) -> str | None:
+    for tag in soup.find_all("meta"):
+        if str(tag.get(attribute, "")).casefold() != value.casefold():
+            continue
+        return clean_optional_str(tag.get("content"))
+    return None
+
+
+def _meta_published_at(soup: BeautifulSoup) -> datetime | None:
+    for attribute, value in (
+        ("property", "article:published_time"),
+        ("name", "datePosted"),
+        ("name", "datePublished"),
+    ):
+        parsed = parse_iso_datetime(_meta_content(soup, attribute, value))
+        if parsed is not None:
+            return parsed
+    time_tag = soup.find("time", attrs={"datetime": True})
+    if time_tag is not None:
+        return parse_iso_datetime(time_tag.get("datetime"))
+    return None
+
+
+def _work_mode_from_text(value: str) -> WorkMode | None:
+    normalized = value.casefold()
+    if re.search(r"\bremote\b|\bwork\s+from\s+home\b", normalized):
+        return "remote"
+    if re.search(r"\bhybrid\b", normalized):
+        return "hybrid"
+    if re.search(r"\bon[- ]site\b|\bonsite\b", normalized):
+        return "on-site"
+    return None
+
+
+def _is_closed_page(soup: BeautifulSoup) -> bool:
+    title = soup.title.get_text(" ") if soup.title is not None else ""
+    visible = soup.get_text(" ")
+    normalized = collapse_whitespace(f"{title} {visible}").casefold()
+    return any(
+        marker in normalized
+        for marker in ("this job was closed", "(closed)", "job is closed", "position has been filled")
+    )
+
+
+def _iter_job_posting_nodes(soup: BeautifulSoup) -> list[dict[str, object]]:
+    nodes: list[dict[str, object]] = []
+    for script in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        raw = script.string or script.get_text()
+        try:
+            payload = json.loads(raw)
+        except (TypeError, json.JSONDecodeError):
+            continue
+        candidates = payload if isinstance(payload, list) else [payload]
+        for candidate in candidates:
+            if isinstance(candidate, dict) and isinstance(candidate.get("@graph"), list):
+                candidates.extend(candidate["@graph"])
+            elif isinstance(candidate, dict):
+                node_type = candidate.get("@type")
+                types = node_type if isinstance(node_type, list) else [node_type]
+                if "JobPosting" in types:
+                    nodes.append(candidate)
+    return nodes
+
+
+def _organization_name(value: object) -> str | None:
+    if isinstance(value, dict):
+        return clean_optional_str(value.get("name"))
+    return clean_optional_str(value)
+
+
+def _job_location(value: object) -> str | None:
+    locations = value if isinstance(value, list) else [value]
+    for location in locations:
+        if not isinstance(location, dict):
+            continue
+        address = location.get("address")
+        if isinstance(address, dict):
+            parts: list[str] = []
+            for key in ("streetAddress", "addressLocality", "addressRegion", "addressCountry"):
+                part = address.get(key)
+                if isinstance(part, dict):
+                    part = part.get("name")
+                cleaned = clean_optional_str(part)
+                if cleaned and cleaned not in parts:
+                    parts.append(cleaned)
+            if parts:
+                return ", ".join(parts)
+        place_name = clean_optional_str(location.get("name"))
+        if place_name:
+            return place_name
+    return None
+
+
+def _work_mode(value: object) -> WorkMode | None:
+    if not isinstance(value, str):
+        return None
+    normalized = value.strip().casefold().replace("_", "-")
+    if normalized in {"telecommute", "remote"}:
+        return "remote"
+    if normalized == "hybrid":
+        return "hybrid"
+    if normalized in {"onsite", "on-site", "on site"}:
+        return "on-site"
+    return None
+
+
+__all__ = ["CareerPageContent", "CareerPageFetcher", "CareerPageResolver"]

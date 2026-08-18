@@ -47,7 +47,13 @@ function compareRows(a: MatchRow, b: MatchRow, state: SortState): number {
   return state.direction === "asc" ? result : -result;
 }
 
-export function MatchTable({ rows }: { rows: MatchRow[] }) {
+export function MatchTable({
+  rows,
+  emptyMessage = "No matches match the current filters.",
+}: {
+  rows: MatchRow[];
+  emptyMessage?: string;
+}) {
   const [filters, setFilters] = useState<MatchFilters>(() => defaultMatchFilters());
   const [sort, setSort] = useState<SortState>({ key: "overallScore", direction: "desc" });
   const [statuses, setStatuses] = useState<Record<string, MatchRow["status"]>>(() =>
@@ -188,7 +194,7 @@ export function MatchTable({ rows }: { rows: MatchRow[] }) {
             {visibleRows.length === 0 && (
               <tr>
                 <td colSpan={9} className="px-4 py-10 text-center text-sm text-[#6d787e]">
-                  No matches match the current filters.
+                  {emptyMessage}
                 </td>
               </tr>
             )}

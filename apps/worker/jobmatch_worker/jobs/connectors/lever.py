@@ -26,6 +26,7 @@ from jobmatch_worker.jobs.models import (
     DiscoveredJob,
     DiscoveryCandidateUrl,
     EmploymentType,
+    WorkMode,
 )
 from jobmatch_worker.jobs.query import SearchQuery
 
@@ -48,6 +49,15 @@ _COMMITMENT_MAP: dict[str, EmploymentType] = {
     "freelance": "freelance",
     "freelancer": "freelance",
 }
+
+_WORK_MODE_MAP: dict[str, WorkMode] = {
+    "remote": "remote",
+    "hybrid": "hybrid",
+    "on-site": "on-site",
+    "onsite": "on-site",
+    "on site": "on-site",
+}
+_BLOCKED_SITE_NAMES = frozenset({"leverdemo"})
 
 
 class LeverConnector:
@@ -78,6 +88,8 @@ class LeverConnector:
     ) -> list[DiscoveredJob | DiscoveryCandidateUrl]:
         if not self._site_name:
             raise SourceConfigError(self.source_key, "LEVER_SITE_NAME is not configured")
+        if self._site_name.strip().casefold() in _BLOCKED_SITE_NAMES:
+            raise SourceConfigError(self.source_key, "demo Lever site is not allowed")
         response = await get_json_with_retry(
             self._client,
             url=LEVER_API_URL.format(site=self._site_name),
@@ -130,6 +142,7 @@ def _map_posting(
             title=title,
             company=site_name,
             location=clean_optional_str(categories.get("location")),
+            work_mode=_map_work_mode(posting.get("workplaceType")),
             employment_type=_map_commitment(categories.get("commitment")),
             description=description,
             original_url=original_url,
@@ -145,6 +158,12 @@ def _map_commitment(value: object) -> EmploymentType | None:
     return _COMMITMENT_MAP.get(value.strip().casefold())
 
 
+def _map_work_mode(value: object) -> WorkMode | None:
+    if not isinstance(value, str):
+        return None
+    return _WORK_MODE_MAP.get(value.strip().casefold())
+
+
 def _is_https_url(value: str) -> bool:
     parsed = urllib.parse.urlsplit(value)
     return (
@@ -155,4 +174,11 @@ def _is_https_url(value: str) -> bool:
     )
 
 
-__all__ = ["_COMMITMENT_MAP", "LeverConnector", "_map_commitment"]
+__all__ = [
+    "_BLOCKED_SITE_NAMES",
+    "_COMMITMENT_MAP",
+    "_WORK_MODE_MAP",
+    "LeverConnector",
+    "_map_commitment",
+    "_map_work_mode",
+]

@@ -8,6 +8,7 @@ from jobmatch_worker.ai.base import (
     PermanentAiError,
     RetryableAiError,
     StructuredOutputError,
+    parse_structured_content,
 )
 from jobmatch_worker.ai.nvidia import NvidiaProvider
 from jobmatch_worker.ai.ollama import OllamaProvider
@@ -33,6 +34,12 @@ def _json_body(httpx_mock: HTTPXMock) -> dict:
 
 def test_structured_output_error_is_retryable() -> None:
     assert issubclass(StructuredOutputError, RetryableAiError)
+
+
+def test_structured_content_accepts_json_code_fence() -> None:
+    content = "```json\n{\"ok\": true}\n```"
+
+    assert parse_structured_content(content, SCHEMA) == {"ok": True}
 
 
 # --- OpenRouter ---

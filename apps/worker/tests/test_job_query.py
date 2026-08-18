@@ -25,6 +25,17 @@ def test_build_queries_caps_at_six_queries() -> None:
     assert len(q) <= 6
 
 
+def test_build_queries_caps_remote_fallback_queries_at_six() -> None:
+    q = build_queries(
+        region="indonesia",
+        roles=["Data Engineer", "Data Analyst", "Data Scientist"],
+        locations=["Jakarta", "Bandung"],
+        remote=True,
+    )
+
+    assert len(q) <= 6
+
+
 def test_build_queries_uses_top_three_roles() -> None:
     roles = ["Data Engineer", "Data Analyst", "Data Scientist", "ML Engineer"]
     locations = ["Jakarta"]
@@ -95,6 +106,18 @@ def test_no_location_produces_role_only_query() -> None:
     q = build_queries(region="global", roles=["Data Engineer"], locations=[])
     assert len(q) == 1
     assert q[0].terms == "Data Engineer"
+
+
+def test_remote_location_search_adds_countrywide_fallback() -> None:
+    q = build_queries(
+        region="indonesia",
+        roles=["Robotics Teacher"],
+        locations=["Jakarta"],
+        remote=True,
+    )
+
+    assert q[0].terms == "Robotics Teacher Jakarta Indonesia remote"
+    assert q[1].terms == "Robotics Teacher Indonesia remote"
 
 
 def test_query_builder_caps_excluded_keywords() -> None:

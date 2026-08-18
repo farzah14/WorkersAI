@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
 from jobmatch_worker.handlers.discovery import _build_sources
-from jobmatch_worker.jobs.connectors.base import SourceUnavailable
+from jobmatch_worker.jobs.connectors.base import SourceDataError, SourceUnavailable
+from jobmatch_worker.jobs.connectors.career_page import CareerPageContent
 from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
 
 
@@ -18,9 +20,23 @@ class _Cursor:
         return self._row
 
 
+class _RowsCursor:
+    def __init__(self, rows: list[dict[str, Any]]) -> None:
+        self._rows = rows
+
+    async def fetchall(self) -> list[dict[str, Any]]:
+        return self._rows
+
+
 class _Connection:
-    def __init__(self, run_row: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        run_row: dict[str, Any],
+        *,
+        cached_job_hashes: dict[str, str] | None = None,
+    ) -> None:
         self.run_row = run_row
+        self.cached_job_hashes = cached_job_hashes or {}
         self.executed: list[tuple[str, tuple[Any, ...]]] = []
         self._job_number = 0
 
@@ -29,6 +45,15 @@ class _Connection:
         lowered = query.lower()
         if "from public.job_search_runs" in lowered:
             return _Cursor(self.run_row)
+        if "from public.job_requirements" in lowered:
+            job_ids = {str(job_id) for job_id in params[0]} if params else set()
+            return _RowsCursor(
+                [
+                    {"job_id": job_id, "description_hash": description_hash}
+                    for job_id, description_hash in self.cached_job_hashes.items()
+                    if job_id in job_ids
+                ]
+            )
         if "insert into public.jobs" in lowered:
             self._job_number += 1
             return _Cursor({"id": f"job-{self._job_number}", "inserted": True})
@@ -54,16 +79,84 @@ async def test_build_sources_uses_tavily_for_web_search() -> None:
     sources = _build_sources(
         SimpleNamespace(
             tavily_api_key="tavily-key",
-            greenhouse_board_token="",
-            lever_site_name="",
+            greenhouse_board_token="leverdemo",
+            lever_site_name="leverdemo",
         )
     )
 
-    assert set(sources) == {"tavily", "greenhouse", "lever"}
+    assert set(sources) == {"tavily"}
     assert sources["tavily"].source_key == "tavily"
 
     for source in sources.values():
         await source.aclose()  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
+async def test_tavily_candidate_requires_real_job_metadata() -> None:
+    from jobmatch_worker.handlers.discovery import _candidate_to_job
+
+    candidate = DiscoveryCandidateUrl(
+        url="https://careers.acme.com/jobs/data-engineer",
+        title="Data Engineer",
+    )
+
+    async def fetch_page(_url: str) -> CareerPageContent:
+        return CareerPageContent(text="Build data pipelines.")
+
+    with pytest.raises(SourceDataError, match="company metadata"):
+        await _candidate_to_job(candidate, fetch_page, "tavily")
+
+
+@pytest.mark.asyncio
+async def test_tavily_candidate_uses_job_page_metadata() -> None:
+    from datetime import UTC, datetime
+
+    from jobmatch_worker.handlers.discovery import _candidate_to_job
+
+    candidate = DiscoveryCandidateUrl(
+        url="https://careers.acme.com/jobs/data-engineer",
+        title="Search result title",
+    )
+
+    async def fetch_page(_url: str) -> CareerPageContent:
+        return CareerPageContent(
+            text="Build data pipelines.",
+            title="Data Engineer",
+            company="Acme Labs",
+            location="Jakarta",
+            published_at=datetime(2026, 8, 18, tzinfo=UTC),
+            work_mode="hybrid",
+        )
+
+    job = await _candidate_to_job(candidate, fetch_page, "tavily")
+
+    assert job is not None
+    assert job.title == "Data Engineer"
+    assert job.company == "Acme Labs"
+    assert job.location == "Jakarta"
+    assert job.published_at == datetime(2026, 8, 18, tzinfo=UTC)
+    assert job.work_mode == "hybrid"
+
+
+@pytest.mark.asyncio
+async def test_tavily_candidate_rejects_closed_job_page() -> None:
+    from jobmatch_worker.handlers.discovery import _candidate_to_job
+
+    candidate = DiscoveryCandidateUrl(
+        url="https://careers.acme.com/jobs/closed",
+        title="Closed job",
+    )
+
+    async def fetch_page(_url: str) -> CareerPageContent:
+        return CareerPageContent(
+            text="This job was closed.",
+            title="Closed job",
+            company="Acme Labs",
+            is_closed=True,
+        )
+
+    with pytest.raises(SourceDataError, match="closed"):
+        await _candidate_to_job(candidate, fetch_page, "tavily")
 
 
 def _job(*, source_key: str, url: str, title: str) -> DiscoveredJob:
@@ -81,7 +174,7 @@ def _job(*, source_key: str, url: str, title: str) -> DiscoveredJob:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("requirement_extraction_enabled", "expected_requirement_items"),
-    [(False, 0), (True, 4)],
+    [(False, 0), (True, 2)],
 )
 async def test_discovery_run_keeps_successful_sources_when_one_fails(
     requirement_extraction_enabled: bool,
@@ -150,24 +243,25 @@ async def test_discovery_run_keeps_successful_sources_when_one_fails(
         for query, params in connection.executed
         if "update public.job_search_runs" in query.lower()
     ]
-    assert any(params[0] == "partial" for params in run_updates)
-    final_update = next(params for params in run_updates if params[0] == "partial")
-    assert final_update[1:5] == (5, 4, 1, 1)
+    expected_status = "processing" if requirement_extraction_enabled else "partial"
+    assert any(params[0] == expected_status for params in run_updates)
+    final_update = next(params for params in run_updates if params[0] == expected_status)
+    assert final_update[1:5] == (5, 2, 3, 1)
 
     job_inserts = [
         (query, params)
         for query, params in connection.executed
         if "insert into public.jobs" in query.lower()
     ]
-    assert len(job_inserts) == 4
+    assert len(job_inserts) == 2
 
     provenance = [
         params
         for query, params in connection.executed
         if "insert into public.job_provenance" in query.lower()
     ]
-    assert len(provenance) == 5
-    assert {params[3] for params in provenance} == {"greenhouse", "tavily"}
+    assert len(provenance) == 2
+    assert {params[3] for params in provenance} == {"greenhouse"}
 
     requirement_items = [
         params
@@ -194,6 +288,54 @@ async def test_discovery_run_keeps_successful_sources_when_one_fails(
 
 
 @pytest.mark.asyncio
+async def test_discovery_enqueues_match_for_cached_requirements() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-cached",
+        "status": "queued",
+        "region": "indonesia",
+        "target_roles": ["Data Engineer"],
+        "locations": [],
+        "work_modes": [],
+        "excluded_keywords": [],
+    }
+    connection = _Connection(
+        run_row,
+        cached_job_hashes={
+            "job-1": hashlib.sha256(b"Description for Data Engineer").hexdigest()
+        },
+    )
+
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-cached", "payload": {"search_run_id": "run-cached"}},
+        SimpleNamespace(requirement_extraction_enabled=True, max_attempts=3),
+        connectors={
+            "greenhouse": _Connector(
+                "greenhouse",
+                [
+                    _job(
+                        source_key="greenhouse",
+                        url="https://jobs.example.com/cached",
+                        title="Data Engineer",
+                    )
+                ],
+            )
+        },
+    )
+
+    match_items = [
+        params
+        for query, params in connection.executed
+        if "insert into public.work_items" in query.lower() and params[0] == "match_job"
+    ]
+    assert len(match_items) == 1
+    assert match_items[0][2].obj["search_run_id"] == "run-cached"
+    assert match_items[0][2].obj["job_id"] == "job-1"
+
+
+@pytest.mark.asyncio
 async def test_search_candidates_become_jobs_with_search_provenance() -> None:
     from jobmatch_worker.handlers.discovery import handle_discover_jobs
 
@@ -212,8 +354,13 @@ async def test_search_candidates_become_jobs_with_search_provenance() -> None:
     )
     connection = _Connection(run_row)
 
-    async def fetch_page(_url: str) -> str:
-        return "Backend Engineer\nBuild reliable services."
+    async def fetch_page(_url: str) -> CareerPageContent:
+        return CareerPageContent(
+            text="Backend Engineer\nBuild reliable services.",
+            title="Backend Engineer",
+            company="Acme Labs",
+            location="Jakarta",
+        )
 
     await handle_discover_jobs(
         connection,
@@ -237,7 +384,7 @@ async def test_search_candidates_become_jobs_with_search_provenance() -> None:
         if "insert into public.jobs" in query.lower()
     )
     assert job_insert[1] == "Backend Engineer"
-    assert job_insert[2] == "Unknown"
+    assert job_insert[2] == "Acme Labs"
     assert job_insert[11] == "Backend Engineer\nBuild reliable services."
 
 
@@ -327,7 +474,7 @@ async def test_candidate_fetch_failure_is_recorded_as_source_failure() -> None:
     candidate = DiscoveryCandidateUrl(url="https://careers.example.com/jobs/backend")
     connection = _Connection(run_row)
 
-    async def fetch_page(_url: str) -> str:
+    async def fetch_page(_url: str) -> CareerPageContent:
         raise SourceUnavailable("career_page", "timeout")
 
     await handle_discover_jobs(

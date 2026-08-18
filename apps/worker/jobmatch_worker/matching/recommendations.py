@@ -84,6 +84,7 @@ def sanitize_recommendations(
     """Drop unverifiable claims; convert experience-only claims to conditional phrasing."""
     verified = _verified_terms(candidate)
     sanitized: list[str] = []
+    seen: set[str] = set()
     for text in recommendations:
         asserted = _asserted_entities(text)
         unverified = {
@@ -93,9 +94,14 @@ def sanitize_recommendations(
             if entity not in verified
         }
         if not unverified:
-            sanitized.append(text)
+            recommendation = text
         elif set(asserted) == {"experience"}:
-            sanitized.append(CONDITIONAL_EXPERIENCE_PHRASE)
+            recommendation = CONDITIONAL_EXPERIENCE_PHRASE
+        else:
+            continue
+        if recommendation not in seen:
+            sanitized.append(recommendation)
+            seen.add(recommendation)
     return sanitized
 
 

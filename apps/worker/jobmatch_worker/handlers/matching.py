@@ -5,7 +5,7 @@ from typing import Any
 
 from psycopg import AsyncConnection
 
-from jobmatch_worker.ai.base import PermanentAiError
+from jobmatch_worker.ai.base import PermanentAiError, RetryableAiError
 from jobmatch_worker.ai.router import AiAuditRecorder, AiRouter
 from jobmatch_worker.config import Settings
 from jobmatch_worker.handlers.profile import build_ai_providers
@@ -19,7 +19,7 @@ MATCH_EXPLAIN_OPERATION = "match_explain"
 REQUIREMENT_EXTRACT_OPERATION = "requirement_extract"
 
 _RUN_SELECT_SQL = """
-select r.user_id, r.candidate_profile_id, sp.locations
+select r.user_id, r.candidate_profile_id, r.failed_count, sp.locations
 from public.job_search_runs r
 join public.search_profiles sp on sp.id = r.search_profile_id
 where r.id = %s
@@ -50,17 +50,46 @@ where jrj.job_id = %s
 _PENDING_ITEMS_SQL = """
 select count(*) as pending
 from public.work_items
-where kind = 'match_job'
-  and payload->>'search_run_id' = %s
+where (%s::uuid is null or id <> %s::uuid)
   and status in ('queued', 'processing')
+  and (
+    (kind = 'match_job' and payload->>'search_run_id' = %s)
+    or (
+      kind = 'extract_job_requirements'
+      and exists (
+        select 1
+        from public.job_search_run_jobs jrj
+        where jrj.search_run_id = %s
+          and work_items.payload->>'job_id' = jrj.job_id::text
+      )
+    )
+  )
 """
 
 _FAILED_ITEMS_SQL = """
 select count(*) as failed
 from public.work_items
-where kind = 'match_job'
-  and payload->>'search_run_id' = %s
-  and status = 'failed'
+where status = 'failed'
+  and (
+    (kind = 'match_job' and payload->>'search_run_id' = %s)
+    or (
+      kind = 'extract_job_requirements'
+      and exists (
+        select 1
+        from public.job_search_run_jobs jrj
+        where jrj.search_run_id = %s
+          and work_items.payload->>'job_id' = jrj.job_id::text
+      )
+    )
+  )
+"""
+
+_RUNS_FOR_JOB_SQL = """
+select distinct jrj.search_run_id
+from public.job_search_run_jobs jrj
+join public.job_search_runs r on r.id = jrj.search_run_id
+where jrj.job_id = %s
+  and r.status in ('queued', 'processing', 'partial')
 """
 
 _RUN_COMPLETE_SQL = """
@@ -68,6 +97,51 @@ update public.job_search_runs
 set status = %s, failed_count = %s, completed_at = now()
 where id = %s
 """
+
+
+def _failure_message(prefix: str, error: Exception) -> str:
+    """Keep provider status details without persisting arbitrary exception text."""
+    if not isinstance(error, (PermanentAiError, RetryableAiError)):
+        return prefix
+    detail = str(error).strip()[:200]
+    return f"{prefix}: {detail}" if detail else prefix
+
+
+async def _complete_run_if_terminal(
+    conn: AsyncConnection[Any], run_id: str, *, current_item_id: str | None = None
+) -> None:
+    pending_cursor = await conn.execute(
+        _PENDING_ITEMS_SQL,
+        (current_item_id, current_item_id, run_id, run_id),
+    )
+    pending_result = await pending_cursor.fetchone()
+    if pending_result is None or int(pending_result["pending"]) != 0:
+        return
+
+    failed_cursor = await conn.execute(_FAILED_ITEMS_SQL, (run_id, run_id))
+    failed_result = await failed_cursor.fetchone()
+    if failed_result is None:
+        raise RuntimeError("work item count returned no row")
+
+    run_cursor = await conn.execute(
+        "select failed_count from public.job_search_runs where id = %s",
+        (run_id,),
+    )
+    run = await run_cursor.fetchone() or {}
+    failed = int(run.get("failed_count") or 0) + int(failed_result["failed"])
+    await conn.execute(
+        _RUN_COMPLETE_SQL,
+        ("completed" if failed == 0 else "partial", failed, run_id),
+    )
+
+
+async def _complete_runs_for_job_if_terminal(
+    conn: AsyncConnection[Any], job_id: str
+) -> None:
+    cursor = await conn.execute(_RUNS_FOR_JOB_SQL, (job_id,))
+    runs = await cursor.fetchall()
+    for run in runs:
+        await _complete_run_if_terminal(conn, str(run["search_run_id"]))
 
 
 async def _enqueue_match_items(
@@ -121,6 +195,7 @@ async def handle_extract_job_requirements(
     job = await job_row.fetchone()
     if job is None or not job.get("description"):
         await fail_item(conn, item_id, "job not found")
+        await _complete_runs_for_job_if_terminal(conn, str(job_id))
         return
 
     owned_router = router is None
@@ -147,13 +222,15 @@ async def handle_extract_job_requirements(
             await complete_item(conn, item_id)
         except PermanentAiError as exc:
             await fail_item(conn, item_id, str(exc))
+            await _complete_runs_for_job_if_terminal(conn, str(job_id))
         except Exception as exc:  # noqa: BLE001 - heterogeneous transient failures
             await conn.rollback()
             attempt = int(item.get("attempts") or 0)
             if attempt >= settings.max_attempts:
-                await fail_item(conn, item_id, "requirement extraction failed")
+                await fail_item(conn, item_id, _failure_message("requirement extraction failed", exc))
             else:
                 await retry_item(conn, item_id, str(exc), attempt)
+            await _complete_runs_for_job_if_terminal(conn, str(job_id))
     finally:
         if owned_router:
             await router.aclose()
@@ -189,6 +266,7 @@ async def handle_match_job(
     profile_result = await profile_row.fetchone()
     if profile_result is None:
         await fail_item(conn, item_id, "candidate profile not confirmed")
+        await _complete_run_if_terminal(conn, str(run_id), current_item_id=item_id)
         return
     profile = CandidateProfile.model_validate(profile_result["profile"])
 
@@ -196,6 +274,7 @@ async def handle_match_job(
     job = await job_row.fetchone()
     if job is None or not job.get("description"):
         await fail_item(conn, item_id, "job not found")
+        await _complete_run_if_terminal(conn, str(run_id), current_item_id=item_id)
         return
 
     locations = list(run.get("locations") or [])
@@ -227,31 +306,19 @@ async def handle_match_job(
                 semantic=semantic,
             )
 
-            pending_cursor = await conn.execute(_PENDING_ITEMS_SQL, (run_id,))
-            pending_result = await pending_cursor.fetchone()
-            if pending_result is None:
-                raise RuntimeError("work item count returned no row")
-            pending = int(pending_result["pending"])
-            if pending == 0:
-                failed_cursor = await conn.execute(_FAILED_ITEMS_SQL, (run_id,))
-                failed_result = await failed_cursor.fetchone()
-                if failed_result is None:
-                    raise RuntimeError("work item count returned no row")
-                failed = int(failed_result["failed"])
-                await conn.execute(
-                    _RUN_COMPLETE_SQL,
-                    ("completed" if failed == 0 else "partial", failed, run_id),
-                )
+            await _complete_run_if_terminal(conn, str(run_id), current_item_id=item_id)
             await complete_item(conn, item_id)
         except PermanentAiError as exc:
             await fail_item(conn, item_id, str(exc))
+            await _complete_run_if_terminal(conn, str(run_id), current_item_id=item_id)
         except Exception as exc:  # noqa: BLE001 - heterogeneous transient failures
             await conn.rollback()
             attempt = int(item.get("attempts") or 0)
             if attempt >= settings.max_attempts:
-                await fail_item(conn, item_id, "job match failed")
+                await fail_item(conn, item_id, _failure_message("job match failed", exc))
             else:
                 await retry_item(conn, item_id, str(exc), attempt)
+            await _complete_run_if_terminal(conn, str(run_id), current_item_id=item_id)
     finally:
         if owned_router:
             await router.aclose()

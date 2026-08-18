@@ -35,7 +35,7 @@ class StructuredOutputError(RetryableAiError):
 
 def parse_structured_content(content: str, schema: dict[str, Any]) -> dict[str, Any]:
     try:
-        data = json.loads(content)
+        data = json.loads(_strip_json_code_fence(content))
     except (json.JSONDecodeError, TypeError) as exc:
         raise StructuredOutputError(f"provider returned invalid JSON: {exc}") from exc
     if not isinstance(data, dict):
@@ -45,6 +45,17 @@ def parse_structured_content(content: str, schema: dict[str, Any]) -> dict[str, 
     except jsonschema.ValidationError as exc:
         raise StructuredOutputError(f"provider output failed schema validation: {exc.message}") from exc
     return data
+
+
+def _strip_json_code_fence(content: str) -> str:
+    stripped = content.strip()
+    lines = stripped.splitlines()
+    if len(lines) >= 3:
+        opening = lines[0].strip()
+        language = opening[3:].strip().casefold() if opening.startswith("```") else ""
+        if language in {"", "json"} and lines[-1].strip() == "```":
+            return "\n".join(lines[1:-1]).strip()
+    return stripped
 
 
 def extract_message_content(

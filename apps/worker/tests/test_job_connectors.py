@@ -57,6 +57,7 @@ LEVER_BODY = [
             "commitment": "Full-time",
             "team": "Engineering",
         },
+        "workplaceType": "hybrid",
         "createdAt": 1783000000000,
         "descriptionPlain": "Build reliable data pipelines.",
     },
@@ -75,6 +76,11 @@ TAVILY_BODY = {
             "title": "Data Engineer at Acme",
             "url": "https://careers.acme.com/jobs/data-engineer",
             "content": "Join our data team in Jakarta.",
+        },
+        {
+            "title": "Demo CTO",
+            "url": "https://jobs.leverdemo.com/postings/cto",
+            "content": "Synthetic demo posting.",
         },
         {
             "title": "Insecure copy",
@@ -154,13 +160,44 @@ async def test_tavily_maps_results_to_candidates(httpx_mock: HTTPXMock) -> None:
     assert request.method == "POST"
     assert str(request.url) == TAVILY_URL
     body = json.loads(request.content)
-    assert body["query"] == QUERY.terms
+    assert body["query"] == f"{QUERY.terms} jobs"
     assert body["topic"] == "general"
     assert body["search_depth"] == "basic"
     assert body["include_answer"] is False
     assert body["include_raw_content"] is False
     assert body["include_images"] is False
     assert body["api_key"] == "test-key"
+    await connector.aclose()
+
+
+async def test_tavily_filters_excluded_keywords_locally(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        url=TAVILY_URL,
+        method="POST",
+        json={
+            "results": [
+                {
+                    "title": "Programmer",
+                    "url": "https://careers.acme.com/jobs/programmer",
+                    "content": "Build software.",
+                },
+                {
+                    "title": "Data Engineer",
+                    "url": "https://careers.acme.com/jobs/data-engineer",
+                    "content": "Build data pipelines.",
+                },
+            ]
+        },
+    )
+    connector = TavilyConnector(api_key="test-key", client=httpx.AsyncClient())
+
+    candidates = await connector.search(
+        SearchQuery("Data Engineer", negative_terms=("Programmer",))
+    )
+
+    assert len(candidates) == 1
+    assert isinstance(candidates[0], DiscoveryCandidateUrl)
+    assert candidates[0].title == "Data Engineer"
     await connector.aclose()
 
 
@@ -333,6 +370,7 @@ async def test_lever_maps_postings(httpx_mock: HTTPXMock) -> None:
     assert job.company == "acme"
     assert job.original_url == "https://jobs.lever.co/acme/abc123"
     assert job.location == "Jakarta"
+    assert job.work_mode == "hybrid"
     assert job.employment_type == "full-time"
     assert "Build reliable data pipelines." in job.description
     assert "Engineering" in job.description
@@ -358,6 +396,13 @@ async def test_lever_500_raises_source_unavailable(httpx_mock: HTTPXMock) -> Non
 async def test_lever_missing_site_name_is_config_error() -> None:
     connector = LeverConnector(site_name="", client=httpx.AsyncClient())
     with pytest.raises(SourceConfigError):
+        await connector.search(QUERY)
+
+
+async def test_lever_demo_site_is_rejected() -> None:
+    connector = LeverConnector(site_name="leverdemo", client=httpx.AsyncClient())
+
+    with pytest.raises(SourceConfigError, match="demo"):
         await connector.search(QUERY)
 
 
@@ -438,6 +483,103 @@ async def test_career_page_strips_scripts_styles_and_forms(httpx_mock: HTTPXMock
     assert "s3cret-script" not in text
     assert "secret-field" not in text
     assert "Nav links" not in text
+
+
+async def test_career_page_extracts_job_posting_metadata(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        url="https://careers.acme.com/robots.txt",
+        text="User-agent: *\nAllow: /",
+    )
+    page = """
+    <html><head>
+      <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "JobPosting",
+          "title": "Senior Data Engineer",
+          "datePosted": "2026-08-18",
+          "hiringOrganization": {"@type": "Organization", "name": "Acme Labs"},
+          "jobLocation": {
+            "@type": "Place",
+            "address": {
+              "addressLocality": "Jakarta",
+              "addressRegion": "DKI Jakarta",
+              "addressCountry": "ID"
+            }
+          },
+          "jobLocationType": "TELECOMMUTE"
+        }
+      </script>
+    </head><body><p>Build reliable data pipelines.</p></body></html>
+    """
+    httpx_mock.add_response(
+        url="https://careers.acme.com/jobs/senior-data-engineer",
+        html=page,
+    )
+    fetcher = CareerPageFetcher(client=httpx.AsyncClient(), resolver=_public_resolver)
+
+    content = await fetcher.extract_content(
+        "https://careers.acme.com/jobs/senior-data-engineer"
+    )
+
+    assert content.text == "Build reliable data pipelines."
+    assert content.title == "Senior Data Engineer"
+    assert content.company == "Acme Labs"
+    assert content.location == "Jakarta, DKI Jakarta, ID"
+    assert content.published_at == datetime(2026, 8, 18, tzinfo=UTC)
+    assert content.work_mode == "remote"
+
+
+async def test_career_page_extracts_meta_job_metadata(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        url="https://careers.acme.com/robots.txt",
+        text="User-agent: *\nAllow: /",
+    )
+    page = """
+    <html><head>
+      <title>Online Coding Teacher Jobs at Algonova, Jakarta Pusat | Glints</title>
+      <meta name="description" content="Apply for Online Coding Teacher at Algonova. Remote Jobs. Job Location: Jakarta Pusat">
+      <meta property="article:published_time" content="2026-08-18T09:30:00Z">
+    </head><body><p>Teach coding to students.</p></body></html>
+    """
+    httpx_mock.add_response(
+        url="https://careers.acme.com/jobs/online-coding-teacher",
+        html=page,
+    )
+    fetcher = CareerPageFetcher(client=httpx.AsyncClient(), resolver=_public_resolver)
+
+    content = await fetcher.extract_content(
+        "https://careers.acme.com/jobs/online-coding-teacher"
+    )
+
+    assert content.title == "Online Coding Teacher"
+    assert content.company == "Algonova"
+    assert content.location == "Jakarta Pusat"
+    assert content.published_at == datetime(2026, 8, 18, 9, 30, tzinfo=UTC)
+    assert content.work_mode == "remote"
+    assert content.is_closed is False
+
+
+async def test_career_page_marks_closed_meta_job(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        url="https://careers.acme.com/robots.txt",
+        text="User-agent: *\nAllow: /",
+    )
+    httpx_mock.add_response(
+        url="https://careers.acme.com/jobs/closed",
+        html="""
+        <html><head>
+          <title>Data Engineer Jobs at Acme Labs (Closed) | Glints</title>
+          <meta name="description" content="Apply for Data Engineer at Acme Labs. Remote Jobs.">
+        </head><body><p>This job was closed.</p></body></html>
+        """,
+    )
+    fetcher = CareerPageFetcher(client=httpx.AsyncClient(), resolver=_public_resolver)
+
+    content = await fetcher.extract_content("https://careers.acme.com/jobs/closed")
+
+    assert content.company == "Acme Labs"
+    assert content.is_closed is True
 
 
 async def test_career_page_rejects_oversize_body(httpx_mock: HTTPXMock) -> None:

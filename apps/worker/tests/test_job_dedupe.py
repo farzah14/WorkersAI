@@ -341,6 +341,25 @@ class TestUpsertJobs:
         assert params[6] == "on-site"
         assert params[7] == "full-time"
 
+    def test_upsert_refreshes_reused_job_metadata(self) -> None:
+        conn = FakeConnection()
+        conn.set_rows([{"id": "job-1", "inserted": False}])
+        jobs = [
+            make_normalized(
+                company="Updated Acme",
+                work_mode="hybrid",
+                published_at=datetime(2026, 8, 18, tzinfo=UTC),
+                original_url="https://x.example/1",
+            )
+        ]
+
+        asyncio.run(upsert_jobs(conn, search_run_id="run-1", jobs=jobs))
+
+        insert_sql = conn.executed[0][0].lower()
+        assert "company = excluded.company" in insert_sql
+        assert "published_at = coalesce(excluded.published_at" in insert_sql
+        assert "work_mode = coalesce(excluded.work_mode" in insert_sql
+
 
 def test_published_at_is_kept_utc() -> None:
     published = datetime(2026, 8, 1, 12, 0, tzinfo=UTC)

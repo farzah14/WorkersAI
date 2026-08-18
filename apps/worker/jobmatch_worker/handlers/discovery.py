@@ -19,9 +19,10 @@ from jobmatch_worker.jobs.connectors.base import (
     SourceError,
     SourceUnavailable,
 )
-from jobmatch_worker.jobs.connectors.career_page import CareerPageFetcher
-from jobmatch_worker.jobs.connectors.greenhouse import GreenhouseConnector
-from jobmatch_worker.jobs.connectors.lever import LeverConnector
+from jobmatch_worker.jobs.connectors.career_page import (
+    CareerPageContent,
+    CareerPageFetcher,
+)
 from jobmatch_worker.jobs.connectors.tavily import TavilyConnector
 from jobmatch_worker.jobs.dedupe import (
     dedupe_jobs,
@@ -37,6 +38,7 @@ from jobmatch_worker.queue import complete_item, enqueue_item, fail_item, retry_
 _SOURCE_CONCURRENCY = 4
 _MAX_SOURCE_RESULTS = 200
 _MAX_CAREER_CANDIDATES = 120
+_MAX_JOBS_PER_RUN = 2
 _MAX_TITLE_CHARS = 300
 _MAX_COMPANY_CHARS = 300
 _MAX_LOCATION_CHARS = 300
@@ -55,7 +57,7 @@ _SOURCE_TYPES = {
     "lever": "ats",
     "career_page": "page",
 }
-FetchPage = Callable[[str], Awaitable[str]]
+FetchPage = Callable[[str], Awaitable[CareerPageContent]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,11 +85,9 @@ def _error_code(error: SourceError) -> str:
 
 
 def _build_sources(settings: Settings) -> dict[str, SourceConnector]:
-    return {
-        "tavily": TavilyConnector(api_key=settings.tavily_api_key),
-        "greenhouse": GreenhouseConnector(board_token=settings.greenhouse_board_token),
-        "lever": LeverConnector(site_name=settings.lever_site_name),
-    }
+    # MVP discovery uses Tavily only; ATS connectors remain available for a
+    # future explicitly configured source rollout.
+    return {"tavily": TavilyConnector(api_key=settings.tavily_api_key)}
 
 
 def _candidate_title(candidate: DiscoveryCandidateUrl, text: str) -> str:
@@ -104,16 +104,24 @@ async def _candidate_to_job(
     fetch_page: FetchPage,
     source_key: str,
 ) -> DiscoveredJob | None:
-    text = (await fetch_page(candidate.url)).strip()
+    content = await fetch_page(candidate.url)
+    text = content.text.strip()
     if not text:
         raise SourceDataError("career_page", "empty page text")
+    if content.is_closed:
+        raise SourceDataError(source_key, "job page is closed")
+    if not content.company:
+        raise SourceDataError(source_key, "job page missing company metadata")
     job = DiscoveredJob(
-        source_name="Career page",
+        source_name="Tavily",
         source_key=source_key,
-        title=_candidate_title(candidate, text),
-        company="Unknown",
+        title=content.title or _candidate_title(candidate, text),
+        company=content.company,
+        location=content.location,
+        work_mode=content.work_mode,
         description=text,
         original_url=candidate.url,
+        published_at=content.published_at,
     )
     _validate_job_size(job, source_key)
     return job
@@ -334,17 +342,44 @@ async def _persist_provenance(
         )
 
 
-async def _enqueue_requirement_extraction(
+async def _enqueue_requirement_work(
     conn: AsyncConnection[Any],
     *,
     run_id: str,
     jobs: list[NormalizedJob],
     job_ids: tuple[str, ...],
-) -> None:
+    extraction_enabled: bool,
+) -> bool:
     if len(jobs) != len(job_ids):
         raise RuntimeError("job upsert returned misaligned requirement ids")
+
+    cache_cursor = await conn.execute(
+        """
+        select job_id, description_hash
+        from public.job_requirements
+        where job_id = any(%s)
+        """,
+        (list(job_ids),),
+    )
+    cached_hashes = {
+        str(row["job_id"]): row["description_hash"]
+        for row in await cache_cursor.fetchall()
+    }
+
+    has_downstream_work = False
     for job, job_id in zip(jobs, job_ids, strict=True):
         description_hash = hashlib.sha256(job.description.encode("utf-8")).hexdigest()
+        if cached_hashes.get(str(job_id)) == description_hash:
+            await enqueue_item(
+                conn,
+                kind="match_job",
+                dedupe_key=f"match_job:{run_id}:{job_id}:{description_hash}",
+                payload={"search_run_id": run_id, "job_id": job_id},
+            )
+            has_downstream_work = True
+            continue
+        if not extraction_enabled:
+            continue
         # Plan 4 adds the persistent requirement cache; this key is the
         # interim idempotency boundary for discovery retries.
         await enqueue_item(
@@ -353,6 +388,8 @@ async def _enqueue_requirement_extraction(
             dedupe_key=f"extract_job_requirements:{job_id}:{description_hash}",
             payload={"job_id": job_id, "description_hash": description_hash},
         )
+        has_downstream_work = True
+    return has_downstream_work
 
 
 async def _close_sources(sources: dict[str, SourceConnector]) -> None:
@@ -401,7 +438,7 @@ async def handle_discover_jobs(
     page_fetcher: CareerPageFetcher | None = None
     if fetch_page is None:
         page_fetcher = CareerPageFetcher()
-        fetch_page = page_fetcher.extract_text
+        fetch_page = page_fetcher.extract_content
 
     try:
         try:
@@ -454,21 +491,24 @@ async def handle_discover_jobs(
             except (SourceError, ValueError):
                 continue
         kept, duplicate_count = dedupe_jobs(normalized)
+        if len(kept) > _MAX_JOBS_PER_RUN:
+            duplicate_count += len(kept) - _MAX_JOBS_PER_RUN
+            kept = kept[:_MAX_JOBS_PER_RUN]
         upsert_result = await upsert_jobs(conn, search_run_id=run_id, jobs=kept)
         await _persist_provenance(
             conn,
             run_id=run_id,
-            all_jobs=normalized,
+            all_jobs=kept,
             kept_jobs=kept,
             job_ids=upsert_result.job_ids,
         )
-        if getattr(settings, "requirement_extraction_enabled", False):
-            await _enqueue_requirement_extraction(
-                conn,
-                run_id=run_id,
-                jobs=kept,
-                job_ids=upsert_result.job_ids,
-            )
+        has_downstream_work = await _enqueue_requirement_work(
+            conn,
+            run_id=run_id,
+            jobs=kept,
+            job_ids=upsert_result.job_ids,
+            extraction_enabled=getattr(settings, "requirement_extraction_enabled", False),
+        )
 
         failed_outcomes = [outcome for outcome in outcomes if outcome.status == "failed"]
         retryable_outcomes = [outcome for outcome in outcomes if outcome.retryable]
@@ -490,7 +530,9 @@ async def handle_discover_jobs(
             await retry_item(conn, item_id, "retryable source failure", attempts)
             return
 
-        if not kept:
+        if has_downstream_work:
+            status = "processing"
+        elif not kept:
             status = "failed"
         elif failed_outcomes:
             status = "partial"
@@ -504,6 +546,7 @@ async def handle_discover_jobs(
             normalized_count=len(kept),
             duplicate_count=duplicate_total,
             failed_count=len(failed_outcomes),
+            terminal=not has_downstream_work,
         )
         if retryable_outcomes and not kept:
             await fail_item(conn, item_id, "retryable source failure exhausted")

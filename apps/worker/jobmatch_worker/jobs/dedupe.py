@@ -106,8 +106,8 @@ async def upsert_jobs(
 ) -> UpsertResult:
     """Upsert jobs into the catalog and link them to the search run.
 
-    New fingerprints are inserted; existing rows are refreshed
-    (``last_seen_at``/``last_checked_at``) and counted as duplicates.
+    New fingerprints are inserted; existing rows refresh source metadata and
+    ``last_seen_at``/``last_checked_at`` and are counted as duplicates.
     Links into ``job_search_run_jobs`` are added idempotently. Runs on
     the connection passed by the caller inside its transaction.
     """
@@ -126,7 +126,26 @@ async def upsert_jobs(
                last_checked_at)
             values (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now(), now(), now())
             on conflict (fingerprint) do update
-              set last_seen_at = now(), last_checked_at = now(),
+              set title = excluded.title,
+                  company = excluded.company,
+                  location = coalesce(excluded.location, jobs.location),
+                  country = coalesce(excluded.country, jobs.country),
+                  region = case
+                    when excluded.region = 'unknown' then jobs.region
+                    else excluded.region
+                  end,
+                  work_mode = coalesce(excluded.work_mode, jobs.work_mode),
+                  employment_type = coalesce(excluded.employment_type, jobs.employment_type),
+                  salary_min = coalesce(excluded.salary_min, jobs.salary_min),
+                  salary_max = coalesce(excluded.salary_max, jobs.salary_max),
+                  salary_currency = coalesce(excluded.salary_currency, jobs.salary_currency),
+                  description = excluded.description,
+                  source_name = excluded.source_name,
+                  original_url = excluded.original_url,
+                  canonical_url = excluded.canonical_url,
+                  published_at = coalesce(excluded.published_at, jobs.published_at),
+                  last_seen_at = now(),
+                  last_checked_at = now(),
                   status = 'active'
             returning id, (xmax = 0) as inserted
             """,

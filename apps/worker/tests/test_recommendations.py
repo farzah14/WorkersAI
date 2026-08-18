@@ -48,6 +48,16 @@ def test_unverified_experience_converted_to_conditional_phrasing() -> None:
     assert all("AWS" not in x and "3 years" not in x for x in rec)
 
 
+def test_sanitized_recommendations_are_unique() -> None:
+    candidate = {"skills": ["Python"]}
+    rec = sanitize_recommendations(
+        candidate,
+        ["Add 3 years AWS experience", "Add 5 years GCP experience", "Highlight Python work"],
+    )
+
+    assert len(rec) == len(set(rec))
+
+
 def test_language_claim_guarded() -> None:
     candidate = {"skills": ["Python"], "languages": ["Bahasa Indonesia"]}
     rec = sanitize_recommendations(candidate, ["List Japanese proficiency", "List Bahasa Indonesia proficiency"])
