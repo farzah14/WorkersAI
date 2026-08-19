@@ -21,6 +21,7 @@ export async function signUp(formData: FormData) {
   const passwordRequirement = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
   if (!passwordRequirement.test(password)) redirect("/register?error=weak_password");
   const { error } = await supabase.auth.signUp({ email, password });
+  if (error?.code === "user_already_exists") redirect("/register?error=email_taken");
   if (error) redirect("/register?error=signup_failed");
   await supabase.auth.signOut();
   redirect("/login?registered=1");

@@ -83,6 +83,19 @@ test("acceptance: dashboard shows the signed-in user name", async ({ page }) => 
   await expect(page.getByText("Job Seeker")).not.toBeVisible();
 });
 
+test("acceptance: register rejects an already-registered email with a sign-in hint", async ({
+  page,
+}) => {
+  await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
+  await page.goto("/register");
+  await page.getByLabel("Email").fill(SEED_EMAIL);
+  await page.locator("#register-password").fill("E2e-password-123!");
+  await page.locator("#register-confirm-password").fill("E2e-password-123!");
+  await page.getByRole("button", { name: "Register" }).click();
+  await expect(page.getByText(/already registered/i)).toBeVisible();
+  await expect(page).toHaveURL(/error=email_taken/);
+});
+
 test("acceptance: upload digital PDF and DOCX CVs", async ({ page }) => {
   await signIn(page);
   await page.goto("/cvs");

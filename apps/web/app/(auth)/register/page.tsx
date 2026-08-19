@@ -15,6 +15,9 @@ export default async function RegisterPage({
     if (errKey === "signup_failed") {
       return t("auth.errors.signupFailed");
     }
+    if (errKey === "email_taken") {
+      return t("auth.errors.emailTaken");
+    }
     if (errKey === "password_mismatch") {
       return t("auth.errors.passwordMismatch");
     }

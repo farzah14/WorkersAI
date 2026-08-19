@@ -47,6 +47,7 @@
     "errors": {
       "invalidCredentials": "Gagal masuk. Silakan periksa kembali email dan kata sandi kamu.",
       "signupFailed": "Pendaftaran gagal. Silakan periksa kembali data kamu dan coba lagi.",
+      "emailTaken": "Email ini sudah terdaftar. Silakan masuk.",
       "passwordMismatch": "Kata sandi tidak cocok.",
       "passwordRequirements": "Kata sandi minimal 8 karakter serta harus mengandung huruf, angka, dan simbol.",
       "oauthFailed": "Autentikasi Google terhenti atau gagal. Silakan coba lagi.",

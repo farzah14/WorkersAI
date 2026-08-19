@@ -47,6 +47,7 @@
     "errors": {
       "invalidCredentials": "Sign-in failed. Please verify your email and password.",
       "signupFailed": "Registration failed. Please check your details and try again.",
+      "emailTaken": "This email is already registered. Sign in instead.",
       "passwordMismatch": "Passwords do not match.",
       "passwordRequirements": "Password must be at least 8 characters and include letters, numbers, and symbols.",
       "oauthFailed": "Google sign-in was interrupted or failed. Please try again.",
