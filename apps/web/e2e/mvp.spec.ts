@@ -118,6 +118,28 @@ test("acceptance: delete the original CV file from the profile page", async ({ p
   await expect(row.getByRole("button", { name: "Delete Original" })).toBeHidden();
 });
 
+test("acceptance: setting a CV active syncs the candidate profile page", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/onboarding/profile");
+  await expect(page.getByLabel("Name")).toHaveValue("E2E Candidate");
+  await page.goto("/dashboard/profile");
+  const row = page.locator("li").filter({ hasText: "sample.pdf" });
+  await row.getByRole("button", { name: "Set active" }).click();
+  await expect(row.getByRole("button", { name: "Active" })).toBeVisible();
+
+  const banner = page.locator("section").filter({ hasText: "Current Active CV" });
+  await expect(banner.getByText("sample.pdf", { exact: true })).toBeVisible();
+
+  await page.getByRole("link", { name: "Edit Candidate Profile" }).click();
+  await page.waitForURL("**/onboarding/profile");
+  await expect(page.getByLabel("Name")).not.toHaveValue("E2E Candidate");
+
+  await page.goto("/dashboard/profile");
+  const seededRow = page.locator("li").filter({ hasText: "e2e-cv.pdf" });
+  await seededRow.getByRole("button", { name: "Set active" }).click();
+  await expect(seededRow.getByRole("button", { name: "Active" })).toBeVisible();
+});
+
 test("acceptance: schema-valid editable candidate profile", async ({ page }) => {
   await signIn(page);
   await page.goto("/onboarding/profile");
@@ -178,12 +200,20 @@ test("acceptance: Save, Applied, and Ignore tracking", async ({ page }) => {
   await page.goto("/dashboard");
   await page.getByRole("link", { name: "Senior Data Analyst" }).click();
   await page.waitForURL(/\/jobs\//);
+  const saveResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/job-status") && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Save" }).click();
+  await saveResponse;
   await expect(page.getByRole("button", { name: "Unsave" })).toBeVisible();
 
   await page.goto("/saved");
   await expect(page.getByText("Senior Data Analyst")).toBeVisible();
+  const ignoreResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/job-status") && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Ignore" }).click();
+  await ignoreResponse;
   await expect(page.getByText("Senior Data Analyst")).toBeHidden();
 });
 
