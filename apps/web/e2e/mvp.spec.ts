@@ -108,6 +108,16 @@ test("acceptance: upload digital PDF and DOCX CVs", async ({ page }) => {
   await expect(page.getByText("sample.docx").first()).toBeVisible();
 });
 
+test("acceptance: delete the original CV file from the profile page", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/dashboard/profile");
+  const row = page.locator("li").filter({ hasText: "sample.pdf" });
+  await expect(row.getByText("Original Kept")).toBeVisible();
+  await row.getByRole("button", { name: "Delete Original" }).click();
+  await expect(row.getByText("Original Deleted")).toBeVisible();
+  await expect(row.getByRole("button", { name: "Delete Original" })).toBeHidden();
+});
+
 test("acceptance: schema-valid editable candidate profile", async ({ page }) => {
   await signIn(page);
   await page.goto("/onboarding/profile");
