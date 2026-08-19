@@ -15,6 +15,12 @@ export default async function RegisterPage({
     if (errKey === "signup_failed") {
       return t("auth.errors.signupFailed");
     }
+    if (errKey === "password_mismatch") {
+      return t("auth.errors.passwordMismatch");
+    }
+    if (errKey === "weak_password") {
+      return t("auth.errors.passwordRequirements");
+    }
     if (errKey === "oauth_failed") {
       return t("auth.errors.oauthFailed");
     }
@@ -78,16 +84,34 @@ export default async function RegisterPage({
               <div className={styles.fieldGroup}>
                 <label htmlFor="register-password" className={styles.fieldLabel}>
                   <span>{t("auth.passwordLabel")}</span>
-                  <span className={styles.fieldHint}>{t("auth.passwordMinLengthHint")}</span>
+                  <span className={styles.fieldHint}>{t("auth.passwordRequirementsHint")}</span>
                 </label>
                 <input
                   id="register-password"
                   name="password"
                   type="password"
                   required
-                  minLength={6}
+                  minLength={8}
+                  pattern="(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}"
+                  title={t("auth.passwordRequirementsHint")}
                   autoComplete="new-password"
                   placeholder={t("auth.passwordPlaceholder")}
+                  className={styles.inputControl}
+                />
+              </div>
+
+              <div className={styles.fieldGroup}>
+                <label htmlFor="register-confirm-password" className={styles.fieldLabel}>
+                  <span>{t("auth.confirmPasswordLabel")}</span>
+                </label>
+                <input
+                  id="register-confirm-password"
+                  name="confirmPassword"
+                  type="password"
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  placeholder={t("auth.confirmPasswordPlaceholder")}
                   className={styles.inputControl}
                 />
               </div>

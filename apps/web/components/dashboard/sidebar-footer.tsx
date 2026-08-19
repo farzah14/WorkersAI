@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { initialsFor, resolveDisplayName } from "@/lib/display-name";
 
 interface SidebarFooterProps {
   isCollapsed: boolean;
@@ -11,6 +12,24 @@ interface SidebarFooterProps {
 export function SidebarFooter({ isCollapsed }: SidebarFooterProps) {
   const router = useRouter();
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [displayName, setDisplayName] = useState("Job Seeker");
+  const [initials, setInitials] = useState("JS");
+
+  useEffect(() => {
+    let cancelled = false;
+    createClient()
+      .auth.getUser()
+      .then(({ data }) => {
+        if (cancelled) return;
+        const name = resolveDisplayName(data.user);
+        setDisplayName(name);
+        setInitials(initialsFor(name));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   async function handleSignOut() {
     setIsSigningOut(true);
@@ -100,11 +119,11 @@ export function SidebarFooter({ isCollapsed }: SidebarFooterProps) {
       <div className="flex items-center justify-between p-2 rounded-xl bg-[#faf9f6] border border-[#d9d5cc]">
         <div className="flex items-center gap-2.5 overflow-hidden">
           <div className="w-8 h-8 rounded-full bg-[#15212b] text-white flex items-center justify-center font-mono font-bold text-xs shrink-0">
-            HV
+            {initials}
           </div>
           <div className="truncate">
             <p className="text-xs font-semibold text-[#15212b] truncate">
-              Job Seeker
+              {displayName}
             </p>
             <p className="text-[10px] text-[#6d787e] truncate font-mono">
               Signed in

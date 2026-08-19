@@ -41,6 +41,48 @@ test("acceptance: email login and Google OAuth callback contract", async ({ page
   await expect(page).toHaveURL(/\/dashboard/);
 });
 
+test("acceptance: register rejects mismatched password confirmation", async ({ page }) => {
+  await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
+  await page.goto("/register");
+  await page.getByLabel("Email").fill("e2e-register-fresh@example.test");
+  await page.locator("#register-password").fill("E2e-password-123!");
+  await page.locator("#register-confirm-password").fill("Different-password-456!");
+  await page.getByRole("button", { name: "Register" }).click();
+  await expect(page.getByText("Passwords do not match.")).toBeVisible();
+  await expect(page).toHaveURL(/error=password_mismatch/);
+});
+
+test("acceptance: register sends the user to sign in first", async ({ page }) => {
+  await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
+  await page.goto("/register");
+  await page.getByLabel("Email").fill(`e2e-register-${Date.now()}@example.test`);
+  await page.locator("#register-password").fill("E2e-password-123!");
+  await page.locator("#register-confirm-password").fill("E2e-password-123!");
+  await page.getByRole("button", { name: "Register" }).click();
+  await expect(page.getByText("Account created. Please sign in.")).toBeVisible();
+  await expect(page).toHaveURL(/\/login/);
+});
+
+test("acceptance: register rejects passwords without letters, numbers, and symbols", async ({ page }) => {
+  await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
+  await page.goto("/register");
+  await page.getByLabel("Email").fill("e2e-register-fresh@example.test");
+  await page.locator("#register-password").fill("E2epassword123");
+  await page.locator("#register-confirm-password").fill("E2epassword123");
+  await page.getByRole("button", { name: "Register" }).click();
+  const validationMessage = await page
+    .locator("#register-password")
+    .evaluate((el) => (el as HTMLInputElement).validationMessage);
+  expect(validationMessage).not.toBe("");
+  await expect(page).toHaveURL(/\/register/);
+});
+
+test("acceptance: dashboard shows the signed-in user name", async ({ page }) => {
+  await signIn(page);
+  await expect(page.locator("aside").getByText("e2e", { exact: true })).toBeVisible();
+  await expect(page.getByText("Job Seeker")).not.toBeVisible();
+});
+
 test("acceptance: upload digital PDF and DOCX CVs", async ({ page }) => {
   await signIn(page);
   await page.goto("/cvs");
