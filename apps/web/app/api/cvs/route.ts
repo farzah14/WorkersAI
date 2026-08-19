@@ -102,12 +102,13 @@ export async function DELETE(request: Request) {
     .maybeSingle();
   if (!cv) return NextResponse.json({ error: "cv_not_found" }, { status: 404 });
 
+  const serviceClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } },
+  );
+
   if (cv.storage_path) {
-    const serviceClient = createServiceClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false } },
-    );
     const { error: removeError } = await serviceClient.storage
       .from("cvs")
       .remove([cv.storage_path]);
@@ -116,13 +117,12 @@ export async function DELETE(request: Request) {
     }
   }
 
-  const { error: updateError } = await supabase
-    .from("cvs")
-    .update({ storage_path: null, retain_original: false })
-    .eq("id", cv.id)
-    .eq("user_id", user.id);
-  if (updateError) {
-    return NextResponse.json({ error: "cv_update_failed" }, { status: 500 });
+  const { error: purgeError } = await serviceClient.rpc("delete_cv", {
+    p_cv_id: cv.id,
+    p_user_id: user.id,
+  });
+  if (purgeError) {
+    return NextResponse.json({ error: "cv_delete_failed" }, { status: 500 });
   }
 
   return NextResponse.json({ id: cv.id }, { status: 200 });

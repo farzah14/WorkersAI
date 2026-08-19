@@ -30,19 +30,6 @@ function authOnly(client: unknown) {
   createServerClientMock.mockResolvedValue(client as never);
 }
 
-function storageClient(removals: Array<{ bucket: string; paths: string[] }>) {
-  return {
-    storage: {
-      from: vi.fn((bucket: string) => ({
-        remove: vi.fn(async (paths: string[]) => {
-          removals.push({ bucket, paths });
-          return { data: [], error: null };
-        }),
-      })),
-    },
-  };
-}
-
 function cvChain(cvResult: unknown) {
   return {
     select: vi.fn().mockReturnValue({
@@ -60,87 +47,112 @@ function cvChain(cvResult: unknown) {
   };
 }
 
+function cvServiceClient(
+  removals: Array<{ bucket: string; paths: string[] }>,
+  rpcError: unknown = null,
+) {
+  return {
+    storage: {
+      from: vi.fn((bucket: string) => ({
+        remove: vi.fn(async (paths: string[]) => {
+          removals.push({ bucket, paths });
+          return { data: [], error: null };
+        }),
+      })),
+    },
+    rpc: vi.fn().mockResolvedValue({ data: null, error: rpcError }),
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("DELETE /api/cvs (delete original file, keep profile)", () => {
+describe("DELETE /api/cvs (remove the CV and its extracted profile)", () => {
   function makeRequest(cvId: string | null): Request {
     const url = new URL("http://localhost/api/cvs");
     if (cvId) url.searchParams.set("cv_id", cvId);
     return new Request(url, { method: "DELETE" });
   }
 
-  it("removes the private object and keeps the structured profile", async () => {
-    authOnly({
+  function cvClient(cvResult: unknown) {
+    return {
       auth: { getUser: vi.fn().mockResolvedValue(authenticatedUser()) },
       from: vi.fn((table: string) => {
         if (table === "cvs") {
-          return cvChain({ data: { id: CV_ID, storage_path: CV_PATH }, error: null });
+          return cvChain(cvResult);
         }
         throw new Error(`unexpected table ${table}`);
       }),
-    });
+    };
+  }
+
+  it("removes the private object and purges the CV row via delete_cv", async () => {
+    authOnly(cvClient({ data: { id: CV_ID, storage_path: CV_PATH }, error: null }));
     const removals: Array<{ bucket: string; paths: string[] }> = [];
-    createServiceClientMock.mockReturnValue(storageClient(removals) as never);
+    const serviceClient = cvServiceClient(removals);
+    createServiceClientMock.mockReturnValue(serviceClient as never);
 
     const response = await deleteCv(makeRequest(CV_ID));
 
     expect(response.status).toBe(200);
     expect(removals).toEqual([{ bucket: "cvs", paths: [CV_PATH] }]);
+    expect(serviceClient.rpc).toHaveBeenCalledWith("delete_cv", {
+      p_cv_id: CV_ID,
+      p_user_id: USER_ID,
+    });
   });
 
   it("returns 404 for a cv owned by another user", async () => {
-    authOnly({
-      auth: { getUser: vi.fn().mockResolvedValue(authenticatedUser()) },
-      from: vi.fn((table: string) => {
-        if (table === "cvs") {
-          return cvChain({ data: null, error: null });
-        }
-        throw new Error(`unexpected table ${table}`);
-      }),
-    });
-    createServiceClientMock.mockReturnValue(storageClient([]) as never);
+    authOnly(cvClient({ data: null, error: null }));
+    const serviceClient = cvServiceClient([]);
+    createServiceClientMock.mockReturnValue(serviceClient as never);
 
     const response = await deleteCv(makeRequest(CV_ID));
 
     expect(response.status).toBe(404);
+    expect(serviceClient.rpc).not.toHaveBeenCalled();
   });
 
   it("returns 400 for a missing or malformed cv id", async () => {
     authOnly({
       auth: { getUser: vi.fn().mockResolvedValue(authenticatedUser()) },
     });
-    createServiceClientMock.mockReturnValue(storageClient([]) as never);
+    createServiceClientMock.mockReturnValue(cvServiceClient([]) as never);
 
     expect((await deleteCv(makeRequest(null))).status).toBe(400);
     expect((await deleteCv(makeRequest("not-a-uuid"))).status).toBe(400);
   });
 
   it("treats an already-missing object as idempotent success", async () => {
-    authOnly({
-      auth: { getUser: vi.fn().mockResolvedValue(authenticatedUser()) },
-      from: vi.fn((table: string) => {
-        if (table === "cvs") {
-          return cvChain({ data: { id: CV_ID, storage_path: CV_PATH }, error: null });
-        }
-        throw new Error(`unexpected table ${table}`);
+    authOnly(cvClient({ data: { id: CV_ID, storage_path: CV_PATH }, error: null }));
+    const serviceClient = cvServiceClient([]);
+    serviceClient.storage.from = vi.fn(() => ({
+      remove: vi.fn().mockResolvedValue({
+        data: null,
+        error: { message: "The resource was not found" },
       }),
-    });
-    createServiceClientMock.mockReturnValue({
-      storage: {
-        from: vi.fn(() => ({
-          remove: vi.fn().mockResolvedValue({
-            data: null,
-            error: { message: "The resource was not found" },
-          }),
-        })),
-      },
-    } as never);
+    })) as never;
+    createServiceClientMock.mockReturnValue(serviceClient as never);
 
     const response = await deleteCv(makeRequest(CV_ID));
 
     expect(response.status).toBe(200);
+    expect(serviceClient.rpc).toHaveBeenCalledWith("delete_cv", {
+      p_cv_id: CV_ID,
+      p_user_id: USER_ID,
+    });
+  });
+
+  it("returns 500 when the cleanup function fails", async () => {
+    authOnly(cvClient({ data: { id: CV_ID, storage_path: null }, error: null }));
+    createServiceClientMock.mockReturnValue(
+      cvServiceClient([], { message: "purge failed" }) as never,
+    );
+
+    const response = await deleteCv(makeRequest(CV_ID));
+
+    expect(response.status).toBe(500);
   });
 
   it("returns 401 without a session", async () => {

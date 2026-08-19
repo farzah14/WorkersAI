@@ -99,23 +99,36 @@ test("acceptance: register rejects an already-registered email with a sign-in hi
 test("acceptance: upload digital PDF and DOCX CVs", async ({ page }) => {
   await signIn(page);
   await page.goto("/cvs");
-  const uploader = page.getByLabel("Choose a CV file");
-  await uploader.setInputFiles(path.resolve(__dirname, "../../worker/tests/fixtures/sample.pdf"));
+  const pdfUpload = page.waitForResponse(
+    (response) => response.url().includes("/api/cvs") && response.request().method() === "POST",
+  );
+  await page.getByLabel("Choose a CV file").setInputFiles(
+    path.resolve(__dirname, "../../worker/tests/fixtures/sample.pdf"),
+  );
   await page.getByRole("button", { name: "Upload CV" }).click();
+  expect((await pdfUpload).status()).toBe(201);
+  await page.reload();
   await expect(page.getByText("sample.pdf").first()).toBeVisible();
-  await uploader.setInputFiles(path.resolve(__dirname, "../../worker/tests/fixtures/sample.docx"));
+
+  const docxUpload = page.waitForResponse(
+    (response) => response.url().includes("/api/cvs") && response.request().method() === "POST",
+  );
+  await page.getByLabel("Choose a CV file").setInputFiles(
+    path.resolve(__dirname, "../../worker/tests/fixtures/sample.docx"),
+  );
   await page.getByRole("button", { name: "Upload CV" }).click();
+  expect((await docxUpload).status()).toBe(201);
+  await page.reload();
   await expect(page.getByText("sample.docx").first()).toBeVisible();
 });
 
-test("acceptance: delete the original CV file from the profile page", async ({ page }) => {
+test("acceptance: delete a CV from the profile page", async ({ page }) => {
   await signIn(page);
   await page.goto("/dashboard/profile");
   const row = page.locator("li").filter({ hasText: "sample.pdf" });
-  await expect(row.getByText("Original Kept")).toBeVisible();
-  await row.getByRole("button", { name: "Delete Original" }).click();
-  await expect(row.getByText("Original Deleted")).toBeVisible();
-  await expect(row.getByRole("button", { name: "Delete Original" })).toBeHidden();
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: "Delete" }).click();
+  await expect(row).toBeHidden();
 });
 
 test("acceptance: setting a CV active syncs the candidate profile page", async ({ page }) => {
@@ -123,12 +136,12 @@ test("acceptance: setting a CV active syncs the candidate profile page", async (
   await page.goto("/onboarding/profile");
   await expect(page.getByLabel("Name")).toHaveValue("E2E Candidate");
   await page.goto("/dashboard/profile");
-  const row = page.locator("li").filter({ hasText: "sample.pdf" });
+  const row = page.locator("li").filter({ hasText: "sample.docx" });
   await row.getByRole("button", { name: "Set active" }).click();
   await expect(row.getByRole("button", { name: "Active" })).toBeVisible();
 
   const banner = page.locator("section").filter({ hasText: "Current Active CV" });
-  await expect(banner.getByText("sample.pdf", { exact: true })).toBeVisible();
+  await expect(banner.getByText("sample.docx", { exact: true })).toBeVisible();
 
   await page.getByRole("link", { name: "Edit Candidate Profile" }).click();
   await page.waitForURL("**/onboarding/profile");

@@ -6,13 +6,10 @@ import { useState } from "react";
 type CvRow = {
   id: string;
   original_name: string | null;
-  storage_path: string | null;
-  retain_original: boolean;
 };
 
 type SettingsCopy = {
   deleteOriginal: string;
-  originalDeleted: string;
   confirmationLabel: string;
   deleteAccount: string;
   accountDeleted: string;
@@ -34,22 +31,18 @@ export function SettingsActions({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [confirmation, setConfirmation] = useState("");
-  const [removedId, setRemovedId] = useState<string | null>(null);
 
-  async function deleteOriginal(cvId: string) {
+  async function deleteCv(cvId: string) {
     setBusy(true);
     setError(null);
-    setMessage(null);
     try {
       const url = new URL("/api/cvs", window.location.origin);
       url.searchParams.set("cv_id", cvId);
       const response = await fetch(url, { method: "DELETE" });
       if (!response.ok) throw new Error("failed");
-      setRemovedId(cvId);
-      setMessage(copy.originalDeleted);
+      router.refresh();
     } catch {
       setError(copy.error);
-    } finally {
       setBusy(false);
     }
   }
@@ -80,19 +73,14 @@ export function SettingsActions({
   if (cv && !account) {
     return (
       <div className="flex items-center gap-3">
-        {cv.storage_path && removedId !== cv.id && (
-          <button
-            type="button"
-            onClick={() => deleteOriginal(cv.id)}
-            disabled={busy}
-            className="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-100 disabled:opacity-50"
-          >
-            {copy.deleteOriginal}
-          </button>
-        )}
-        {removedId === cv.id && (
-          <span className="text-xs text-emerald-700">{copy.originalDeleted}</span>
-        )}
+        <button
+          type="button"
+          onClick={() => deleteCv(cv.id)}
+          disabled={busy}
+          className="rounded-md border border-stone-300 px-3 py-1.5 text-sm text-stone-700 hover:bg-stone-100 disabled:opacity-50"
+        >
+          {copy.deleteOriginal}
+        </button>
         {error && <span className="text-xs text-red-600">{error}</span>}
       </div>
     );

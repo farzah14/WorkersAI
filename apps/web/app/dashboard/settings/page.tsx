@@ -6,8 +6,6 @@ import { SettingsActions } from "@/app/settings/settings-actions";
 type CvRow = {
   id: string;
   original_name: string | null;
-  storage_path: string | null;
-  retain_original: boolean;
 };
 
 export default async function DashboardSettingsPage() {
@@ -24,7 +22,7 @@ export default async function DashboardSettingsPage() {
 
   const { data: cvs } = await supabase
     .from("cvs")
-    .select("id, original_name, storage_path, retain_original")
+    .select("id, original_name")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -41,7 +39,7 @@ export default async function DashboardSettingsPage() {
             Settings & Privacy
           </h1>
           <p className="mt-2 text-[#53616a]">
-            Manage your stored CV retention policies and account data.
+            Manage your stored CV files and account data.
           </p>
         </header>
 
@@ -63,11 +61,6 @@ export default async function DashboardSettingsPage() {
                 <div>
                   <p className="text-sm font-medium text-[#15212b]">
                     {cv.original_name ?? cv.id}
-                    {!cv.storage_path && (
-                      <span className="ml-2 text-xs text-[#6d787e]">
-                        ({t("settings.originalDeleted")})
-                      </span>
-                    )}
                   </p>
                 </div>
                 <SettingsActions cv={cv} copy={t.raw("settings")} />
