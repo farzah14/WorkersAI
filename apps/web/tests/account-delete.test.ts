@@ -186,7 +186,11 @@ describe("DELETE /api/account/delete", () => {
     };
   }
 
-  function accountServiceClient(removals: Array<{ bucket: string; paths: string[] }>, deleteUserError: unknown = null) {
+  function accountServiceClient(
+    removals: Array<{ bucket: string; paths: string[] }>,
+    deleteUserError: unknown = null,
+    rpcError: unknown = null,
+  ) {
     return {
       storage: {
         from: vi.fn((bucket: string) => ({
@@ -196,6 +200,7 @@ describe("DELETE /api/account/delete", () => {
           }),
         })),
       },
+      rpc: vi.fn().mockResolvedValue({ data: null, error: rpcError }),
       auth: {
         admin: {
           deleteUser: vi.fn().mockResolvedValue({ data: null, error: deleteUserError }),
@@ -216,6 +221,48 @@ describe("DELETE /api/account/delete", () => {
       { bucket: "cvs", paths: [CV_PATH] },
       { bucket: "exports", paths: [`${USER_ID}/exp-1/report.xlsx`] },
     ]);
+  });
+
+  it("purges the user's queued work items before deleting the auth user", async () => {
+    authOnly(makeClient({}));
+    const calls: string[] = [];
+    const serviceClient = accountServiceClient([]);
+    vi.mocked(serviceClient.rpc).mockImplementation(async (fn: string) => {
+      calls.push(fn);
+      return { data: null, error: null };
+    });
+    vi.mocked(serviceClient.auth.admin.deleteUser).mockImplementation(async () => {
+      calls.push("deleteUser");
+      return { data: null, error: null };
+    });
+    createServiceClientMock.mockReturnValue(serviceClient as never);
+
+    const response = await deleteAccount(makeRequest("DELETE"));
+
+    expect(response.status).toBe(200);
+    expect(serviceClient.rpc).toHaveBeenCalledWith("delete_account_cleanup", {
+      p_user_id: USER_ID,
+    });
+    expect(calls).toEqual(["delete_account_cleanup", "deleteUser"]);
+  });
+
+  it("does not delete the user when work item cleanup fails", async () => {
+    authOnly(makeClient({}));
+    const deleteUser = vi.fn();
+    createServiceClientMock.mockReturnValue({
+      storage: {
+        from: vi.fn(() => ({
+          remove: vi.fn().mockResolvedValue({ data: [], error: null }),
+        })),
+      },
+      rpc: vi.fn().mockResolvedValue({ data: null, error: { message: "rpc down" } }),
+      auth: { admin: { deleteUser } },
+    } as never);
+
+    const response = await deleteAccount(makeRequest("DELETE"));
+
+    expect(response.status).toBe(500);
+    expect(deleteUser).not.toHaveBeenCalled();
   });
 
   it("requires the DELETE confirmation token", async () => {
