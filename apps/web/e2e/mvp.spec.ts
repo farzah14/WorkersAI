@@ -145,7 +145,7 @@ test("acceptance: setting a CV active syncs the candidate profile page", async (
 
   await page.getByRole("link", { name: "Edit Candidate Profile" }).click();
   await page.waitForURL("**/onboarding/profile");
-  await expect(page.getByLabel("Name")).not.toHaveValue("E2E Candidate");
+  await expect(page.getByLabel("Name")).toHaveValue("Jane Doe", { timeout: 30_000 });
 
   await page.goto("/dashboard/profile");
   const seededRow = page.locator("li").filter({ hasText: "e2e-cv.pdf" });
