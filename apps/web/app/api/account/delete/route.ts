@@ -68,6 +68,13 @@ export async function DELETE(request: Request): Promise<NextResponse> {
     }
   }
 
+  const { error: cleanupError } = await serviceClient.rpc("delete_account_cleanup", {
+    p_user_id: user.id,
+  });
+  if (cleanupError) {
+    return NextResponse.json({ error: "work_items_cleanup_failed" }, { status: 500 });
+  }
+
   const { error: deleteError } = await serviceClient.auth.admin.deleteUser(user.id);
   if (deleteError) {
     return NextResponse.json({ error: "account_delete_failed" }, { status: 500 });

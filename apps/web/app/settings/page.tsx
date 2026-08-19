@@ -6,8 +6,6 @@ import { SettingsActions } from "./settings-actions";
 type CvRow = {
   id: string;
   original_name: string | null;
-  storage_path: string | null;
-  retain_original: boolean;
 };
 
 export default async function SettingsPage() {
@@ -24,7 +22,7 @@ export default async function SettingsPage() {
 
   const { data: cvs } = await supabase
     .from("cvs")
-    .select("id, original_name, storage_path, retain_original")
+    .select("id, original_name")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -44,11 +42,6 @@ export default async function SettingsPage() {
               <div>
                 <p className="text-sm font-medium">
                   {cv.original_name ?? cv.id}
-                  {!cv.storage_path && (
-                    <span className="ml-2 text-xs text-stone-400">
-                      {t("settings.originalDeleted")}
-                    </span>
-                  )}
                 </p>
               </div>
               <SettingsActions cv={cv} copy={t.raw("settings")} />

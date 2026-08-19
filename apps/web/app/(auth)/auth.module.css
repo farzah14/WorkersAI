@@ -151,6 +151,39 @@
   opacity: 0.95;
 }
 
+/* Success Banner */
+.successAlert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.625rem;
+  background: oklch(95% 0.05 155);
+  border: 1px solid oklch(85% 0.09 155);
+  color: oklch(35% 0.12 155);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.successIcon {
+  flex-shrink: 0;
+  width: 1rem;
+  height: 1rem;
+  margin-top: 0.1rem;
+  color: oklch(45% 0.15 155);
+}
+
+.successTitle {
+  font-weight: 700;
+  margin: 0 0 0.1rem;
+}
+
+.successDescription {
+  margin: 0;
+  opacity: 0.95;
+}
+
 /* Form Styles */
 .authForm {
   display: flex;

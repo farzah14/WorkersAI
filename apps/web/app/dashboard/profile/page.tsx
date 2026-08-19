@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { CvUploadForm } from "@/components/cv-upload-form";
+import { CvDeleteButton } from "@/components/cv-delete-button";
 import { SetActiveCvForm } from "@/components/set-active-cv-form";
 import { createClient } from "@/lib/supabase/server";
 
@@ -17,7 +18,7 @@ export default async function ProfileAndCvsPage() {
 
   const { data: cvs } = await supabase
     .from("cvs")
-    .select("id, original_name, extraction_status, is_active, retain_original, created_at")
+    .select("id, original_name, extraction_status, is_active, created_at")
     .eq("user_id", user.id)
     .order("created_at", { ascending: false });
 
@@ -93,13 +94,11 @@ export default async function ProfileAndCvsPage() {
                         · Active
                       </span>
                     )}
-                    {cv.retain_original
-                      ? " · Original Kept"
-                      : " · Original Deleted"}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
                   <SetActiveCvForm cvId={cv.id} isActive={cv.is_active} />
+                  <CvDeleteButton cvId={cv.id} />
                   <time
                     className="text-xs font-mono text-[#6d787e]"
                     dateTime={cv.created_at}

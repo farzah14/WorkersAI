@@ -41,16 +41,116 @@ test("acceptance: email login and Google OAuth callback contract", async ({ page
   await expect(page).toHaveURL(/\/dashboard/);
 });
 
+test("acceptance: register rejects mismatched password confirmation", async ({ page }) => {
+  await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
+  await page.goto("/register");
+  await page.getByLabel("Email").fill("e2e-register-fresh@example.test");
+  await page.locator("#register-password").fill("E2e-password-123!");
+  await page.locator("#register-confirm-password").fill("Different-password-456!");
+  await page.getByRole("button", { name: "Register" }).click();
+  await expect(page.getByText("Passwords do not match.")).toBeVisible();
+  await expect(page).toHaveURL(/error=password_mismatch/);
+});
+
+test("acceptance: register sends the user to sign in first", async ({ page }) => {
+  await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
+  await page.goto("/register");
+  await page.getByLabel("Email").fill(`e2e-register-${Date.now()}@example.test`);
+  await page.locator("#register-password").fill("E2e-password-123!");
+  await page.locator("#register-confirm-password").fill("E2e-password-123!");
+  await page.getByRole("button", { name: "Register" }).click();
+  await expect(page.getByText("Account created. Please sign in.")).toBeVisible();
+  await expect(page).toHaveURL(/\/login/);
+});
+
+test("acceptance: register rejects passwords without letters, numbers, and symbols", async ({ page }) => {
+  await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
+  await page.goto("/register");
+  await page.getByLabel("Email").fill("e2e-register-fresh@example.test");
+  await page.locator("#register-password").fill("E2epassword123");
+  await page.locator("#register-confirm-password").fill("E2epassword123");
+  await page.getByRole("button", { name: "Register" }).click();
+  const validationMessage = await page
+    .locator("#register-password")
+    .evaluate((el) => (el as HTMLInputElement).validationMessage);
+  expect(validationMessage).not.toBe("");
+  await expect(page).toHaveURL(/\/register/);
+});
+
+test("acceptance: dashboard shows the signed-in user name", async ({ page }) => {
+  await signIn(page);
+  await expect(page.locator("aside").getByText("e2e", { exact: true })).toBeVisible();
+  await expect(page.getByText("Job Seeker")).not.toBeVisible();
+});
+
+test("acceptance: register rejects an already-registered email with a sign-in hint", async ({
+  page,
+}) => {
+  await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
+  await page.goto("/register");
+  await page.getByLabel("Email").fill(SEED_EMAIL);
+  await page.locator("#register-password").fill("E2e-password-123!");
+  await page.locator("#register-confirm-password").fill("E2e-password-123!");
+  await page.getByRole("button", { name: "Register" }).click();
+  await expect(page.getByText(/already registered/i)).toBeVisible();
+  await expect(page).toHaveURL(/error=email_taken/);
+});
+
 test("acceptance: upload digital PDF and DOCX CVs", async ({ page }) => {
   await signIn(page);
   await page.goto("/cvs");
-  const uploader = page.getByLabel("Choose a CV file");
-  await uploader.setInputFiles(path.resolve(__dirname, "../../worker/tests/fixtures/sample.pdf"));
+  const pdfUpload = page.waitForResponse(
+    (response) => response.url().includes("/api/cvs") && response.request().method() === "POST",
+  );
+  await page.getByLabel("Choose a CV file").setInputFiles(
+    path.resolve(__dirname, "../../worker/tests/fixtures/sample.pdf"),
+  );
   await page.getByRole("button", { name: "Upload CV" }).click();
+  expect((await pdfUpload).status()).toBe(201);
+  await page.reload();
   await expect(page.getByText("sample.pdf").first()).toBeVisible();
-  await uploader.setInputFiles(path.resolve(__dirname, "../../worker/tests/fixtures/sample.docx"));
+
+  const docxUpload = page.waitForResponse(
+    (response) => response.url().includes("/api/cvs") && response.request().method() === "POST",
+  );
+  await page.getByLabel("Choose a CV file").setInputFiles(
+    path.resolve(__dirname, "../../worker/tests/fixtures/sample.docx"),
+  );
   await page.getByRole("button", { name: "Upload CV" }).click();
+  expect((await docxUpload).status()).toBe(201);
+  await page.reload();
   await expect(page.getByText("sample.docx").first()).toBeVisible();
+});
+
+test("acceptance: delete a CV from the profile page", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/dashboard/profile");
+  const row = page.locator("li").filter({ hasText: "sample.pdf" });
+  await expect(row).toBeVisible();
+  await row.getByRole("button", { name: "Delete" }).click();
+  await expect(row).toBeHidden();
+});
+
+test("acceptance: setting a CV active syncs the candidate profile page", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/onboarding/profile");
+  await expect(page.getByLabel("Name")).toHaveValue("E2E Candidate");
+  await page.goto("/dashboard/profile");
+  const row = page.locator("li").filter({ hasText: "sample.docx" });
+  await row.getByRole("button", { name: "Set active" }).click();
+  await expect(row.getByRole("button", { name: "Active" })).toBeVisible();
+
+  const banner = page.locator("section").filter({ hasText: "Current Active CV" });
+  await expect(banner.getByText("sample.docx", { exact: true })).toBeVisible();
+
+  await page.getByRole("link", { name: "Edit Candidate Profile" }).click();
+  await page.waitForURL("**/onboarding/profile");
+  await expect(page.getByLabel("Name")).toHaveValue("Jane Doe", { timeout: 30_000 });
+
+  await page.goto("/dashboard/profile");
+  const seededRow = page.locator("li").filter({ hasText: "e2e-cv.pdf" });
+  await seededRow.getByRole("button", { name: "Set active" }).click();
+  await expect(seededRow.getByRole("button", { name: "Active" })).toBeVisible();
 });
 
 test("acceptance: schema-valid editable candidate profile", async ({ page }) => {
@@ -113,12 +213,20 @@ test("acceptance: Save, Applied, and Ignore tracking", async ({ page }) => {
   await page.goto("/dashboard");
   await page.getByRole("link", { name: "Senior Data Analyst" }).click();
   await page.waitForURL(/\/jobs\//);
+  const saveResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/job-status") && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Save" }).click();
+  await saveResponse;
   await expect(page.getByRole("button", { name: "Unsave" })).toBeVisible();
 
   await page.goto("/saved");
   await expect(page.getByText("Senior Data Analyst")).toBeVisible();
+  const ignoreResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/job-status") && response.request().method() === "POST",
+  );
   await page.getByRole("button", { name: "Ignore" }).click();
+  await ignoreResponse;
   await expect(page.getByText("Senior Data Analyst")).toBeHidden();
 });
 

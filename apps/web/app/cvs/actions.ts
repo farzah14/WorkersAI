@@ -23,5 +23,7 @@ export async function setActiveCv(
   if (!result.ok) return { error: "Could not activate this CV. Please try again." };
 
   revalidatePath("/cvs");
+  revalidatePath("/dashboard/profile");
+  revalidatePath("/onboarding/profile");
   return { error: null };
 }
