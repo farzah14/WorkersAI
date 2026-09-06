@@ -453,7 +453,7 @@ git commit -m "fix: keep new users signed in"
 - Modify: `apps/web/app/api/profile/route.ts`
 - Modify: `apps/web/tests/profile-schema.test.ts`
 
-- [ ] **Step 1: Write transaction and repository regressions**
+- [x] **Step 1: Write transaction and repository regressions**
 
 Add pgtap coverage that saves a new confirmed version and activates its CV, then force an activation failure and assert neither a new profile version nor active-CV state changed. Replace the multi-method fake expectation with one RPC expectation:
 
@@ -474,13 +474,13 @@ it("saves and activates through one database operation", async () => {
 });
 ```
 
-- [ ] **Step 2: Verify the single-operation contract is red**
+- [x] **Step 2: Verify the single-operation contract is red**
 
 Run: `corepack pnpm --dir apps/web test -- tests/profile-schema.test.ts`
 
 Expected: current repository performs separate insert, clear, and activate calls.
 
-- [ ] **Step 3: Add the authenticated transaction function**
+- [x] **Step 3: Add the authenticated transaction function**
 
 Implement `save_candidate_profile(p_cv_id uuid, p_profile jsonb) returns integer` in the migration. It must:
 
@@ -507,7 +507,7 @@ return v_version;
 
 Revoke public/anon execution and grant authenticated execution. Replace `ProfileRepo` with a single `rpc` dependency and map PostgreSQL errors to the existing safe HTTP statuses.
 
-- [ ] **Step 4: Verify atomicity and web contracts**
+- [x] **Step 4: Verify atomicity and web contracts**
 
 Run:
 
@@ -521,7 +521,7 @@ corepack pnpm --dir apps/web typecheck
 
 Expected: rollback and success pgtap assertions pass; web tests and checks pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add supabase/migrations/202609060003_save_candidate_profile.sql supabase/tests/profiles_ai.sql apps/web/lib/profile/save-profile.ts apps/web/app/api/profile/route.ts apps/web/tests/profile-schema.test.ts
