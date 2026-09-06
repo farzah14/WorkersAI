@@ -174,7 +174,7 @@ def _job(*, source_key: str, url: str, title: str) -> DiscoveredJob:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("requirement_extraction_enabled", "expected_requirement_items"),
-    [(False, 0), (True, 2)],
+    [(False, 0), (True, 4)],
 )
 async def test_discovery_run_keeps_successful_sources_when_one_fails(
     requirement_extraction_enabled: bool,
@@ -246,22 +246,22 @@ async def test_discovery_run_keeps_successful_sources_when_one_fails(
     expected_status = "processing" if requirement_extraction_enabled else "partial"
     assert any(params[0] == expected_status for params in run_updates)
     final_update = next(params for params in run_updates if params[0] == expected_status)
-    assert final_update[1:5] == (5, 2, 3, 1)
+    assert final_update[1:5] == (5, 4, 1, 1)
 
     job_inserts = [
         (query, params)
         for query, params in connection.executed
         if "insert into public.jobs" in query.lower()
     ]
-    assert len(job_inserts) == 2
+    assert len(job_inserts) == 4
 
     provenance = [
         params
         for query, params in connection.executed
         if "insert into public.job_provenance" in query.lower()
     ]
-    assert len(provenance) == 2
-    assert {params[3] for params in provenance} == {"greenhouse"}
+    assert len(provenance) == 4
+    assert {params[3] for params in provenance} == {"greenhouse", "tavily"}
 
     requirement_items = [
         params

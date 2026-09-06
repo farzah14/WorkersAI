@@ -38,7 +38,6 @@ from jobmatch_worker.queue import complete_item, enqueue_item, fail_item, retry_
 _SOURCE_CONCURRENCY = 4
 _MAX_SOURCE_RESULTS = 200
 _MAX_CAREER_CANDIDATES = 120
-_MAX_JOBS_PER_RUN = 2
 _MAX_TITLE_CHARS = 300
 _MAX_COMPANY_CHARS = 300
 _MAX_LOCATION_CHARS = 300
@@ -491,9 +490,6 @@ async def handle_discover_jobs(
             except (SourceError, ValueError):
                 continue
         kept, duplicate_count = dedupe_jobs(normalized)
-        if len(kept) > _MAX_JOBS_PER_RUN:
-            duplicate_count += len(kept) - _MAX_JOBS_PER_RUN
-            kept = kept[:_MAX_JOBS_PER_RUN]
         upsert_result = await upsert_jobs(conn, search_run_id=run_id, jobs=kept)
         await _persist_provenance(
             conn,
