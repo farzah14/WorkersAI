@@ -19,10 +19,56 @@ from jobmatch_worker.jobs.query import SearchQuery
 
 TAVILY_API_URL = "https://api.tavily.com/search"
 TAVILY_MAX_COUNT = 20
-TAVILY_DEFAULT_COUNT = 10
+TAVILY_DEFAULT_COUNT = 20
 TAVILY_SEARCH_DEPTH = "basic"
 _JOB_QUERY_MARKERS = ("job", "jobs", "career", "careers", "vacancy", "hiring")
-_DEMO_HOST_MARKERS = ("leverdemo", "example.com", "example.org", "example.net")
+_DEMO_HOST_MARKERS = (
+    "leverdemo",
+    "example.com",
+    "example.org",
+    "example.net",
+    "reddit.com",
+    "facebook.com",
+    "instagram.com",
+    "twitter.com",
+    "x.com",
+    "youtube.com",
+    "tiktok.com",
+    "quora.com",
+    "medium.com",
+    "wikipedia.org",
+    "notion.site",
+    "crossover.com",
+    "resources.workable.com",
+    "levels.fyi",
+    "glassdoor.com",
+    "glassdoor.sg",
+    "glassdoor.co.in",
+    "dailyremote.com",
+    "learn4good.com",
+    "remoterocketship.com",
+)
+_EXCLUDED_PATH_SUBSTRINGS = (
+    "/search",
+    "/job-search",
+    "/jobs/search",
+    "/role/l/",
+    "/country/",
+    "/countries/",
+    "/location/",
+    "/locations/",
+    "/categories/",
+    "/category/",
+    "/tags/",
+    "/tag/",
+    "/q-",
+    "_srch_",
+    "/home/te/",
+    "/home/work_from_home/",
+    "/job-descriptions/",
+    "/job-description",
+    "/similar-jobs/",
+)
 _DEMO_TITLE_MARKERS = ("synthetic demo", "test posting")
 
 
@@ -134,12 +180,31 @@ def _job_query_terms(query: SearchQuery) -> str:
 def _is_allowed_job_result(url: str, title: str | None) -> bool:
     parsed = urllib.parse.urlsplit(url)
     host = (parsed.hostname or "").casefold()
+    path = (parsed.path or "").casefold()
+    query = (parsed.query or "").casefold()
     title_text = (title or "").casefold()
+
     if any(marker in host for marker in _DEMO_HOST_MARKERS):
         return False
     if any(marker in title_text for marker in _DEMO_TITLE_MARKERS):
         return False
-    return parsed.scheme == "https" and bool(host)
+    if parsed.scheme != "https" or not host:
+        return False
+    if "error=true" in query:
+        return False
+    if any(marker in path for marker in _EXCLUDED_PATH_SUBSTRINGS):
+        return False
+    if re.search(r"-(?:jobs|lowongan|vacancies)(?:/|$)", path) and not re.search(r"/jobs?/\d+", path):
+        return False
+    if re.search(r"\b\d+\+?\s+jobs?\b", title_text):
+        return False
+    if re.search(r"\bjobs\s+(?:in|di)\s+", title_text):
+        return False
+    if re.search(r"\btop\s+\d*\s*companies\b", title_text):
+        return False
+    if re.search(r"\bjob\s+opportunities\s+(?:in|di)\b", title_text):
+        return False
+    return True
 
 
 def _contains_excluded_keyword(

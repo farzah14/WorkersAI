@@ -101,9 +101,12 @@ async def get_json_with_retry(
                 raise SourceConfigError(source_key, f"HTTP {status}")
             else:
                 body = await _read_capped_body(source_key, response, _JSON_MAX_BYTES)
+                resp_headers = httpx.Headers(response.headers)
+                resp_headers.pop("content-encoding", None)
+                resp_headers.pop("content-length", None)
                 return httpx.Response(
                     status_code=status,
-                    headers=response.headers,
+                    headers=resp_headers,
                     content=body,
                     request=request,
                 )
@@ -145,9 +148,12 @@ async def post_json_with_retry(
                 raise SourceConfigError(source_key, f"HTTP {status}")
             else:
                 body = await _read_capped_body(source_key, response, _JSON_MAX_BYTES)
+                resp_headers = httpx.Headers(response.headers)
+                resp_headers.pop("content-encoding", None)
+                resp_headers.pop("content-length", None)
                 return httpx.Response(
                     status_code=status,
-                    headers=response.headers,
+                    headers=resp_headers,
                     content=body,
                     request=request,
                 )

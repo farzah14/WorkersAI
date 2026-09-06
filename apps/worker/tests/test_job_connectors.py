@@ -14,7 +14,10 @@ from jobmatch_worker.jobs.connectors.base import (
     SourceError,
     SourceUnavailable,
 )
-from jobmatch_worker.jobs.connectors.career_page import CareerPageFetcher
+from jobmatch_worker.jobs.connectors.career_page import (
+    CareerPageFetcher,
+    _extract_page_content,
+)
 from jobmatch_worker.jobs.connectors.greenhouse import GreenhouseConnector
 from jobmatch_worker.jobs.connectors.lever import LeverConnector
 from jobmatch_worker.jobs.connectors.pinning_transport import (
@@ -1342,3 +1345,90 @@ async def test_tavily_oversize_json_body_is_data_error(httpx_mock: HTTPXMock) ->
         await connector.search(QUERY)
     assert "size" in str(excinfo.value)
     await connector.aclose()
+
+
+async def test_career_page_extracts_company_from_jobs_at_pattern() -> None:
+    html = b"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Jobs at StraitsX</title>
+</head>
+<body>
+    <h1>Senior Software Engineer</h1>
+    <p>We are looking for a software engineer to join our team in Jakarta.</p>
+</body>
+</html>"""
+    content = _extract_page_content(html, source_key="career_page")
+    assert content.company == "StraitsX"
+    assert content.title == "Senior Software Engineer"
+
+
+async def test_career_page_extracts_company_from_og_site_name() -> None:
+    html = b"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Software jobs in Indonesia</title>
+    <meta property="og:site_name" content="Michael Page Indonesia" />
+</head>
+<body>
+    <p>Software developer role with great benefits.</p>
+</body>
+</html>"""
+    content = _extract_page_content(html, source_key="career_page")
+    assert content.company == "Michael Page Indonesia"
+
+
+async def test_career_page_extracts_greenhouse_application_format() -> None:
+    html = b"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Job Application for Cloud Infrastructure Engineer at DKatalis</title>
+</head>
+<body>
+    <div class="location">Jakarta, Indonesia</div>
+    <p>We are looking for a cloud engineer.</p>
+</body>
+</html>"""
+    content = _extract_page_content(html, source_key="career_page")
+    assert content.company == "DKatalis"
+    assert content.title == "Cloud Infrastructure Engineer"
+    assert content.location == "Jakarta, Indonesia"
+
+
+async def test_career_page_detects_removed_job() -> None:
+    html = b"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Software Engineer - Samsung</title>
+</head>
+<body>
+    <p>Sorry, this job was removed on November 18, 2025.</p>
+</body>
+</html>"""
+    content = _extract_page_content(html, source_key="career_page")
+    assert content.is_closed is True
+
+
+def test_tavily_rejects_aggregator_urls() -> None:
+    from jobmatch_worker.jobs.connectors.tavily import _is_allowed_job_result
+
+    assert not _is_allowed_job_result(
+        "https://id.jobstreet.com/software-engineer-jobs",
+        "Software Engineer Jobs in Indonesia - Jobstreet",
+    )
+    assert not _is_allowed_job_result(
+        "https://jobs.workable.com/search/indonesia/jobs",
+        "Software Engineer Jobs in Indonesia",
+    )
+    assert not _is_allowed_job_result(
+        "https://idn-remote-jobs.notion.site",
+        "Remote Jobs for IDN Talents",
+    )
+    assert not _is_allowed_job_result(
+        "https://job-boards.greenhouse.io/straitsx?error=true",
+        "Jobs at StraitsX",
+    )
+    assert _is_allowed_job_result(
+        "https://careers.services.global.ntt/global/en/job/R-141604/Software-Engineer",
+        "Software Engineer at NTT Data",
+    )
