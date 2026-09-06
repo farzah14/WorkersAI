@@ -65,7 +65,18 @@ class FakeConnection:
                 "idempotency_key": idempotency_key,
             }
             self.inserted_runs.append(row)
-            return FakeCursor([row])
+            returning_columns = [
+                column.strip()
+                for column in sql.lower().split("returning", 1)[1].split(",")
+            ]
+            return FakeCursor(
+                [
+                    {
+                        key: row[key]
+                        for key in returning_columns
+                    }
+                ]
+            )
         if sql.lstrip().startswith(WORK_INSERT_MARKER):
             self.enqueued.append((params[0], params[1], params[2]))
             return FakeCursor(None)
@@ -140,6 +151,26 @@ async def test_two_daily_profiles_create_two_runs(
         dedupe_key == f"discover_jobs:{r['id']}"
         for (_, dedupe_key, _), r in zip(conn.enqueued, conn.inserted_runs, strict=True)
     )
+
+
+async def test_daily_run_enqueue_payload_includes_returned_profile_identifiers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    conn = FakeConnection(profiles=[profile("u-1", "p-1", "c-1")])
+    settings = make_settings(monkeypatch)
+    now = datetime(2026, 8, 17, 0, 0, tzinfo=UTC)
+
+    await schedule_daily_runs(conn, settings, now_utc=now)  # type: ignore[arg-type]
+
+    kind, dedupe_key, payload = conn.enqueued[0]
+    assert kind == "discover_jobs"
+    assert dedupe_key == "discover_jobs:run-1"
+    assert payload.obj == {
+        "search_run_id": "run-1",
+        "search_profile_id": "p-1",
+        "candidate_profile_id": "c-1",
+        "user_id": "u-1",
+    }
 
 
 async def test_second_invocation_same_utc_day_creates_no_runs(

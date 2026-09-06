@@ -46,7 +46,7 @@ insert into public.job_search_runs
   (user_id, search_profile_id, candidate_profile_id, trigger, idempotency_key)
 values (%s, %s, %s, 'daily', %s)
 on conflict (idempotency_key) do nothing
-returning id
+returning id, user_id, search_profile_id, candidate_profile_id
 """
 
 @dataclass(frozen=True, slots=True)
