@@ -3,9 +3,9 @@ import { createClient } from "@/lib/supabase/server";
 import { saveProfileRequestSchema } from "@/lib/profile/schema";
 import {
   isActiveCvConflict,
+  isUniqueViolation,
   isVersionRace,
   saveCandidateProfile,
-  supabaseProfileRepo,
 } from "@/lib/profile/save-profile";
 
 export async function GET() {
@@ -70,13 +70,19 @@ export async function POST(request: NextRequest) {
     .maybeSingle();
   if (!ownedCv) return NextResponse.json({ error: "cv_not_found" }, { status: 404 });
 
-  const result = await saveCandidateProfile(supabaseProfileRepo(supabase), {
+  const result = await saveCandidateProfile(supabase, {
     userId: user.id,
     cvId,
     profile,
   });
   if (!result.ok) {
-    if (isActiveCvConflict(result.error)) {
+    if (result.error.message?.includes("cv_not_found")) {
+      return NextResponse.json({ error: "cv_not_found" }, { status: 404 });
+    }
+    if (result.error.code === "42501" || result.error.message?.includes("unauthorized")) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+    if (isActiveCvConflict(result.error) || isUniqueViolation(result.error)) {
       return NextResponse.json({ error: "active_cv_conflict" }, { status: 409 });
     }
     if (isVersionRace(result.error)) {
