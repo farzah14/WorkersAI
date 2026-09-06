@@ -20,10 +20,10 @@ export async function signUp(formData: FormData) {
   if (password !== confirmPassword) redirect("/register?error=password_mismatch");
   const passwordRequirement = /^(?=.*[A-Za-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
   if (!passwordRequirement.test(password)) redirect("/register?error=weak_password");
-  const { error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({ email, password });
   if (error?.code === "user_already_exists") redirect("/register?error=email_taken");
   if (error) redirect("/register?error=signup_failed");
-  await supabase.auth.signOut();
+  if (data?.session) redirect("/dashboard");
   redirect("/login?registered=1");
 }
 
