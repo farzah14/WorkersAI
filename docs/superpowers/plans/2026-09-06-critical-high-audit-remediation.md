@@ -592,7 +592,7 @@ git commit -m "fix: retain all distinct discovery results"
 - Modify: `apps/worker/tests/test_discovery_handler.py`
 - Modify: `apps/worker/jobmatch_worker/handlers/discovery.py`
 
-- [ ] **Step 1: Write source-builder and provenance regressions**
+- [x] **Step 1: Write source-builder and provenance regressions**
 
 Change the source-builder expectation and add provenance assertions:
 
@@ -609,7 +609,7 @@ assert {params[0] for params in provenance if params[3] in {"greenhouse", "tavil
 
 The duplicate fixture must include the same canonical job once from Greenhouse and once from Tavily, plus other distinct jobs. Assert both source keys map to the same persisted `job_id`.
 
-- [ ] **Step 2: Verify both regressions are red**
+- [x] **Step 2: Verify both regressions are red**
 
 Run:
 
@@ -620,7 +620,7 @@ cd apps/worker
 
 Expected: production builder exposes only Tavily and duplicate provenance is absent.
 
-- [ ] **Step 3: Construct all connectors and pass all normalized jobs**
+- [x] **Step 3: Construct all connectors and pass all normalized jobs**
 
 Import the ATS connectors and implement:
 
@@ -649,7 +649,7 @@ await _persist_provenance(
 
 Do not catch configuration failures in `_build_sources`; each connector reports `SourceConfigError` inside `_run_source`, preserving source isolation and final `PARTIAL` accounting.
 
-- [ ] **Step 4: Verify the complete discovery subsystem**
+- [x] **Step 4: Verify the complete discovery subsystem**
 
 Run:
 
@@ -662,7 +662,7 @@ cd apps/worker
 
 Expected: all selected tests and static checks pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/worker/jobmatch_worker/handlers/discovery.py apps/worker/tests/test_discovery_handler.py
