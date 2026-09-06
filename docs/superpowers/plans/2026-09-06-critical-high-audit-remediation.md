@@ -535,7 +535,7 @@ git commit -m "fix: save profiles and active CV atomically"
 - Modify: `apps/worker/tests/test_discovery_handler.py`
 - Modify: `apps/worker/jobmatch_worker/handlers/discovery.py`
 
-- [ ] **Step 1: Change the acceptance-shaped assertion to four distinct jobs**
+- [x] **Step 1: Change the acceptance-shaped assertion to four distinct jobs**
 
 In `test_discovery_run_keeps_successful_sources_when_one_fails`, assert:
 
@@ -547,13 +547,13 @@ assert len(provenance) == 5
 
 Keep five unique-normalized inputs with one duplicate URL and one failed source so the counts mean discovered, normalized, duplicate, failed.
 
-- [ ] **Step 2: Verify the regression is red**
+- [x] **Step 2: Verify the regression is red**
 
 Run: `cd apps/worker && /tmp/workersai-tools/uv run pytest tests/test_discovery_handler.py::test_discovery_run_keeps_successful_sources_when_one_fails -q`
 
 Expected: only two jobs are inserted and extra distinct jobs are counted as duplicates.
 
-- [ ] **Step 3: Remove output truncation**
+- [x] **Step 3: Remove output truncation**
 
 Delete `_MAX_JOBS_PER_RUN` and this block only:
 
@@ -565,7 +565,7 @@ if len(kept) > _MAX_JOBS_PER_RUN:
 
 Keep `_MAX_SOURCE_RESULTS` and `_MAX_CAREER_CANDIDATES` unchanged.
 
-- [ ] **Step 4: Verify discovery checks**
+- [x] **Step 4: Verify discovery checks**
 
 Run:
 
@@ -578,7 +578,7 @@ cd apps/worker
 
 Expected: discovery tests, Ruff, and mypy pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/worker/jobmatch_worker/handlers/discovery.py apps/worker/tests/test_discovery_handler.py
