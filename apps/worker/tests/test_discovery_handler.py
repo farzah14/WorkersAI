@@ -84,8 +84,9 @@ async def test_build_sources_uses_tavily_for_web_search() -> None:
         )
     )
 
-    assert set(sources) == {"tavily"}
-    assert sources["tavily"].source_key == "tavily"
+    assert set(sources) == {"tavily", "greenhouse", "lever"}
+    assert sources["greenhouse"].source_key == "greenhouse"
+    assert sources["lever"].source_key == "lever"
 
     for source in sources.values():
         await source.aclose()  # type: ignore[attr-defined]
@@ -260,8 +261,23 @@ async def test_discovery_run_keeps_successful_sources_when_one_fails(
         for query, params in connection.executed
         if "insert into public.job_provenance" in query.lower()
     ]
-    assert len(provenance) == 4
-    assert {params[3] for params in provenance} == {"greenhouse", "tavily"}
+    source_keys = [params[3] for params in provenance]
+    assert len(provenance) == 5
+    assert source_keys.count("greenhouse") == 3
+    assert source_keys.count("tavily") == 2
+    assert {params[0] for params in provenance if params[3] in {"greenhouse", "tavily"}}
+    duplicate_job_ids = {
+        params[0]
+        for params in provenance
+        if params[5] == "https://jobs.example.com/data-engineer"
+    }
+    assert len(duplicate_job_ids) == 1
+    duplicate_sources = {
+        params[3]
+        for params in provenance
+        if params[5] == "https://jobs.example.com/data-engineer"
+    }
+    assert duplicate_sources == {"greenhouse", "tavily"}
 
     requirement_items = [
         params

@@ -23,6 +23,8 @@ from jobmatch_worker.jobs.connectors.career_page import (
     CareerPageContent,
     CareerPageFetcher,
 )
+from jobmatch_worker.jobs.connectors.greenhouse import GreenhouseConnector
+from jobmatch_worker.jobs.connectors.lever import LeverConnector
 from jobmatch_worker.jobs.connectors.tavily import TavilyConnector
 from jobmatch_worker.jobs.dedupe import (
     dedupe_jobs,
@@ -84,9 +86,13 @@ def _error_code(error: SourceError) -> str:
 
 
 def _build_sources(settings: Settings) -> dict[str, SourceConnector]:
-    # MVP discovery uses Tavily only; ATS connectors remain available for a
-    # future explicitly configured source rollout.
-    return {"tavily": TavilyConnector(api_key=settings.tavily_api_key)}
+    return {
+        "tavily": TavilyConnector(api_key=settings.tavily_api_key),
+        "greenhouse": GreenhouseConnector(
+            board_token=settings.greenhouse_board_token
+        ),
+        "lever": LeverConnector(site_name=settings.lever_site_name),
+    }
 
 
 def _candidate_title(candidate: DiscoveryCandidateUrl, text: str) -> str:
@@ -494,7 +500,7 @@ async def handle_discover_jobs(
         await _persist_provenance(
             conn,
             run_id=run_id,
-            all_jobs=kept,
+            all_jobs=normalized,
             kept_jobs=kept,
             job_ids=upsert_result.job_ids,
         )
