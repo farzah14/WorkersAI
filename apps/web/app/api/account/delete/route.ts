@@ -39,18 +39,22 @@ export async function DELETE(request: Request): Promise<NextResponse> {
     { auth: { persistSession: false } },
   );
 
-  const { data: cvs } = await supabase
+  const { data: cvs, error: cvListError } = await supabase
     .from("cvs")
     .select("storage_path")
     .eq("user_id", user.id)
     .not("storage_path", "is", null);
-  const cvPaths = (cvs ?? []).map((row) => row.storage_path).filter((p): p is string => Boolean(p));
 
-  const { data: exports } = await supabase
+  const { data: exports, error: exportListError } = await supabase
     .from("exports")
     .select("storage_path")
     .eq("user_id", user.id)
     .not("storage_path", "is", null);
+  if (cvListError || exportListError) {
+    return NextResponse.json({ error: "storage_enumeration_failed" }, { status: 500 });
+  }
+
+  const cvPaths = (cvs ?? []).map((row) => row.storage_path).filter((p): p is string => Boolean(p));
   const exportPaths = (exports ?? [])
     .map((row) => row.storage_path)
     .filter((p): p is string => Boolean(p));

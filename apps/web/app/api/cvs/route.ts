@@ -16,6 +16,24 @@ function isStorageNotFound(error: { message?: string } | null): boolean {
   return /not found|does not exist|nosuchkey/i.test(error.message ?? "");
 }
 
+function createCvServiceClient() {
+  return createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } },
+  );
+}
+
+async function cleanupFailedCv(
+  client: ReturnType<typeof createCvServiceClient>,
+  cvId: string,
+  userId: string,
+  storagePath: string,
+): Promise<void> {
+  await client.storage.from("cvs").remove([storagePath]);
+  await client.rpc("delete_cv", { p_cv_id: cvId, p_user_id: userId });
+}
+
 export async function POST(request: NextRequest) {
   const supabase = await createServerClient();
   const {
@@ -61,21 +79,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "storage upload failed" }, { status: 500 });
   }
 
-  const { error: pathError } = await supabase.from("cvs").update({ storage_path: path }).eq("id", cvRow.id);
-  if (pathError) return NextResponse.json({ error: "could not finalize cv record" }, { status: 500 });
+  const serviceClient = createCvServiceClient();
 
-  const serviceClient = createServiceClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
+  const { error: pathError } = await supabase.from("cvs").update({ storage_path: path }).eq("id", cvRow.id);
+  if (pathError) {
+    await cleanupFailedCv(serviceClient, cvRow.id, user.id, path);
+    return NextResponse.json({ error: "could not finalize cv record" }, { status: 500 });
+  }
+
   const { error: queueError } = await serviceClient.from("work_items").insert({
     kind: "extract_cv",
     dedupe_key: `extract_cv:${cvRow.id}`,
     payload: { cv_id: cvRow.id, user_id: user.id },
   });
   if (queueError) {
-    await supabase.from("cvs").delete().eq("id", cvRow.id);
+    await cleanupFailedCv(serviceClient, cvRow.id, user.id, path);
     return NextResponse.json({ error: "could not enqueue cv extraction" }, { status: 500 });
   }
 

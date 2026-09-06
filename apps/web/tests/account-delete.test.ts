@@ -173,7 +173,17 @@ describe("DELETE /api/account/delete", () => {
     });
   }
 
-  function makeClient({ cvs = [CV_PATH], exports: exportPaths = [] }: { cvs?: string[]; exports?: string[] }) {
+  function makeClient({
+    cvs = [CV_PATH],
+    exports: exportPaths = [],
+    cvError = null,
+    exportError = null,
+  }: {
+    cvs?: string[];
+    exports?: string[];
+    cvError?: unknown;
+    exportError?: unknown;
+  }) {
     return {
       auth: {
         getUser: vi.fn().mockResolvedValue(authenticatedUser()),
@@ -187,7 +197,7 @@ describe("DELETE /api/account/delete", () => {
                 then: (resolve: (value: unknown) => void) => {
                   resolve({
                     data: paths.map((p) => ({ storage_path: p })),
-                    error: null,
+                    error: table === "cvs" ? cvError : exportError,
                   });
                 },
               }),
@@ -313,6 +323,30 @@ describe("DELETE /api/account/delete", () => {
 
     expect(response.status).toBe(500);
     expect(deleteUser).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when CV storage-path enumeration fails", async () => {
+    authOnly(makeClient({ cvError: { message: "database unavailable" } }));
+    const serviceClient = accountServiceClient([]);
+    createServiceClientMock.mockReturnValue(serviceClient as never);
+
+    const response = await deleteAccount(makeRequest("DELETE"));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "storage_enumeration_failed" });
+    expect(serviceClient.auth.admin.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when export storage-path enumeration fails", async () => {
+    authOnly(makeClient({ exportError: { message: "database unavailable" } }));
+    const serviceClient = accountServiceClient([]);
+    createServiceClientMock.mockReturnValue(serviceClient as never);
+
+    const response = await deleteAccount(makeRequest("DELETE"));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "storage_enumeration_failed" });
+    expect(serviceClient.auth.admin.deleteUser).not.toHaveBeenCalled();
   });
 
   it("returns 500 when the auth user deletion fails", async () => {
