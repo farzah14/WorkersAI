@@ -9,7 +9,7 @@ const exportFormatSchema = z.enum(["xlsx", "pdf"]);
 
 const exportFiltersSchema = z
   .object({
-    region: z.enum(["indonesia", "global"]).optional(),
+    region: z.array(z.enum(["indonesia", "global"])).max(2).optional(),
     work_mode: z.array(z.enum(["remote", "hybrid", "on-site"])).optional(),
     min_score: z.number().int().min(0).max(100).optional(),
     status: z.array(z.enum(["new", "saved", "applied", "ignored"])).optional(),

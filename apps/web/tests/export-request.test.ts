@@ -192,7 +192,12 @@ describe("POST /api/exports", () => {
         searchRunId: RUN_ID,
         format: "xlsx",
         scope: "current_filters",
-        filters: { min_score: 80, status: ["saved"] },
+        filters: {
+          region: ["indonesia"],
+          work_mode: ["remote"],
+          min_score: 80,
+          status: ["saved"],
+        },
       }),
     );
 
@@ -204,6 +209,12 @@ describe("POST /api/exports", () => {
         search_run_id: RUN_ID,
         format: "xlsx",
         scope: "current_filters",
+        filter_json: {
+          region: ["indonesia"],
+          work_mode: ["remote"],
+          min_score: 80,
+          status: ["saved"],
+        },
         status: "queued",
       }),
     );

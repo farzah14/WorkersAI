@@ -2,9 +2,6 @@ from datetime import date
 from typing import Any
 
 import pytest
-from pydantic import ValidationError
-from test_excel_export import make_row
-
 from jobmatch_worker.exports.models import (
     CandidateSummary,
     ExportFilters,
@@ -19,6 +16,8 @@ from jobmatch_worker.exports.service import (
     generate_report,
     storage_path_for,
 )
+from pydantic import ValidationError
+from test_excel_export import make_row
 
 
 def test_export_filters_rejects_unknown_fields() -> None:
@@ -26,6 +25,16 @@ def test_export_filters_rejects_unknown_fields() -> None:
         ExportFilters.model_validate(
             {"region": ["indonesia"], "drop table": "jobs"}
         )
+
+
+def test_web_shaped_export_filters_validate() -> None:
+    filters = ExportFilters.model_validate({
+        "region": ["indonesia"],
+        "work_mode": ["remote"],
+        "min_score": 80,
+        "status": ["saved"],
+    })
+    assert filters.region == ["indonesia"]
 
 
 def test_export_request_validates_scope_and_format() -> None:

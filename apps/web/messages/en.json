@@ -181,7 +181,12 @@
     "empty": "No exports yet.",
     "emptyHint": "Create your first export to download results.",
     "openDashboard": "Open dashboard",
-    "download": "Download"
+    "download": "Download",
+    "createXlsx": "Export Excel (.xlsx)",
+    "createPdf": "Export PDF (.pdf)",
+    "creating": "Requesting export…",
+    "requestAccepted": "Export request accepted. Processing in background.",
+    "requestFailed": "Could not create export request. Please try again."
   },
   "settings": {
     "title": "Settings",
