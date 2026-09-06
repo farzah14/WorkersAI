@@ -28,7 +28,7 @@
 - Modify: `apps/worker/tests/test_scheduler.py`
 - Modify: `apps/worker/jobmatch_worker/scheduler.py`
 
-- [ ] **Step 1: Make the fake reproduce PostgreSQL's actual return shape**
+- [x] **Step 1: Make the fake reproduce PostgreSQL's actual return shape**
 
 Change `FakeConnection.execute()` so its run insert result is derived from the SQL `RETURNING` list instead of inventing identifiers. Add this assertion:
 
@@ -57,13 +57,13 @@ async def test_run_insert_returns_every_field_used_by_queue_payload(
     ]
 ```
 
-- [ ] **Step 2: Verify the regression is red**
+- [x] **Step 2: Verify the regression is red**
 
 Run: `cd apps/worker && /tmp/workersai-tools/uv run pytest tests/test_scheduler.py::test_run_insert_returns_every_field_used_by_queue_payload -q`
 
 Expected: failure with `KeyError: 'search_profile_id'` when the fake returns only fields named by the production SQL.
 
-- [ ] **Step 3: Return the queue payload identifiers from PostgreSQL**
+- [x] **Step 3: Return the queue payload identifiers from PostgreSQL**
 
 Change `RUN_INSERT_SQL` to:
 
@@ -77,7 +77,7 @@ returning id, user_id, search_profile_id, candidate_profile_id
 """
 ```
 
-- [ ] **Step 4: Verify focused and worker checks**
+- [x] **Step 4: Verify focused and worker checks**
 
 Run:
 
@@ -90,7 +90,7 @@ cd apps/worker
 
 Expected: 7 scheduler tests pass; Ruff and mypy exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/worker/jobmatch_worker/scheduler.py apps/worker/tests/test_scheduler.py
@@ -104,7 +104,7 @@ git commit -m "fix: return scheduler queue identifiers"
 - Create: `supabase/migrations/202609060001_secure_api_usage.sql`
 - Modify: `supabase/tests/hardening.sql`
 
-- [ ] **Step 1: Add same-user and cross-user pgtap cases**
+- [x] **Step 1: Add same-user and cross-user pgtap cases**
 
 Insert a second auth user, raise the plan count by two, and add:
 
@@ -134,13 +134,13 @@ select throws_ok(
 );
 ```
 
-- [ ] **Step 2: Verify the security regression is red**
+- [x] **Step 2: Verify the security regression is red**
 
 Run: `supabase db test supabase/tests/hardening.sql`
 
 Expected: the cross-user `throws_ok` assertion fails because the current function increments user 2.
 
-- [ ] **Step 3: Add an append-only secure replacement**
+- [x] **Step 3: Add an append-only secure replacement**
 
 Create the migration with:
 
@@ -178,7 +178,7 @@ grant execute on function public.increment_api_usage(uuid, text)
   to authenticated, service_role;
 ```
 
-- [ ] **Step 4: Verify SQL and web rate-limit callers**
+- [x] **Step 4: Verify SQL and web rate-limit callers**
 
 Run:
 
@@ -190,7 +190,7 @@ corepack pnpm --dir apps/web test -- tests/rate-limit.test.ts
 
 Expected: pgtap finishes with zero failures and the web rate-limit tests pass. If the Supabase runtime is unavailable, record that boundary and do not call the SQL behavior verified.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add supabase/migrations/202609060001_secure_api_usage.sql supabase/tests/hardening.sql
@@ -206,7 +206,7 @@ git commit -m "fix: enforce quota ownership"
 - Modify: `apps/web/app/api/cvs/route.ts`
 - Modify: `apps/web/app/api/account/delete/route.ts`
 
-- [ ] **Step 1: Write storage-safety regressions**
+- [x] **Step 1: Write storage-safety regressions**
 
 Use mocked Supabase chains to add these behaviors:
 
@@ -237,13 +237,13 @@ it("does not delete the auth user when export path enumeration fails", async () 
 
 The helpers must return only mock handles and fixed synthetic UUID paths; they must not log request files or paths.
 
-- [ ] **Step 2: Verify both regressions are red**
+- [x] **Step 2: Verify both regressions are red**
 
 Run: `corepack pnpm --dir apps/web test -- tests/cv-upload.test.ts tests/account-delete.test.ts`
 
 Expected: uploaded-object removal is missing after finalization/queue failures, and enumeration errors are treated as empty lists.
 
-- [ ] **Step 3: Add exact-object compensation**
+- [x] **Step 3: Add exact-object compensation**
 
 In the CV route, add and use:
 
@@ -273,7 +273,7 @@ if (cvListError || exportListError) {
 }
 ```
 
-- [ ] **Step 4: Verify the affected web boundary**
+- [x] **Step 4: Verify the affected web boundary**
 
 Run:
 
@@ -285,7 +285,7 @@ corepack pnpm --dir apps/web typecheck
 
 Expected: focused tests, ESLint, and TypeScript all pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/app/api/cvs/route.ts apps/web/app/api/account/delete/route.ts apps/web/tests/cv-upload.test.ts apps/web/tests/account-delete.test.ts
@@ -303,7 +303,7 @@ git commit -m "fix: clean up failed CV storage writes"
 - Modify: `apps/web/app/cvs/page.tsx`
 - Modify: `apps/web/tests/account-delete.test.ts`
 
-- [ ] **Step 1: Write original-only deletion regressions**
+- [x] **Step 1: Write original-only deletion regressions**
 
 Add a route test using `?cv_id=${CV_ID}&mode=original`:
 
@@ -321,7 +321,7 @@ it("deletes only the original object and preserves the CV profile", async () => 
 
 Add pgtap fixtures for a CV plus candidate profile, call `delete_original_cv`, then assert the CV and profile still exist, `storage_path is null`, and `retain_original is false`.
 
-- [ ] **Step 2: Verify the regressions are red**
+- [x] **Step 2: Verify the regressions are red**
 
 Run:
 
@@ -332,7 +332,7 @@ supabase db test supabase/tests/core_cv.sql
 
 Expected: the route calls full deletion and the SQL function is absent.
 
-- [ ] **Step 3: Add the original-only database operation and route mode**
+- [x] **Step 3: Add the original-only database operation and route mode**
 
 Create:
 
@@ -358,7 +358,7 @@ grant execute on function public.delete_original_cv(uuid, uuid) to service_role;
 
 The route validates `mode` as `original | full`, removes the private object first, calls `delete_original_cv` for `original`, and retains `delete_cv` for explicit full deletion. Select `storage_path` on the CV page and render separate original-file and full-CV buttons; the original button is absent when `storage_path` is null.
 
-- [ ] **Step 4: Verify DB, route, and UI**
+- [x] **Step 4: Verify DB, route, and UI**
 
 Run:
 
@@ -372,7 +372,7 @@ corepack pnpm --dir apps/web typecheck
 
 Expected: original-only deletion preserves profile fixtures; web checks pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add supabase/migrations/202609060002_original_cv_retention.sql supabase/tests/core_cv.sql apps/web/app/api/cvs/route.ts apps/web/components/cv-delete-button.tsx apps/web/app/cvs/page.tsx apps/web/tests/account-delete.test.ts
@@ -855,7 +855,7 @@ git commit -m "fix: finalize runs after provider failure"
 **Files:**
 - Verify only; modify documentation only if a command or environment boundary must be recorded.
 
-- [ ] **Step 1: Run all available web gates**
+- [x] **Step 1: Run all available web gates**
 
 ```bash
 corepack pnpm --dir apps/web test
@@ -866,7 +866,7 @@ corepack pnpm --dir apps/web build
 
 Expected: 0 failed tests and every command exits 0.
 
-- [ ] **Step 2: Run all worker gates**
+- [x] **Step 2: Run all worker gates**
 
 ```bash
 cd apps/worker
@@ -877,7 +877,7 @@ cd apps/worker
 
 Expected: 0 failed tests; only the three explicitly gated live-provider tests may skip; Ruff and mypy exit 0.
 
-- [ ] **Step 3: Run database, Compose, and E2E gates when available**
+- [x] **Step 3: Run database, Compose, and E2E gates when available**
 
 ```bash
 supabase db reset
@@ -888,7 +888,7 @@ corepack pnpm --dir apps/web exec playwright test
 
 Expected: migrations apply, pgtap has 0 failures, Compose exits 0 without an Ollama service, and authenticated E2E passes. Report missing executables, unavailable daemons, or absent seeded services as unverified boundaries.
 
-- [ ] **Step 4: Check secrets, whitespace, and requirement coverage**
+- [x] **Step 4: Check secrets, whitespace, and requirement coverage**
 
 ```bash
 git diff --check origin/main...HEAD
@@ -898,6 +898,6 @@ git log --oneline origin/main..HEAD
 
 Expected: whitespace check is clean, secret scan prints no tracked credentials, and history contains the design plus ten ordered fix commits.
 
-- [ ] **Step 5: Record final status**
+- [x] **Step 5: Record final status**
 
 Re-read `docs/superpowers/specs/2026-09-06-critical-high-audit-remediation-design.md` and this plan. Check off only requirements supported by fresh command output. Report any unavailable integration boundary separately from code/test failures.
