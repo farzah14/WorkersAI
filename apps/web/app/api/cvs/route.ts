@@ -29,9 +29,52 @@ async function cleanupFailedCv(
   cvId: string,
   userId: string,
   storagePath: string,
+): Promise<{ complete: boolean }> {
+  try {
+    const { error: removeError } = await client.storage.from("cvs").remove([storagePath]);
+    if (removeError && !isStorageNotFound(removeError)) {
+      return { complete: false };
+    }
+  } catch {
+    return { complete: false };
+  }
+
+  try {
+    const { error: purgeError } = await client.rpc("delete_cv", {
+      p_cv_id: cvId,
+      p_user_id: userId,
+    });
+    return { complete: !purgeError };
+  } catch {
+    return { complete: false };
+  }
+}
+
+async function retainFailedCvStoragePath(
+  client: ReturnType<typeof createCvServiceClient>,
+  cvId: string,
+  userId: string,
+  storagePath: string,
 ): Promise<void> {
-  await client.storage.from("cvs").remove([storagePath]);
-  await client.rpc("delete_cv", { p_cv_id: cvId, p_user_id: userId });
+  try {
+    await client
+      .from("cvs")
+      .update({ storage_path: storagePath })
+      .eq("id", cvId)
+      .eq("user_id", userId);
+  } catch {
+    // The original sanitized route failure remains authoritative.
+  }
+}
+
+function failedCvUploadResponse(error: string, cleanupComplete: boolean): NextResponse {
+  return NextResponse.json(
+    {
+      error,
+      ...(cleanupComplete ? {} : { cleanup: "incomplete" }),
+    },
+    { status: 500 },
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -83,8 +126,9 @@ export async function POST(request: NextRequest) {
 
   const { error: pathError } = await supabase.from("cvs").update({ storage_path: path }).eq("id", cvRow.id);
   if (pathError) {
-    await cleanupFailedCv(serviceClient, cvRow.id, user.id, path);
-    return NextResponse.json({ error: "could not finalize cv record" }, { status: 500 });
+    await retainFailedCvStoragePath(serviceClient, cvRow.id, user.id, path);
+    const cleanup = await cleanupFailedCv(serviceClient, cvRow.id, user.id, path);
+    return failedCvUploadResponse("could not finalize cv record", cleanup.complete);
   }
 
   const { error: queueError } = await serviceClient.from("work_items").insert({
@@ -93,8 +137,8 @@ export async function POST(request: NextRequest) {
     payload: { cv_id: cvRow.id, user_id: user.id },
   });
   if (queueError) {
-    await cleanupFailedCv(serviceClient, cvRow.id, user.id, path);
-    return NextResponse.json({ error: "could not enqueue cv extraction" }, { status: 500 });
+    const cleanup = await cleanupFailedCv(serviceClient, cvRow.id, user.id, path);
+    return failedCvUploadResponse("could not enqueue cv extraction", cleanup.complete);
   }
 
   return NextResponse.json({ id: cvRow.id }, { status: 201 });
