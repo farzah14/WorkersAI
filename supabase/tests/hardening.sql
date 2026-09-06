@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap;
 
-select plan(20);
+select plan(25);
 
 select is(
     (select count(*) from pg_tables where schemaname = 'public' and tablename = 'api_usage_windows'),
@@ -91,8 +91,11 @@ select is(
 );
 
 insert into auth.users (id, email)
-values ('00000000-0000-0000-0000-000000000001', 'hardening-fixture@example.test');
+values
+    ('00000000-0000-0000-0000-000000000001', 'hardening-fixture@example.test'),
+    ('00000000-0000-0000-0000-000000000002', 'hardening-other@example.test');
 
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 set local role service_role;
 select is(
     public.increment_api_usage('00000000-0000-0000-0000-000000000001'::uuid, 'upload_cv'), 1,
@@ -137,11 +140,40 @@ select is(
     'anon cannot execute quota function'
 );
 
-select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000000001"}', true);
+select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000000001","role":"authenticated"}', true);
 set local role authenticated;
 select is(
     public.increment_api_usage('00000000-0000-0000-0000-000000000001'::uuid, 'manual_search'), 1,
     'authenticated user can increment quota through rpc'
+);
+select throws_ok(
+    $$select public.increment_api_usage('00000000-0000-0000-0000-000000000002'::uuid, 'manual_search')$$,
+    '42501', 'quota_user_mismatch',
+    'authenticated user cannot increment another user quota'
+);
+select throws_ok(
+    $$select public.increment_api_usage(null::uuid, 'manual_search')$$,
+    '42501', 'quota_user_mismatch',
+    'authenticated user cannot increment quota for a null user'
+);
+select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+select throws_ok(
+    $$select public.increment_api_usage('00000000-0000-0000-0000-000000000001'::uuid, 'manual_search')$$,
+    '42501', 'quota_user_mismatch',
+    'authenticated role without a user identity cannot increment quota'
+);
+reset role;
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+set local role service_role;
+select is(
+    (select count(*) from public.api_usage_windows
+     where user_id = '00000000-0000-0000-0000-000000000002'),
+    0::bigint,
+    'rejected cross-user increment leaves the target quota unchanged'
+);
+select is(
+    public.increment_api_usage('00000000-0000-0000-0000-000000000002'::uuid, 'manual_search'), 1,
+    'service role without a user identity can increment another user quota'
 );
 reset role;
 select set_config('request.jwt.claims', '', true);
