@@ -39,31 +39,42 @@ async function cleanupFailedCv(
     return { complete: false };
   }
 
-  try {
-    const { error: purgeError } = await client.rpc("delete_cv", {
-      p_cv_id: cvId,
-      p_user_id: userId,
-    });
-    return { complete: !purgeError };
-  } catch {
-    return { complete: false };
-  }
+  return { complete: await purgeProvisionalCv(client, cvId, userId) };
 }
 
-async function retainFailedCvStoragePath(
+async function persistCvStoragePath(
   client: ReturnType<typeof createCvServiceClient>,
   cvId: string,
   userId: string,
   storagePath: string,
-): Promise<void> {
+): Promise<boolean> {
   try {
-    await client
+    const { data, error } = await client
       .from("cvs")
       .update({ storage_path: storagePath })
       .eq("id", cvId)
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .select("id")
+      .single();
+    return !error && data?.id === cvId;
   } catch {
-    // The original sanitized route failure remains authoritative.
+    return false;
+  }
+}
+
+async function purgeProvisionalCv(
+  client: ReturnType<typeof createCvServiceClient>,
+  cvId: string,
+  userId: string,
+): Promise<boolean> {
+  try {
+    const { error } = await client.rpc("delete_cv", {
+      p_cv_id: cvId,
+      p_user_id: userId,
+    });
+    return !error;
+  } catch {
+    return false;
   }
 }
 
@@ -114,21 +125,19 @@ export async function POST(request: NextRequest) {
   if (insertError || !cvRow) return NextResponse.json({ error: "could not create cv record" }, { status: 500 });
 
   const path = `${user.id}/${cvRow.id}/${safeFilename(originalName)}`;
+  const serviceClient = createCvServiceClient();
+  const pathPersisted = await persistCvStoragePath(serviceClient, cvRow.id, user.id, path);
+  if (!pathPersisted) {
+    const purged = await purgeProvisionalCv(serviceClient, cvRow.id, user.id);
+    return failedCvUploadResponse("could not finalize cv record", purged);
+  }
+
   const { error: uploadError } = await supabase.storage.from("cvs").upload(path, file, {
     contentType: file.type,
   });
   if (uploadError) {
-    await supabase.from("cvs").delete().eq("id", cvRow.id);
-    return NextResponse.json({ error: "storage upload failed" }, { status: 500 });
-  }
-
-  const serviceClient = createCvServiceClient();
-
-  const { error: pathError } = await supabase.from("cvs").update({ storage_path: path }).eq("id", cvRow.id);
-  if (pathError) {
-    await retainFailedCvStoragePath(serviceClient, cvRow.id, user.id, path);
-    const cleanup = await cleanupFailedCv(serviceClient, cvRow.id, user.id, path);
-    return failedCvUploadResponse("could not finalize cv record", cleanup.complete);
+    const purged = await purgeProvisionalCv(serviceClient, cvRow.id, user.id);
+    return failedCvUploadResponse("storage upload failed", purged);
   }
 
   const { error: queueError } = await serviceClient.from("work_items").insert({

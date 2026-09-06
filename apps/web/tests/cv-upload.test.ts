@@ -65,6 +65,7 @@ function makeUploadClient(pathError: unknown) {
       },
     },
     deleteEq,
+    upload,
     update,
   };
 }
@@ -73,13 +74,19 @@ function makeServiceClient({
   queueError = null,
   removeError = null,
   rpcError = null,
+  referenceData = { id: CV_ID } as { id: string } | null,
+  referenceError = null,
   removeReject,
+  referenceReject,
   rpcReject,
 }: {
   queueError?: unknown;
   removeError?: unknown;
   rpcError?: unknown;
+  referenceData?: { id: string } | null;
+  referenceError?: unknown;
   removeReject?: unknown;
+  referenceReject?: unknown;
   rpcReject?: unknown;
 } = {}) {
   const remove = removeReject
@@ -88,7 +95,11 @@ function makeServiceClient({
   const rpc = rpcReject
     ? vi.fn().mockRejectedValue(rpcReject)
     : vi.fn().mockResolvedValue({ data: null, error: rpcError });
-  const referenceUserEq = vi.fn().mockResolvedValue({ data: null, error: null });
+  const referenceSingle = referenceReject
+    ? vi.fn().mockRejectedValue(referenceReject)
+    : vi.fn().mockResolvedValue({ data: referenceData, error: referenceError });
+  const referenceSelect = vi.fn().mockReturnValue({ single: referenceSingle });
+  const referenceUserEq = vi.fn().mockReturnValue({ select: referenceSelect });
   const referenceIdEq = vi.fn().mockReturnValue({ eq: referenceUserEq });
   const referenceUpdate = vi.fn().mockReturnValue({ eq: referenceIdEq });
 
@@ -114,6 +125,8 @@ function makeServiceClient({
     remove,
     rpc,
     referenceIdEq,
+    referenceSelect,
+    referenceSingle,
     referenceUpdate,
     referenceUserEq,
   };
@@ -124,8 +137,8 @@ beforeEach(() => {
 });
 
 describe("POST /api/cvs cleanup after storage upload", () => {
-  it("removes the exact object and provisional row when storage-path persistence fails", async () => {
-    const { client } = makeUploadClient({ message: "database unavailable" });
+  it("deletes the provisional row without uploading when durable path persistence fails", async () => {
+    const { client, upload } = makeUploadClient(null);
     const {
       client: serviceClient,
       remove,
@@ -133,17 +146,39 @@ describe("POST /api/cvs cleanup after storage upload", () => {
       referenceIdEq,
       referenceUpdate,
       referenceUserEq,
-    } = makeServiceClient();
+    } = makeServiceClient({ referenceError: { message: "database unavailable" } });
     createServerClientMock.mockResolvedValue(client as never);
     createServiceClientMock.mockReturnValue(serviceClient as never);
 
     const response = await POST(makeRequest() as never);
 
     expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "could not finalize cv record" });
     expect(referenceUpdate).toHaveBeenCalledWith({ storage_path: CV_PATH });
     expect(referenceIdEq).toHaveBeenCalledWith("id", CV_ID);
     expect(referenceUserEq).toHaveBeenCalledWith("user_id", USER_ID);
-    expect(remove).toHaveBeenCalledWith([CV_PATH]);
+    expect(upload).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+    expect(rpc).toHaveBeenCalledWith("delete_cv", {
+      p_cv_id: CV_ID,
+      p_user_id: USER_ID,
+    });
+  });
+
+  it("does not upload when durable path persistence matches no CV row", async () => {
+    const { client, upload } = makeUploadClient(null);
+    const { client: serviceClient, remove, rpc } = makeServiceClient({
+      referenceData: null,
+    });
+    createServerClientMock.mockResolvedValue(client as never);
+    createServiceClientMock.mockReturnValue(serviceClient as never);
+
+    const response = await POST(makeRequest() as never);
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "could not finalize cv record" });
+    expect(upload).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
     expect(rpc).toHaveBeenCalledWith("delete_cv", {
       p_cv_id: CV_ID,
       p_user_id: USER_ID,
@@ -171,8 +206,14 @@ describe("POST /api/cvs cleanup after storage upload", () => {
   });
 
   it("retains the durable CV row when storage removal resolves with an error", async () => {
-    const { client, deleteEq, update } = makeUploadClient(null);
-    const { client: serviceClient, remove, rpc } = makeServiceClient({
+    const { client, deleteEq, upload, update } = makeUploadClient(null);
+    const {
+      client: serviceClient,
+      referenceUpdate,
+      referenceUserEq,
+      remove,
+      rpc,
+    } = makeServiceClient({
       queueError: { message: "queue unavailable" },
       removeError: { message: "storage unavailable" },
     });
@@ -186,7 +227,11 @@ describe("POST /api/cvs cleanup after storage upload", () => {
       error: "could not enqueue cv extraction",
       cleanup: "incomplete",
     });
-    expect(update).toHaveBeenCalledWith({ storage_path: CV_PATH });
+    expect(referenceUpdate).toHaveBeenCalledWith({ storage_path: CV_PATH });
+    expect(referenceUserEq.mock.invocationCallOrder[0]).toBeLessThan(
+      upload.mock.invocationCallOrder[0],
+    );
+    expect(update).not.toHaveBeenCalled();
     expect(remove).toHaveBeenCalledWith([CV_PATH]);
     expect(rpc).not.toHaveBeenCalled();
     expect(deleteEq).not.toHaveBeenCalled();
@@ -216,8 +261,9 @@ describe("POST /api/cvs cleanup after storage upload", () => {
   });
 
   it("keeps the sanitized response when storage cleanup rejects", async () => {
-    const { client } = makeUploadClient({ message: "database unavailable" });
+    const { client } = makeUploadClient(null);
     const { client: serviceClient, rpc, referenceUpdate } = makeServiceClient({
+      queueError: { message: "queue unavailable" },
       removeReject: new Error("storage transport failure"),
     });
     createServerClientMock.mockResolvedValue(client as never);
@@ -229,7 +275,7 @@ describe("POST /api/cvs cleanup after storage upload", () => {
     const response = await responsePromise;
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({
-      error: "could not finalize cv record",
+      error: "could not enqueue cv extraction",
       cleanup: "incomplete",
     });
     expect(referenceUpdate).toHaveBeenCalledWith({ storage_path: CV_PATH });
