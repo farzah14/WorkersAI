@@ -165,6 +165,11 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: "invalid_cv_id" }, { status: 400 });
   }
 
+  const mode = new URL(request.url).searchParams.get("mode") ?? "original";
+  if (mode !== "original" && mode !== "full") {
+    return NextResponse.json({ error: "invalid_delete_mode" }, { status: 400 });
+  }
+
   const { data: cv } = await supabase
     .from("cvs")
     .select("id, storage_path")
@@ -188,12 +193,16 @@ export async function DELETE(request: Request) {
     }
   }
 
-  const { error: purgeError } = await serviceClient.rpc("delete_cv", {
+  const operation = mode === "original" ? "delete_original_cv" : "delete_cv";
+  const { error: purgeError } = await serviceClient.rpc(operation, {
     p_cv_id: cv.id,
     p_user_id: user.id,
   });
   if (purgeError) {
-    return NextResponse.json({ error: "cv_delete_failed" }, { status: 500 });
+    return NextResponse.json(
+      { error: mode === "original" ? "original_delete_failed" : "cv_delete_failed" },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ id: cv.id }, { status: 200 });

@@ -13,7 +13,7 @@ export default async function CvsPage() {
 
   const { data: cvs } = await supabase
     .from("cvs")
-    .select("id, original_name, extraction_status, is_active, created_at")
+    .select("id, original_name, extraction_status, is_active, storage_path, created_at")
     .order("created_at", { ascending: false });
 
   return (
@@ -32,7 +32,10 @@ export default async function CvsPage() {
             </div>
             <div className="flex items-center gap-3">
               <SetActiveCvForm cvId={cv.id} isActive={cv.is_active} />
-              <CvDeleteButton cvId={cv.id} />
+              {cv.storage_path && (
+                <CvDeleteButton cvId={cv.id} cvName={cv.original_name} mode="original" />
+              )}
+              <CvDeleteButton cvId={cv.id} cvName={cv.original_name} mode="full" />
               <time className="text-xs text-gray-400" dateTime={cv.created_at}>
                 {new Date(cv.created_at).toLocaleDateString()}
               </time>
