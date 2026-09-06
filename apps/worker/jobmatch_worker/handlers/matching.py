@@ -98,6 +98,12 @@ set status = %s, failed_count = %s, completed_at = now()
 where id = %s
 """
 
+_SUCCESSFUL_MATCHES_SQL = """
+select count(*) as matched
+from public.job_matches
+where search_run_id = %s
+"""
+
 
 def _failure_message(prefix: str, error: Exception) -> str:
     """Keep provider status details without persisting arbitrary exception text."""
@@ -129,9 +135,21 @@ async def _complete_run_if_terminal(
     )
     run = await run_cursor.fetchone() or {}
     failed = int(run.get("failed_count") or 0) + int(failed_result["failed"])
+
+    matches_cursor = await conn.execute(_SUCCESSFUL_MATCHES_SQL, (run_id,))
+    matches_result = await matches_cursor.fetchone()
+    matched = int(matches_result["matched"]) if matches_result and "matched" in matches_result else 0
+
+    if failed == 0:
+        status = "completed"
+    elif matched > 0:
+        status = "partial"
+    else:
+        status = "failed"
+
     await conn.execute(
         _RUN_COMPLETE_SQL,
-        ("completed" if failed == 0 else "partial", failed, run_id),
+        (status, failed, run_id),
     )
 
 
@@ -203,6 +221,7 @@ async def handle_extract_job_requirements(
         providers = build_ai_providers(settings)
         if not providers:
             await fail_item(conn, item_id, "no AI providers configured")
+            await _complete_runs_for_job_if_terminal(conn, str(job_id))
             return
         router = AiRouter(providers, operation=REQUIREMENT_EXTRACT_OPERATION, audit=audit)
     try:
@@ -285,6 +304,7 @@ async def handle_match_job(
         providers = build_ai_providers(settings)
         if not providers:
             await fail_item(conn, item_id, "no AI providers configured")
+            await _complete_run_if_terminal(conn, str(run_id), current_item_id=item_id)
             return
         router = AiRouter(providers, operation=MATCH_EXPLAIN_OPERATION, audit=audit)
     if semantic is None:
