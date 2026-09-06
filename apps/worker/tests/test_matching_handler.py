@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
+
 from jobmatch_worker.ai.base import AiResult, RetryableAiError
 
 PROFILE_JSON = {
@@ -298,8 +299,9 @@ async def test_extract_job_requirements_handler_persists_cache() -> None:
 
 @pytest.mark.asyncio
 async def test_extract_job_requirements_enqueues_matches_for_related_runs() -> None:
-    from jobmatch_worker.handlers.matching import handle_extract_job_requirements
     from psycopg.types.json import Jsonb
+
+    from jobmatch_worker.handlers.matching import handle_extract_job_requirements
 
     connection = _Connection(
         run_row=None,

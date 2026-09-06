@@ -4,6 +4,8 @@ from datetime import date
 from typing import Any
 
 import httpx
+from psycopg import AsyncConnection
+
 from jobmatch_worker.config import Settings
 from jobmatch_worker.exports.excel import build_excel_bytes
 from jobmatch_worker.exports.models import (
@@ -15,7 +17,6 @@ from jobmatch_worker.exports.models import (
 )
 from jobmatch_worker.exports.pdf import build_pdf_bytes
 from jobmatch_worker.queue import complete_item, fail_item, retry_item
-from psycopg import AsyncConnection
 
 _SCOPE_BEST_MIN_SCORE = 80
 
