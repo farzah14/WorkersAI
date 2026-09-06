@@ -682,7 +682,7 @@ git commit -m "fix: enable hybrid discovery provenance"
 - Create: `apps/web/tests/export-request-form.test.tsx`
 - Modify: `apps/worker/tests/test_export_service.py`
 
-- [ ] **Step 1: Write cross-runtime contract and UI tests**
+- [x] **Step 1: Write cross-runtime contract and UI tests**
 
 In the route test, submit and assert persistence of:
 
@@ -710,7 +710,7 @@ def test_web_shaped_export_filters_validate() -> None:
 
 Render `ExportRequestForm` with a run id, click Excel and PDF actions, assert `POST /api/exports` receives the chosen format, and assert pending/error/success text is accessible.
 
-- [ ] **Step 2: Verify the scalar/list and missing-control failures**
+- [x] **Step 2: Verify the scalar/list and missing-control failures**
 
 Run:
 
@@ -721,7 +721,7 @@ cd apps/worker && /tmp/workersai-tools/uv run pytest tests/test_export_service.p
 
 Expected: the web schema rejects region arrays and the form module is absent; the worker contract test passes and defines the target shape.
 
-- [ ] **Step 3: Implement the shared request shape and form**
+- [x] **Step 3: Implement the shared request shape and form**
 
 Change web `region` validation to:
 
@@ -742,7 +742,7 @@ Implement `ExportRequestForm` as a client component with `runId`, optional curre
 
 Read `apps/web/node_modules/next/dist/docs/01-app/01-getting-started/05-server-and-client-components.md` before implementing the boundary. On the server page, query the newest owned search run id and render the form above the list. Add identical key sets to both locale files: `createXlsx`, `createPdf`, `creating`, `requestAccepted`, and `requestFailed`.
 
-- [ ] **Step 4: Verify export behavior and Next build**
+- [x] **Step 4: Verify export behavior and Next build**
 
 Run:
 
@@ -759,7 +759,7 @@ cd apps/worker
 
 Expected: web tests/lint/typecheck/build and worker export tests/static checks pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/web/app/api/exports/route.ts apps/web/components/export-request-form.tsx apps/web/app/exports/page.tsx apps/web/messages/en.json apps/web/messages/id.json apps/web/tests/export-request.test.ts apps/web/tests/export-request-form.test.tsx apps/worker/tests/test_export_service.py
