@@ -386,7 +386,7 @@ git commit -m "fix: preserve profiles when deleting original CVs"
 - Create: `apps/web/tests/signup-actions.test.ts`
 - Modify: `apps/web/app/(auth)/actions.ts`
 
-- [ ] **Step 1: Add redirect-contract tests**
+- [x] **Step 1: Add redirect-contract tests**
 
 Mock `createClient` and `redirect`; because Next.js redirects throw, assert the destination:
 
@@ -406,13 +406,13 @@ it("sends a sessionless signup to login", async () => {
 });
 ```
 
-- [ ] **Step 2: Verify the authenticated case is red**
+- [x] **Step 2: Verify the authenticated case is red**
 
 Run: `corepack pnpm --dir apps/web test -- tests/signup-actions.test.ts`
 
 Expected: dashboard assertion fails and `signOut` is called.
 
-- [ ] **Step 3: Branch on the Supabase session**
+- [x] **Step 3: Branch on the Supabase session**
 
 Read the Next 16 redirect guide at `apps/web/node_modules/next/dist/docs/01-app/03-api-reference/04-functions/redirect.md`, then change the action to:
 
@@ -424,7 +424,7 @@ if (data.session) redirect("/dashboard");
 redirect("/login?registered=1");
 ```
 
-- [ ] **Step 4: Verify auth and runtime checks**
+- [x] **Step 4: Verify auth and runtime checks**
 
 Run:
 
@@ -436,7 +436,7 @@ corepack pnpm --dir apps/web typecheck
 
 Expected: all focused tests and checks pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add 'apps/web/app/(auth)/actions.ts' apps/web/tests/signup-actions.test.ts
