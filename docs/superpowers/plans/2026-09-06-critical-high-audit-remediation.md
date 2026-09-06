@@ -773,7 +773,7 @@ git commit -m "fix: align export filters and request controls"
 - Modify: `apps/worker/tests/test_matching_handler.py`
 - Modify: `apps/worker/jobmatch_worker/handlers/matching.py`
 
-- [ ] **Step 1: Write no-provider terminal-accounting tests**
+- [x] **Step 1: Write no-provider terminal-accounting tests**
 
 Add one test for requirement extraction and one for direct matching:
 
@@ -801,13 +801,13 @@ async def test_match_job_without_provider_completes_run_accounting() -> None:
 
 For requirement extraction, configure `_RUNS_FOR_JOB_SQL` to return the affected run and assert it receives a terminal run update after the work item fails.
 
-- [ ] **Step 2: Verify both paths are red**
+- [x] **Step 2: Verify both paths are red**
 
 Run: `cd apps/worker && /tmp/workersai-tools/uv run pytest tests/test_matching_handler.py -k 'without_provider' -q`
 
 Expected: the item is failed but no run completion update is executed.
 
-- [ ] **Step 3: Call completion accounting before each no-provider return**
+- [x] **Step 3: Call completion accounting before each no-provider return**
 
 Use the same helpers already used by other terminal errors:
 
@@ -829,7 +829,7 @@ if not providers:
 
 If the run has no successful matches, update `_complete_run_if_terminal` to select the successful match count and choose `failed` for zero successes plus failures, `partial` for successes plus failures, and `completed` for no failures.
 
-- [ ] **Step 4: Verify matching and worker checks**
+- [x] **Step 4: Verify matching and worker checks**
 
 Run:
 
@@ -842,7 +842,7 @@ cd apps/worker
 
 Expected: all matching tests and static checks pass.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/worker/jobmatch_worker/handlers/matching.py apps/worker/tests/test_matching_handler.py
