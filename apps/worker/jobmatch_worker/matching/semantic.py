@@ -1,8 +1,7 @@
 """Optional cloud embedding similarity with deterministic lexical fallback.
 
-Embeddings are an internal matching helper, not a generative AI operation:
-they never trigger NVIDIA/OpenRouter, and there is no local embedding
-server in the MVP. When no ``OLLAMA_EMBED_MODEL`` is configured or the
+Embeddings are an internal matching helper, routed through 9Router OpenAI-compatible
+embeddings endpoint. When no ``NINEROUTER_EMBED_MODEL`` is configured or the
 cloud embedding request fails, matching degrades to token-set similarity
 and records ``degraded=True`` in the match result.
 """
@@ -13,10 +12,10 @@ from dataclasses import dataclass, field
 
 import httpx
 
-from jobmatch_worker.ai.ollama import OLLAMA_CLOUD_BASE_URL
+from jobmatch_worker.ai.ninerouter import NINEROUTER_DEFAULT_BASE_URL
 
 MAX_INPUT_CHARS = 512
-EMBED_PATH = "embed"
+EMBED_PATH = "embeddings"
 EMBED_TIMEOUT_SECONDS = 10.0
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+")
@@ -50,34 +49,49 @@ def cosine_similarity(left: Sequence[float], right: Sequence[float]) -> float:
 
 
 class EmbeddingClient:
-    """Ollama Cloud embedding client; never used for generative calls."""
+    """9Router / OpenAI-compatible embedding client; never used for generative calls."""
 
     def __init__(
         self,
         *,
-        api_key: str,
+        api_key: str = "",
         model: str,
-        base_url: str = OLLAMA_CLOUD_BASE_URL,
+        base_url: str = NINEROUTER_DEFAULT_BASE_URL,
         client: httpx.AsyncClient | None = None,
         timeout: float = EMBED_TIMEOUT_SECONDS,
+        embed_path: str | None = None,
     ) -> None:
         self._api_key = api_key
         self._model = model
         self._base_url = base_url.rstrip("/")
         self._owns_client = client is None
         self._client = client if client is not None else httpx.AsyncClient(timeout=timeout)
+        if embed_path is not None:
+            self._embed_path = embed_path
+        elif self._base_url.endswith("/api"):
+            self._embed_path = "embed"
+        else:
+            self._embed_path = "embeddings"
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
+        headers: dict[str, str] = {}
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
         response = await self._client.post(
-            f"{self._base_url}/{EMBED_PATH}",
+            f"{self._base_url}/{self._embed_path.lstrip('/')}",
             json={
                 "model": self._model,
                 "input": [normalize_for_semantic(text) for text in texts],
             },
-            headers={"Authorization": f"Bearer {self._api_key}"},
+            headers=headers if headers else None,
         )
         response.raise_for_status()
-        return response.json()["embeddings"]
+        data = response.json()
+        if "data" in data and isinstance(data["data"], list):
+            return [item["embedding"] for item in data["data"]]
+        if "embeddings" in data and isinstance(data["embeddings"], list):
+            return data["embeddings"]
+        raise ValueError("Unexpected embeddings response shape")
 
     async def aclose(self) -> None:
         if self._owns_client:

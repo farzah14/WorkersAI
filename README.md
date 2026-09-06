@@ -39,12 +39,8 @@ Worker / Scheduler VPS
   |
   v
 AI Provider Router
-  +---- NVIDIA NIM
-  +---- OpenRouter
-  +---- Ollama Cloud
+  +---- 9Router (OpenAI-compatible AI gateway)
 ```
-
-Ollama is cloud-only in the MVP. The VPS does not host an Ollama daemon or local AI model.
 
 ## Repository documentation
 
@@ -88,7 +84,7 @@ Do not skip forward while an earlier milestone has failing acceptance checks.
 - Supabase Auth/PostgreSQL/private Storage.
 - Python 3.12+ worker.
 - PostgreSQL durable queue; no Redis in the MVP.
-- NVIDIA NIM + OpenRouter + Ollama Cloud fallback.
+- 9Router OpenAI-compatible AI gateway.
 - Vitest + Playwright + pytest + SQL/RLS tests.
 
 ## Local development

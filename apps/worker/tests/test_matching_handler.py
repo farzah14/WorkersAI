@@ -121,17 +121,11 @@ class _FailingRouter:
 def _settings(**overrides: Any) -> SimpleNamespace:
     values: dict[str, Any] = {
         "max_attempts": 3,
-        "ollama_embed_model": "",
-        "ollama_api_key": "",
-        "ollama_model": "",
-        "ollama_base_url": "https://ollama.com/api",
-        "nvidia_api_key": "",
-        "nvidia_model": "",
-        "nvidia_base_url": "https://integrate.api.nvidia.com/v1",
-        "openrouter_api_key": "",
-        "openrouter_model": "",
-        "openrouter_base_url": "https://openrouter.ai/api/v1",
-        "ai_provider_order": "nvidia",
+        "ninerouter_embed_model": "",
+        "ninerouter_api_key": "",
+        "ninerouter_model": "",
+        "ninerouter_base_url": "http://localhost:20128/v1",
+        "ai_provider_order": "9router",
         "ai_timeout_seconds": 1.0,
     }
     values.update(overrides)

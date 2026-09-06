@@ -127,3 +127,26 @@ async def test_embedding_client_sends_batched_authorized_request(httpx_mock: Any
     assert payload["model"] == "embed-model"
     assert payload["input"] == ["python", "aws"]
     assert len(vectors) == 2
+
+
+@pytest.mark.asyncio
+async def test_embedding_client_handles_openai_format(httpx_mock: Any) -> None:
+    httpx_mock.add_response(
+        json={"data": [{"embedding": [1.0, 0.0]}, {"embedding": [0.0, 1.0]}]},
+    )
+    client = EmbeddingClient(
+        api_key="token",
+        model="text-embedding-3-small",
+        base_url="http://localhost:20128/v1",
+        client=httpx.AsyncClient(),
+    )
+    vectors = await client.embed(["python", "AWS!"])
+    request = httpx_mock.get_requests()[-1]
+    payload = json.loads(request.content)
+    assert str(request.url) == "http://localhost:20128/v1/embeddings"
+    assert request.headers["Authorization"] == "Bearer token"
+    assert payload["model"] == "text-embedding-3-small"
+    assert payload["input"] == ["python", "aws"]
+    assert len(vectors) == 2
+    assert vectors[0] == [1.0, 0.0]
+    assert vectors[1] == [0.0, 1.0]

@@ -181,11 +181,11 @@ async def _enqueue_match_items(
 
 
 def build_semantic_matcher(settings: Settings) -> SemanticMatcher:
-    if settings.ollama_embed_model:
+    if settings.ninerouter_embed_model:
         client = EmbeddingClient(
-            api_key=settings.ollama_api_key,
-            model=settings.ollama_embed_model,
-            base_url=settings.ollama_base_url,
+            api_key=settings.ninerouter_api_key,
+            model=settings.ninerouter_embed_model,
+            base_url=settings.ninerouter_base_url,
             timeout=settings.ai_timeout_seconds,
         )
     else:

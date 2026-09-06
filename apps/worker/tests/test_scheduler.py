@@ -87,8 +87,7 @@ def make_settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
     monkeypatch.setenv("DATABASE_URL", "postgresql://u:p@localhost:5432/db")
     monkeypatch.setenv("SUPABASE_URL", "http://localhost:54321")
     monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "test-key")
-    monkeypatch.setenv("OLLAMA_API_KEY", "ollama-key")
-    monkeypatch.setenv("OLLAMA_MODEL", "llama3.2")
+    monkeypatch.setenv("NINEROUTER_MODEL", "gpt-4o-mini")
     return Settings(_env_file=None)
 
 
