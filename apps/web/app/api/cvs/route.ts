@@ -172,11 +172,14 @@ export async function DELETE(request: Request) {
 
   const { data: cv } = await supabase
     .from("cvs")
-    .select("id, storage_path")
+    .select("id, storage_path, extraction_status")
     .eq("id", cvId)
     .eq("user_id", user.id)
     .maybeSingle();
   if (!cv) return NextResponse.json({ error: "cv_not_found" }, { status: 404 });
+  if (mode === "original" && cv.extraction_status !== "extracted") {
+    return NextResponse.json({ error: "cv_not_ready" }, { status: 409 });
+  }
 
   const serviceClient = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

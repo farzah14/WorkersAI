@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
 import { DELETE as deleteCv } from "@/app/api/cvs/route";
 import { DELETE as deleteAccount } from "@/app/api/account/delete/route";
+import CvsPage from "@/app/cvs/page";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 
@@ -9,6 +11,10 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@supabase/supabase-js", () => ({
   createClient: vi.fn(),
+}));
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn(),
+  useRouter: () => ({ refresh: vi.fn() }),
 }));
 
 const createServerClientMock = vi.mocked(createServerClient);
@@ -105,7 +111,10 @@ describe("DELETE /api/cvs", () => {
   });
 
   it("deletes only the original object before preserving the CV profile", async () => {
-    authOnly(cvClient({ data: { id: CV_ID, storage_path: CV_PATH }, error: null }));
+    authOnly(cvClient({
+      data: { id: CV_ID, storage_path: CV_PATH, extraction_status: "extracted" },
+      error: null,
+    }));
     const calls: string[] = [];
     const serviceClient = cvServiceClient([]);
     serviceClient.storage.from = vi.fn(() => ({
@@ -153,7 +162,10 @@ describe("DELETE /api/cvs", () => {
   });
 
   it("defaults legacy callers to non-destructive original deletion", async () => {
-    authOnly(cvClient({ data: { id: CV_ID, storage_path: null }, error: null }));
+    authOnly(cvClient({
+      data: { id: CV_ID, storage_path: null, extraction_status: "extracted" },
+      error: null,
+    }));
     const serviceClient = cvServiceClient([]);
     createServiceClientMock.mockReturnValue(serviceClient as never);
 
@@ -211,7 +223,10 @@ describe("DELETE /api/cvs", () => {
   });
 
   it("does not clear the database reference when object removal fails", async () => {
-    authOnly(cvClient({ data: { id: CV_ID, storage_path: CV_PATH }, error: null }));
+    authOnly(cvClient({
+      data: { id: CV_ID, storage_path: CV_PATH, extraction_status: "extracted" },
+      error: null,
+    }));
     const serviceClient = cvServiceClient([]);
     serviceClient.storage.from = vi.fn(() => ({
       remove: vi.fn().mockResolvedValue({
@@ -225,6 +240,74 @@ describe("DELETE /api/cvs", () => {
 
     expect(response.status).toBe(500);
     expect(serviceClient.rpc).not.toHaveBeenCalled();
+  });
+
+  it.each(["queued", "processing", "failed"])(
+    "rejects original deletion while extraction is %s",
+    async (extractionStatus) => {
+      authOnly(cvClient({
+        data: { id: CV_ID, storage_path: CV_PATH, extraction_status: extractionStatus },
+        error: null,
+      }));
+      const serviceClient = cvServiceClient([]);
+      createServiceClientMock.mockReturnValue(serviceClient as never);
+
+      const response = await deleteCv(makeRequest(CV_ID, "original"));
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toEqual({ error: "cv_not_ready" });
+      expect(serviceClient.storage.from).not.toHaveBeenCalled();
+      expect(serviceClient.rpc).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe("CV retention actions", () => {
+  it("shows original deletion only after extraction completes", async () => {
+    const cvs = [
+      {
+        id: "11111111-1111-1111-1111-111111111111",
+        original_name: "Ready CV",
+        extraction_status: "extracted",
+        is_active: true,
+        storage_path: "ready/resume.pdf",
+        created_at: "2026-09-06T00:00:00Z",
+      },
+      ...["queued", "processing", "failed"].map((status, index) => ({
+        id: `22222222-2222-2222-2222-22222222222${index}`,
+        original_name: `${status} CV`,
+        extraction_status: status,
+        is_active: false,
+        storage_path: `${status}/resume.pdf`,
+        created_at: "2026-09-06T00:00:00Z",
+      })),
+    ];
+    authOnly({
+      auth: { getUser: vi.fn().mockResolvedValue(authenticatedUser()) },
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnValue({
+          order: vi.fn().mockResolvedValue({ data: cvs, error: null }),
+        }),
+      })),
+    });
+
+    render(await CvsPage());
+
+    const readyRow = screen.getByText("Ready CV").closest("li");
+    expect(readyRow).not.toBeNull();
+    expect(
+      within(readyRow!).getByRole("button", { name: "Delete original file for Ready CV" }),
+    ).toBeDefined();
+
+    for (const status of ["queued", "processing", "failed"]) {
+      const row = screen.getByText(`${status} CV`).closest("li");
+      expect(row).not.toBeNull();
+      expect(
+        within(row!).queryByRole("button", {
+          name: `Delete original file for ${status} CV`,
+        }),
+      ).toBeNull();
+    }
   });
 });
 

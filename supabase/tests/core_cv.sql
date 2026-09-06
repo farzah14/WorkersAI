@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap;
 
-select plan(22);
+select plan(24);
 
 select is(
     (select count(*) from pg_tables where schemaname = 'public' and tablename = 'profiles'),
@@ -169,6 +169,25 @@ values (
     'extracted'
 );
 
+insert into public.cvs (
+    id,
+    user_id,
+    original_name,
+    mime_type,
+    storage_path,
+    retain_original,
+    extraction_status
+)
+values (
+    '10000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000001',
+    'queued-resume.pdf',
+    'application/pdf',
+    '00000000-0000-0000-0000-000000000001/10000000-0000-0000-0000-000000000002/queued-resume.pdf',
+    true,
+    'queued'
+);
+
 insert into public.candidate_profiles (id, user_id, cv_id, version, profile)
 values (
     '20000000-0000-0000-0000-000000000001',
@@ -201,6 +220,21 @@ select throws_ok(
 );
 
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select public.delete_original_cv(
+    '10000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000001'
+);
+select is(
+    (select storage_path from public.cvs where id = '10000000-0000-0000-0000-000000000002'),
+    '00000000-0000-0000-0000-000000000001/10000000-0000-0000-0000-000000000002/queued-resume.pdf',
+    'original deletion preserves storage path until extraction completes'
+);
+select is(
+    (select retain_original from public.cvs where id = '10000000-0000-0000-0000-000000000002'),
+    true,
+    'original deletion preserves retention until extraction completes'
+);
+
 select public.delete_original_cv(
     '10000000-0000-0000-0000-000000000001',
     '00000000-0000-0000-0000-000000000002'

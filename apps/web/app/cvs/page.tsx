@@ -32,7 +32,7 @@ export default async function CvsPage() {
             </div>
             <div className="flex items-center gap-3">
               <SetActiveCvForm cvId={cv.id} isActive={cv.is_active} />
-              {cv.storage_path && (
+              {cv.storage_path && cv.extraction_status === "extracted" && (
                 <CvDeleteButton cvId={cv.id} cvName={cv.original_name} mode="original" />
               )}
               <CvDeleteButton cvId={cv.id} cvName={cv.original_name} mode="full" />

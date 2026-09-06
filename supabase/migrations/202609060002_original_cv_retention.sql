@@ -16,7 +16,8 @@ begin
      set storage_path = null,
          retain_original = false
    where id = p_cv_id
-     and user_id = p_user_id;
+     and user_id = p_user_id
+     and extraction_status = 'extracted';
 end;
 $$;
 
