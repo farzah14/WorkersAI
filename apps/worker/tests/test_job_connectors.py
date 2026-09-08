@@ -1378,6 +1378,23 @@ async def test_career_page_extracts_company_from_og_site_name() -> None:
     assert content.company == "Michael Page Indonesia"
 
 
+async def test_generic_og_description_is_not_a_location() -> None:
+    html = b"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Engineer - Acme</title>
+    <meta property="og:description"
+        content="Join our engineering team and build great products." />
+</head>
+<body>
+    <h1>Engineer</h1>
+    <p>Build software.</p>
+</body>
+</html>"""
+    content = _extract_page_content(html, source_key="career_page")
+    assert content.location is None
+
+
 async def test_career_page_extracts_greenhouse_application_format() -> None:
     html = b"""<!DOCTYPE html>
 <html>
