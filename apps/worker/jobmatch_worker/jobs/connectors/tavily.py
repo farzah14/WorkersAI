@@ -22,8 +22,8 @@ TAVILY_MAX_COUNT = 20
 TAVILY_DEFAULT_COUNT = 20
 TAVILY_SEARCH_DEPTH = "basic"
 _JOB_QUERY_MARKERS = ("job", "jobs", "career", "careers", "vacancy", "hiring")
-_DEMO_HOST_MARKERS = (
-    "leverdemo",
+_DEMO_HOST_SUBSTRINGS = ("leverdemo",)
+_BLOCKED_HOST_DOMAINS = (
     "example.com",
     "example.org",
     "example.net",
@@ -179,12 +179,14 @@ def _job_query_terms(query: SearchQuery) -> str:
 
 def _is_allowed_job_result(url: str, title: str | None) -> bool:
     parsed = urllib.parse.urlsplit(url)
-    host = (parsed.hostname or "").casefold()
+    host = (parsed.hostname or "").rstrip(".").casefold()
     path = (parsed.path or "").casefold()
     query = (parsed.query or "").casefold()
     title_text = (title or "").casefold()
 
-    if any(marker in host for marker in _DEMO_HOST_MARKERS):
+    if any(marker in host for marker in _DEMO_HOST_SUBSTRINGS):
+        return False
+    if any(host == domain or host.endswith(f".{domain}") for domain in _BLOCKED_HOST_DOMAINS):
         return False
     if any(marker in title_text for marker in _DEMO_TITLE_MARKERS):
         return False

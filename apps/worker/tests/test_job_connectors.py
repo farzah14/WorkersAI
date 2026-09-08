@@ -1432,3 +1432,28 @@ def test_tavily_rejects_aggregator_urls() -> None:
         "https://careers.services.global.ntt/global/en/job/R-141604/Software-Engineer",
         "Software Engineer at NTT Data",
     )
+
+
+@pytest.mark.parametrize(
+    "host",
+    [
+        "jobs.netflix.com",
+        "careers.spacex.com",
+        "careers.fedex.com",
+        "jobs.straitsx.com",
+    ],
+)
+def test_tavily_allows_employer_domain_suffixes(host: str) -> None:
+    from jobmatch_worker.jobs.connectors.tavily import _is_allowed_job_result
+
+    assert _is_allowed_job_result(
+        f"https://{host}/jobs/123",
+        "Software Engineer",
+    )
+
+
+@pytest.mark.parametrize("host", ["x.com", "www.x.com", "x.com."])
+def test_tavily_rejects_blocked_domain_and_subdomains(host: str) -> None:
+    from jobmatch_worker.jobs.connectors.tavily import _is_allowed_job_result
+
+    assert not _is_allowed_job_result(f"https://{host}/jobs/123", "Software Engineer")
