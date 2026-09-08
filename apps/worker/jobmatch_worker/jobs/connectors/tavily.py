@@ -202,9 +202,7 @@ def _is_allowed_job_result(url: str, title: str | None) -> bool:
         return False
     if re.search(r"\btop\s+\d*\s*companies\b", title_text):
         return False
-    if re.search(r"\bjob\s+opportunities\s+(?:in|di)\b", title_text):
-        return False
-    return True
+    return not re.search(r"\bjob\s+opportunities\s+(?:in|di)\b", title_text)
 
 
 def _contains_excluded_keyword(

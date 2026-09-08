@@ -408,9 +408,10 @@ def _extract_meta_job_metadata(
             loc_tag = soup.find(class_=lambda c: c and "location" in c.lower())
             if loc_tag:
                 location = clean_optional_str(collapse_whitespace(loc_tag.get_text(" ")))
-            elif og_desc := _meta_content(soup, "property", "og:description"):
-                if len(og_desc) < 80 and not og_desc.strip().startswith("<"):
-                    location = clean_optional_str(og_desc)
+            elif (
+                og_desc := _meta_content(soup, "property", "og:description")
+            ) and len(og_desc) < 80 and not og_desc.strip().startswith("<"):
+                location = clean_optional_str(og_desc)
 
     return _JobPostingMetadata(
         title=title,
