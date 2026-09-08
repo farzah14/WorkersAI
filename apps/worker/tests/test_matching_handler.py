@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from jobmatch_worker.ai.base import AiResult, RetryableAiError
+from jobmatch_worker.matching.cache_key import requirements_cache_key
 
 PROFILE_JSON = {
     "name": "Rina",
@@ -281,7 +282,7 @@ async def test_extract_job_requirements_handler_persists_cache() -> None:
     ]
     assert len(inserts) == 1
     assert inserts[0][0] == "job-5"
-    assert inserts[0][1] == "h5"
+    assert inserts[0][1] == requirements_cache_key("Python required")
 
     completed_items = [
         params
@@ -318,9 +319,10 @@ async def test_extract_job_requirements_enqueues_matches_for_related_runs() -> N
         and params[0] == "match_job"
     ]
     assert len(match_items) == 2
+    description_hash = requirements_cache_key("Python required")
     assert {params[1] for params in match_items} == {
-        "match_job:run-5:job-6:h6",
-        "match_job:run-6:job-6:h6",
+        f"match_job:run-5:job-6:{description_hash}",
+        f"match_job:run-6:job-6:{description_hash}",
     }
     payloads = [params[2] for params in match_items]
     assert all(isinstance(payload, Jsonb) for payload in payloads)

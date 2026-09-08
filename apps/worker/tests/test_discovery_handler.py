@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from types import SimpleNamespace
 from typing import Any
 
@@ -10,6 +9,7 @@ from jobmatch_worker.handlers.discovery import _build_sources
 from jobmatch_worker.jobs.connectors.base import SourceDataError, SourceUnavailable
 from jobmatch_worker.jobs.connectors.career_page import CareerPageContent
 from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
+from jobmatch_worker.matching.cache_key import requirements_cache_key
 
 
 class _Cursor:
@@ -319,7 +319,7 @@ async def test_discovery_enqueues_match_for_cached_requirements() -> None:
     connection = _Connection(
         run_row,
         cached_job_hashes={
-            "job-1": hashlib.sha256(b"Description for Data Engineer").hexdigest()
+            "job-1": requirements_cache_key("Description for Data Engineer")
         },
     )
 

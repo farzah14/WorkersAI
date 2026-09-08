@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from jobmatch_worker.ai.base import PermanentAiError, StructuredOutputError
 from jobmatch_worker.ai.router import AiRouter
+from jobmatch_worker.matching.cache_key import MAX_REQUIREMENT_TEXT_CHARS
 from jobmatch_worker.matching.models import JobRequirements
 from jobmatch_worker.matching.prompt import (
     build_requirements_system_prompt,
@@ -31,6 +32,10 @@ def _validation_summary(exc: ValidationError) -> str:
 async def extract_job_requirements(job_text: str, router: AiRouter) -> JobRequirements:
     if not job_text.strip():
         raise PermanentAiError("cannot extract requirements from empty job text")
+    if len(job_text) > MAX_REQUIREMENT_TEXT_CHARS:
+        raise PermanentAiError(
+            f"job text exceeds {MAX_REQUIREMENT_TEXT_CHARS} characters"
+        )
     schema: dict[str, Any] = JobRequirements.model_json_schema()
     system = build_requirements_system_prompt(schema)
     user = build_requirements_user_prompt(job_text)
@@ -51,6 +56,10 @@ async def cached_job_requirements(
     job_text: str,
     router: AiRouter,
 ) -> JobRequirements:
+    if len(job_text) > MAX_REQUIREMENT_TEXT_CHARS:
+        raise PermanentAiError(
+            f"job text exceeds {MAX_REQUIREMENT_TEXT_CHARS} characters"
+        )
     cursor = await conn.execute(
         """
         select description_hash, requirements

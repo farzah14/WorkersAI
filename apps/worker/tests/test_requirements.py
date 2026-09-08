@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 import pytest
@@ -7,7 +8,9 @@ from psycopg.types.json import Jsonb
 from pydantic import ValidationError
 
 from jobmatch_worker.ai.base import AiResult, PermanentAiError, StructuredOutputError
+from jobmatch_worker.matching.cache_key import requirements_cache_key
 from jobmatch_worker.matching.models import JobRequirement, JobRequirements
+from jobmatch_worker.matching.prompt import build_requirements_user_prompt
 from jobmatch_worker.matching.requirements import (
     cached_job_requirements,
     extract_job_requirements,
@@ -91,6 +94,37 @@ def test_requirements_require_at_least_one_item() -> None:
 async def test_extract_rejects_empty_job_text() -> None:
     with pytest.raises(PermanentAiError):
         await extract_job_requirements("   ", _FakeRouter({"requirements": []}))
+
+
+def test_requirements_prompt_preserves_tail() -> None:
+    text = "Company background. " * 900 + "MUST HAVE: active nursing license."
+    prompt = build_requirements_user_prompt(text)
+    assert text in prompt
+
+
+@pytest.mark.asyncio
+async def test_extract_rejects_oversized_job_text_before_provider_call() -> None:
+    router = _FakeRouter(
+        {
+            "requirements": [
+                {
+                    "category": "skill",
+                    "value": "Python",
+                    "criticality": "must",
+                    "evidence": "Python",
+                }
+            ]
+        }
+    )
+    with pytest.raises(PermanentAiError, match="job text exceeds"):
+        await extract_job_requirements("x" * 100_001, router)
+    assert router.calls == 0
+
+
+def test_requirement_cache_key_is_versioned_and_deterministic() -> None:
+    assert requirements_cache_key("description") == requirements_cache_key("description")
+    assert requirements_cache_key("description") != requirements_cache_key("changed")
+    assert requirements_cache_key("description") != "description"
 
 
 @pytest.mark.asyncio
@@ -191,3 +225,24 @@ async def test_cached_requirements_hash_change_replaces_cache() -> None:
     assert reqs.requirements[0].value == "SQL"
     inserts = [q for q, _ in conn.executed if "insert into public.job_requirements" in q.lower()]
     assert len(inserts) == 1
+
+
+@pytest.mark.asyncio
+async def test_cached_requirements_legacy_hash_is_not_a_cache_hit() -> None:
+    router = _FakeRouter(
+        {
+            "requirements": [
+                {"category": "skill", "value": "SQL", "criticality": "must", "evidence": "y"}
+            ]
+        }
+    )
+    legacy_hash = hashlib.sha256(b"desc").hexdigest()
+    conn = _Connection({"description_hash": legacy_hash, "requirements": {"requirements": []}})
+    await cached_job_requirements(
+        conn,
+        job_id="job-1",
+        description_hash=requirements_cache_key("desc"),
+        job_text="desc",
+        router=router,
+    )
+    assert router.calls == 1

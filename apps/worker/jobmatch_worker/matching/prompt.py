@@ -27,12 +27,9 @@ def build_requirements_system_prompt(schema: dict[str, Any]) -> str:
     )
 
 
-_MAX_JOB_TEXT_PROMPT_CHARS = 15_000
-
-
 def build_requirements_user_prompt(job_text: str) -> str:
-    trimmed_text = job_text[:_MAX_JOB_TEXT_PROMPT_CHARS].strip()
-    return f"Extract the employment requirements from this job description text.\n\nJob text:\n{trimmed_text}"
+    text = job_text.strip()
+    return f"Extract the employment requirements from this job description text.\n\nJob text:\n{text}"
 
 
 __all__ = ["build_requirements_system_prompt", "build_requirements_user_prompt"]

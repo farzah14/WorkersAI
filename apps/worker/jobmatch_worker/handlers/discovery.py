@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -35,6 +34,10 @@ from jobmatch_worker.jobs.dedupe import (
 from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
 from jobmatch_worker.jobs.normalize import NormalizedJob, normalize_job
 from jobmatch_worker.jobs.query import SearchQuery, build_queries
+from jobmatch_worker.matching.cache_key import (
+    MAX_REQUIREMENT_TEXT_CHARS,
+    requirements_cache_key,
+)
 from jobmatch_worker.queue import complete_item, enqueue_item, fail_item, retry_item
 
 _SOURCE_CONCURRENCY = 4
@@ -43,7 +46,7 @@ _MAX_CAREER_CANDIDATES = 120
 _MAX_TITLE_CHARS = 300
 _MAX_COMPANY_CHARS = 300
 _MAX_LOCATION_CHARS = 300
-_MAX_DESCRIPTION_CHARS = 100_000
+_MAX_DESCRIPTION_CHARS = MAX_REQUIREMENT_TEXT_CHARS
 _RUN_SELECT_SQL = """
 select r.id, r.status, r.trigger, r.candidate_profile_id,
        sp.region, sp.target_roles, sp.locations, sp.work_modes,
@@ -373,7 +376,7 @@ async def _enqueue_requirement_work(
 
     has_downstream_work = False
     for job, job_id in zip(jobs, job_ids, strict=True):
-        description_hash = hashlib.sha256(job.description.encode("utf-8")).hexdigest()
+        description_hash = requirements_cache_key(job.description)
         if cached_hashes.get(str(job_id)) == description_hash:
             await enqueue_item(
                 conn,

@@ -1,6 +1,5 @@
 """Work-item handlers for job requirement extraction and hybrid matching."""
 
-import hashlib
 from typing import Any
 
 from psycopg import AsyncConnection
@@ -9,6 +8,7 @@ from jobmatch_worker.ai.base import PermanentAiError, RetryableAiError
 from jobmatch_worker.ai.router import AiAuditRecorder, AiRouter
 from jobmatch_worker.config import Settings
 from jobmatch_worker.handlers.profile import build_ai_providers
+from jobmatch_worker.matching.cache_key import requirements_cache_key
 from jobmatch_worker.matching.requirements import cached_job_requirements
 from jobmatch_worker.matching.semantic import EmbeddingClient, SemanticMatcher
 from jobmatch_worker.matching.service import run_match
@@ -203,9 +203,9 @@ async def handle_extract_job_requirements(
 ) -> None:
     payload = item.get("payload") or {}
     job_id = payload.get("job_id")
-    description_hash = payload.get("description_hash")
+    queued_description_hash = payload.get("description_hash")
     item_id = str(item["id"])
-    if not job_id or not description_hash:
+    if not job_id or not queued_description_hash:
         await fail_item(conn, item_id, "payload missing job_id or description_hash")
         return
 
@@ -215,6 +215,8 @@ async def handle_extract_job_requirements(
         await fail_item(conn, item_id, "job not found")
         await _complete_runs_for_job_if_terminal(conn, str(job_id))
         return
+
+    description_hash = requirements_cache_key(job["description"])
 
     owned_router = router is None
     if router is None:
@@ -297,7 +299,7 @@ async def handle_match_job(
         return
 
     locations = list(run.get("locations") or [])
-    description_hash = hashlib.sha256(job["description"].encode("utf-8")).hexdigest()
+    description_hash = requirements_cache_key(job["description"])
 
     owned_router = router is None
     if router is None:
