@@ -4,6 +4,16 @@
 **Status:** Approved final design baseline
 **Product phase:** MVP, architected for later recruiter/HR expansion
 
+> **Current implementation amendment (2026-09-09):** The approved runtime uses
+> a provider-neutral AI router backed by one configurable 9Router
+> OpenAI-compatible gateway. `AI_PROVIDER_ORDER` defaults to `9router`;
+> `NINEROUTER_BASE_URL`, `NINEROUTER_MODEL`, optional `NINEROUTER_API_KEY`, and
+> optional `NINEROUTER_EMBED_MODEL` are the active configuration contract. The
+> historical multi-provider examples below describe the original design
+> exploration and do not override `AGENTS.md` or the implemented architecture.
+> No local Ollama daemon, model pull, GPU inference, or port `11434` dependency
+> is permitted.
+
 ## 1. Product Summary
 
 AI Job Matcher is a SaaS for individual job seekers. A user uploads a CV, the system extracts a structured candidate profile, discovers relevant jobs automatically, scores each job against the candidate profile, explains strengths and gaps, recommends next actions, and exports results to Excel or PDF with clickable original job links.

@@ -2,11 +2,19 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Convert extracted CV text into an editable, schema-valid candidate profile while automatically falling back across NVIDIA NIM, OpenRouter, and Ollama Cloud.
+**Goal:** Convert extracted CV text into an editable, schema-valid candidate profile through the configured 9Router gateway with bounded retry and circuit handling.
 
 **Architecture:** The Python worker owns a provider-neutral `AiProvider` contract. All providers receive the same prompt/schema and return Pydantic-validated structured output; a router applies timeout, retry, circuit-breaker, and fallback rules and records sanitized operational metadata.
 
-**Tech Stack:** Python 3.12, Pydantic, HTTPX, PostgreSQL, NVIDIA NIM/OpenAI-compatible API, OpenRouter, Ollama Cloud HTTP API, pytest, Next.js/Supabase for profile review UI.
+**Tech Stack:** Python 3.12, Pydantic, HTTPX, PostgreSQL, 9Router OpenAI-compatible HTTP API, pytest, Next.js/Supabase for profile review UI.
+
+> **Current implementation amendment (2026-09-09):** The provider adapter task
+> below is historical design text. The shipped implementation has one
+> `NineRouterProvider` in `ai/ninerouter.py`; do not create or restore
+> `nvidia.py`, `openrouter.py`, or `ollama.py`, and do not add those provider
+> names to `AI_PROVIDER_ORDER`. The router's fallback boundary is the configured
+> 9Router gateway and its circuit/retry policy. The current source of truth for
+> deployment and provider configuration is `AGENTS.md` plus `docs/AI-PROVIDERS.md`.
 
 ---
 
@@ -14,7 +22,7 @@
 
 ```text
 apps/worker/jobmatch_worker/
-├── ai/{base,router,nvidia,openrouter,ollama}.py
+├── ai/{base,router,ninerouter}.py
 ├── ai/circuit_breaker.py
 ├── profiles/{models,prompt,extract}.py
 └── handlers/profile.py
@@ -170,79 +178,54 @@ git add apps/worker
 git commit -m "feat: define candidate profile and ai contracts"
 ```
 
-### Task 3: Implement NVIDIA, OpenRouter, and Ollama adapters
-
-Before Step 1 run:
-```bash
-cd apps/worker && uv add --dev pytest-httpx
-```
+### Task 3: Implement the configured 9Router adapter
 
 **Files:**
-- Create: `apps/worker/jobmatch_worker/ai/nvidia.py`
-- Create: `apps/worker/jobmatch_worker/ai/openrouter.py`
-- Create: `apps/worker/jobmatch_worker/ai/ollama.py`
+- Existing: `apps/worker/jobmatch_worker/ai/ninerouter.py`
+- Existing: `apps/worker/jobmatch_worker/ai/router.py`
 - Test: `apps/worker/tests/test_ai_adapters.py`
 
 - [ ] **Step 1: Write failing mocked HTTP contract tests**
 
-Each adapter test must assert the configured model, non-streaming behavior, provider-specific authorization, and returned `AiResult.data`. NVIDIA/OpenRouter tests assert their supported structured-output request fields. Ollama Cloud tests assert Bearer authentication, the cloud base URL, JSON-only prompting, JSON parsing, and application-side schema validation rather than assuming native JSON-schema enforcement.
+The adapter test must assert the configured model, non-streaming behavior,
+optional bearer authorization, the OpenAI-compatible endpoint, and returned
+`AiResult.data`. The application must parse and validate the response rather
+than trusting gateway-native schema enforcement.
 
 Example:
 ```python
 @pytest.mark.asyncio
-async def test_openrouter_uses_json_schema(httpx_mock):
+async def test_ninerouter_uses_configured_model(httpx_mock):
     httpx_mock.add_response(json={"choices":[{"message":{"content":"{\\"ok\\":true}"}}]})
-    provider = OpenRouterProvider(api_key="x", model="free-model", client=httpx.AsyncClient())
+    provider = NineRouterProvider(api_key="x", model="configured-model", base_url="http://gateway/v1", client=httpx.AsyncClient())
     result = await provider.generate_structured(system="s", user="u", schema={"type":"object","properties":{"ok":{"type":"boolean"}},"required":["ok"]})
     assert result.data == {"ok": True}
 ```
 Expected first run: FAIL.
 
-- [ ] **Step 2: Implement OpenRouter adapter**
+- [ ] **Step 2: Verify the 9Router request**
 
-Send `POST https://openrouter.ai/api/v1/chat/completions` with `response_format.type='json_schema'`, strict schema, `stream=false`, timeout from settings, and parse `choices[0].message.content` as JSON. Treat HTTP 408/429/5xx as retryable; 400/401/403 as permanent configuration/input errors.
+Send `POST {NINEROUTER_BASE_URL}/chat/completions` with the configured model,
+non-streaming JSON output, bounded timeout, and optional bearer authorization.
+Parse `choices[0].message.content` as JSON and classify HTTP 408/429/5xx as
+retryable; 400/401/403 as permanent configuration/input errors.
 
-- [ ] **Step 3: Implement NVIDIA NIM adapter**
+- [ ] **Step 3: Verify application-side schema validation**
 
-Use the configured OpenAI-compatible NIM base URL. Send the schema using NIM structured-generation fields supported by the selected endpoint/model; keep this translation inside `nvidia.py` so callers remain provider-neutral. Validate the response with the same Pydantic schema after JSON parsing.
+Validate parsed response data against the caller-supplied schema in the common
+router path. Do not add provider-specific adapters or model names.
 
-- [ ] **Step 4: Implement Ollama Cloud adapter**
+- [ ] **Step 4: Keep the gateway cloud/local boundary explicit**
 
-Update `.env.example` and worker settings with server-only `OLLAMA_API_KEY`, `OLLAMA_BASE_URL=https://ollama.com/api`, and required `OLLAMA_MODEL`. Do not provide a hardcoded model default. When `ollama` is present in `AI_PROVIDER_ORDER`, startup validation must require both the API key and model identifier.
-
-Implement the cloud request without a local daemon dependency:
-```python
-schema_text = json.dumps(schema, separators=(",", ":"))
-payload = {
-    "model": self.model,
-    "stream": False,
-    "options": {"temperature": 0},
-    "messages": [
-        {
-            "role": "system",
-            "content": f"{system}\nReturn JSON only. It must satisfy this JSON Schema: {schema_text}",
-        },
-        {"role": "user", "content": user},
-    ],
-}
-response = await self.client.post(
-    f"{self.base_url.rstrip('/')}/chat",
-    headers={"Authorization": f"Bearer {self.api_key}"},
-    json=payload,
-    timeout=self.timeout,
-)
-response.raise_for_status()
-body = response.json()
-data = json.loads(body["message"]["content"])
-```
-
-Validate `data` against the caller-supplied Pydantic/JSON schema in the common adapter path. Invalid JSON or schema-invalid output is a retryable structured-output failure according to the bounded router policy. Never call `localhost:11434`, pull a model, or start an Ollama container.
+Use only the configured 9Router endpoint. Never call `localhost:11434`, pull a
+model, or start an Ollama container. Validate parsed response data against the
+caller-supplied Pydantic/JSON schema in the common router path.
 
 - [ ] **Step 5: Run adapter tests and commit**
 
 ```bash
 cd apps/worker && uv run pytest tests/test_ai_adapters.py -q
-git add apps/worker && git commit -m "feat: add three ai provider adapters"
+git add apps/worker && git commit -m "test: verify 9router adapter contract"
 ```
 Expected: PASS.
 
@@ -258,17 +241,15 @@ Expected: PASS.
 ```python
 @pytest.mark.asyncio
 async def test_router_falls_back_on_retryable_failure():
-    nvidia = FakeProvider("nvidia", retryable=True)
-    openrouter = FakeProvider("openrouter", data={"ok": True})
-    ollama = FakeProvider("ollama", data={"ok": True})
-    result = await AiRouter([nvidia, openrouter, ollama]).generate_structured(system="s", user="u", schema=SCHEMA)
-    assert result.provider == "openrouter"
+    gateway = FakeProvider("9router", retryable=True)
+    result = await AiRouter([gateway]).generate_structured(system="s", user="u", schema=SCHEMA)
+    assert result.provider == "9router"
 
 @pytest.mark.asyncio
 async def test_router_does_not_fallback_on_invalid_business_input():
-    nvidia = FakeProvider("nvidia", permanent=True)
+    gateway = FakeProvider("9router", permanent=True)
     with pytest.raises(PermanentAiError):
-        await AiRouter([nvidia]).generate_structured(system="s", user="u", schema=SCHEMA)
+        await AiRouter([gateway]).generate_structured(system="s", user="u", schema=SCHEMA)
 ```
 Expected: FAIL.
 
@@ -278,7 +259,11 @@ Use states `closed`, `open`, `half_open`. Open after 3 consecutive retryable pro
 
 - [ ] **Step 3: Implement router rules**
 
-Default order comes from env `AI_PROVIDER_ORDER=nvidia,ollama,openrouter`. Each provider receives one immediate call plus at most one retry with jitter for transport/429/5xx errors. Schema validation failure is retryable once on the same provider, then falls back. Invalid CV/input validation errors never enter the router.
+Default order comes from env `AI_PROVIDER_ORDER=9router`. The configured
+gateway receives one immediate call plus at most one retry with jitter for
+transport/429/5xx errors. Schema validation failure is retryable once on the
+same gateway, then the operation fails. Invalid CV/input validation errors
+never enter the router.
 
 - [ ] **Step 4: Persist AI request metadata**
 

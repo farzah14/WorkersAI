@@ -67,13 +67,15 @@ copy .env.example .env
 
 Edit `.env` locally. Do not paste real secrets into chat, commit history, screenshots, or issue text.
 
-The MVP uses cloud AI providers:
+The MVP uses the provider-neutral AI router backed by a 9Router OpenAI-compatible
+gateway. Configure `AI_PROVIDER_ORDER=9router`, `NINEROUTER_BASE_URL`, and
+`NINEROUTER_MODEL`; keep `NINEROUTER_API_KEY` server-side and leave it blank only
+when the gateway is configured for keyless access. The default endpoint is
+`http://localhost:20128/v1`; production containers must override it when the
+gateway is outside the container network namespace.
 
-```text
-NVIDIA NIM -> OpenRouter -> Ollama Cloud
-```
-
-There is no local Ollama setup step.
+Live provider checks are opt-in with `RUN_LIVE_AI_TESTS=1`. There is no local
+Ollama setup step or port `11434` production dependency.
 
 ## 5. Execute plans in order
 

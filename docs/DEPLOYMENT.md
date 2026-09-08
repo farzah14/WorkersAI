@@ -16,12 +16,14 @@ One persistent VPS
   - scheduler
 
 External AI
-  - NVIDIA NIM
-  - OpenRouter
-  - Ollama Cloud
+  - 9Router OpenAI-compatible gateway
 ```
 
-There is no local Ollama service in production.
+The worker talks to 9Router through `NINEROUTER_BASE_URL`. The default
+`http://localhost:20128/v1` is suitable only when the gateway is reachable from
+the worker container at that address; set a network-reachable production URL
+otherwise. There is no local Ollama service or port `11434` dependency in
+production.
 
 ## 1. Supabase
 
@@ -92,17 +94,16 @@ Do not add:
 The VPS `.env.production` is not committed. It contains the database/storage credentials required by the worker and:
 
 ```dotenv
-AI_PROVIDER_ORDER=nvidia,ollama,openrouter
-NVIDIA_API_KEY=...
-NVIDIA_BASE_URL=...
-NVIDIA_MODEL=...
-OPENROUTER_API_KEY=...
-OPENROUTER_MODEL=...
-OLLAMA_API_KEY=...
-OLLAMA_BASE_URL=https://ollama.com/api
-OLLAMA_MODEL=...
-OLLAMA_EMBED_MODEL=
+AI_PROVIDER_ORDER=9router
+AI_TIMEOUT_SECONDS=30
+NINEROUTER_BASE_URL=http://localhost:20128/v1
+NINEROUTER_API_KEY=...
+NINEROUTER_MODEL=...
+NINEROUTER_EMBED_MODEL=
 ```
+
+`NINEROUTER_MODEL` is required when `9router` is in the provider order. The
+API key is server-only and may be empty only for a keyless local gateway.
 
 ## 5. Provider behavior
 

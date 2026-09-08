@@ -108,6 +108,6 @@ Do not log prompts containing raw CV text, API keys, authorization headers, full
 
 ## Testing
 
-Ordinary tests mock provider HTTP behavior. Live tests against 9Router are optional and gated with `ENABLE_LIVE_AI_TESTS=1`.
+Ordinary tests mock provider HTTP behavior. Live tests against 9Router are optional and gated with `RUN_LIVE_AI_TESTS=1`.
 
 Provider contract tests confirm that the adapter produces the validated internal result shape.
