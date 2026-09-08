@@ -8,6 +8,14 @@
 
 **Tech Stack:** Next.js 16 App Router, TypeScript, Vitest, Supabase/PostgreSQL/pgtap, Python 3.12, asyncio, psycopg, Pydantic, pytest, Ruff, and mypy.
 
+> **Verification correction (2026-09-09):** The historical task checkboxes
+> below describe commits that existed before the current audit remediation.
+> Settings originally omitted `mode=full`; that caller contract is repaired in
+> commit `eaa7b27`. The local web and worker gates are fresh, but SQL/RLS,
+> authenticated Playwright, and Compose checks remain unverified because this
+> environment has no Supabase CLI, Docker, or `apps/web/.env`. See
+> `docs/VERIFICATION-2026-09-08.md` for the exact boundary.
+
 ---
 
 ## File map
@@ -294,6 +302,11 @@ git commit -m "fix: clean up failed CV storage writes"
 ```
 
 ### Task 4: Restore original-file retention behavior
+
+The route, database operation, and original-only UI behavior in this historical
+task are complete. The separate Settings full-deletion caller contract was
+missing from this task's original checklist and is covered by the follow-up
+regression in `apps/web/tests/settings-actions.test.tsx` and commit `eaa7b27`.
 
 **Files:**
 - Create: `supabase/migrations/202609060002_original_cv_retention.sql`
@@ -877,7 +890,7 @@ cd apps/worker
 
 Expected: 0 failed tests; only the three explicitly gated live-provider tests may skip; Ruff and mypy exit 0.
 
-- [x] **Step 3: Run database, Compose, and E2E gates when available**
+- [ ] **Step 3: Run database, Compose, and E2E gates when available**
 
 ```bash
 supabase db reset
@@ -887,6 +900,11 @@ corepack pnpm --dir apps/web exec playwright test
 ```
 
 Expected: migrations apply, pgtap has 0 failures, Compose exits 0 without an Ollama service, and authenticated E2E passes. Report missing executables, unavailable daemons, or absent seeded services as unverified boundaries.
+
+Current result: **not verified**. `supabase` and `docker` are not installed;
+Playwright starts the web server but stops before seeding because
+`apps/web/.env` is absent. Do not mark this step complete until the disposable
+integration environment is available.
 
 - [x] **Step 4: Check secrets, whitespace, and requirement coverage**
 
@@ -901,3 +919,5 @@ Expected: whitespace check is clean, secret scan prints no tracked credentials, 
 - [x] **Step 5: Record final status**
 
 Re-read `docs/superpowers/specs/2026-09-06-critical-high-audit-remediation-design.md` and this plan. Check off only requirements supported by fresh command output. Report any unavailable integration boundary separately from code/test failures.
+
+The fresh local status is recorded in `docs/VERIFICATION-2026-09-08.md`.
