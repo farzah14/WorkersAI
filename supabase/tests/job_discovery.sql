@@ -456,8 +456,8 @@ select is(
     (select coalesce(rowsecurity, false)
      from pg_tables
      where schemaname = 'public' and tablename = 'jobs'),
-    false,
-    'global jobs does not use owner rls'
+    true,
+    'shared jobs catalog uses authenticated read rls'
 );
 
 select is(
