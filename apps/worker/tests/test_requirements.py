@@ -8,7 +8,10 @@ from psycopg.types.json import Jsonb
 from pydantic import ValidationError
 
 from jobmatch_worker.ai.base import AiResult, PermanentAiError, StructuredOutputError
-from jobmatch_worker.matching.cache_key import requirements_cache_key
+from jobmatch_worker.matching.cache_key import (
+    MAX_REQUIREMENT_TEXT_CHARS,
+    requirements_cache_key,
+)
 from jobmatch_worker.matching.models import JobRequirement, JobRequirements
 from jobmatch_worker.matching.prompt import build_requirements_user_prompt
 from jobmatch_worker.matching.requirements import (
@@ -28,13 +31,25 @@ class _FakeRouter:
         self._data = data
         self.calls = 0
         self.system_prompts: list[str] = []
+        self.user_prompts: list[str] = []
 
     async def generate_structured(
         self, *, system: str, user: str, schema: dict[str, Any]
     ) -> AiResult:
         self.calls += 1
         self.system_prompts.append(system)
+        self.user_prompts.append(user)
         return AiResult(provider="nvidia", model="nim-model", data=self._data, latency_ms=1)
+
+
+class _FailingRouter:
+    calls = 0
+
+    async def generate_structured(
+        self, *, system: str, user: str, schema: dict[str, Any]
+    ) -> AiResult:
+        self.calls += 1
+        raise StructuredOutputError("synthetic provider validation failure")
 
 
 class _Cursor:
@@ -119,6 +134,30 @@ async def test_extract_rejects_oversized_job_text_before_provider_call() -> None
     with pytest.raises(PermanentAiError, match="job text exceeds"):
         await extract_job_requirements("x" * 100_001, router)
     assert router.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_extract_accepts_exactly_maximum_job_text_and_sends_it_complete() -> None:
+    router = _FakeRouter(
+        {
+            "requirements": [
+                {
+                    "category": "skill",
+                    "value": "Python",
+                    "criticality": "must",
+                    "evidence": "Python",
+                }
+            ]
+        }
+    )
+    text = "x" * MAX_REQUIREMENT_TEXT_CHARS
+
+    requirements = await extract_job_requirements(text, router)
+
+    assert requirements.requirements[0].value == "Python"
+    assert router.calls == 1
+    assert router.user_prompts[0].endswith(text)
+    assert len(router.user_prompts[0].rsplit("Job text:\n", 1)[-1]) == MAX_REQUIREMENT_TEXT_CHARS
 
 
 def test_requirement_cache_key_is_versioned_and_deterministic() -> None:
@@ -246,3 +285,36 @@ async def test_cached_requirements_legacy_hash_is_not_a_cache_hit() -> None:
         router=router,
     )
     assert router.calls == 1
+
+
+@pytest.mark.asyncio
+async def test_cached_requirements_failure_preserves_existing_cache() -> None:
+    existing_requirements = {
+        "requirements": [
+            {"category": "skill", "value": "Python", "criticality": "must", "evidence": "x"}
+        ]
+    }
+    conn = _Connection(
+        {
+            "description_hash": requirements_cache_key("old description"),
+            "requirements": existing_requirements,
+        }
+    )
+    router = _FailingRouter()
+
+    with pytest.raises(StructuredOutputError, match="synthetic provider validation failure"):
+        await cached_job_requirements(
+            conn,
+            job_id="job-1",
+            description_hash=requirements_cache_key("new description"),
+            job_text="new description",
+            router=router,
+        )
+
+    assert router.calls == 1
+    assert conn.row == {
+        "description_hash": requirements_cache_key("old description"),
+        "requirements": existing_requirements,
+    }
+    inserts = [q for q, _ in conn.executed if "insert into public.job_requirements" in q.lower()]
+    assert inserts == []
