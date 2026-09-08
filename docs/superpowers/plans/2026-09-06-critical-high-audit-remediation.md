@@ -921,3 +921,15 @@ Expected: whitespace check is clean, secret scan prints no tracked credentials, 
 Re-read `docs/superpowers/specs/2026-09-06-critical-high-audit-remediation-design.md` and this plan. Check off only requirements supported by fresh command output. Report any unavailable integration boundary separately from code/test failures.
 
 The fresh local status is recorded in `docs/VERIFICATION-2026-09-08.md`.
+
+### 2026-09-09 review follow-up
+
+The follow-up review corrected the new `jobs_visibility.sql` privilege calls to
+use PostgreSQL's supported three-argument `has_table_privilege` form inside
+pgTAP `ok(...)` assertions. It also added Settings failure-state coverage,
+requirements boundary/prompt/cache-preservation coverage, and browser checks
+for OAuth callback routing, CV retention/deletion, export downloads, and
+account deletion. These changes pass the available local gates, but Step 3
+remains open because Supabase CLI, Docker/Compose, and the authenticated
+Playwright environment are still unavailable. Production readiness remains
+unverified.

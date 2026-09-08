@@ -22,6 +22,42 @@ This record distinguishes fresh local evidence from checks blocked by missing in
 
 The skipped worker test is intentionally quota-free behavior. It does not prove gateway reachability or production model compatibility.
 
+## Review follow-up (2026-09-09)
+
+The reviewed follow-up commits are `8ffb0a9`, `ba6a88f`, `85de858`, and
+`f489c37`, on top of the original remediation sequence.
+
+- `supabase/tests/jobs_visibility.sql` now wraps both role privilege checks in
+  pgTAP `ok(...)` assertions. PostgreSQL documents `has_table_privilege` with
+  two- or three-argument forms; the assertion description is now supplied to
+  pgTAP instead of the PostgreSQL function. See the
+  [PostgreSQL 15 access-privilege function contract](https://www.postgresql.org/docs/15/functions-info.html#FUNCTIONS-INFO-ACCESS-TABLE).
+- Settings component coverage now checks sanitized failure feedback,
+  re-enablement, and no refresh after a failed full-deletion response.
+- Requirements coverage now checks the exact 100,000-character boundary,
+  complete user-prompt delivery at the router boundary, and preservation of an
+  existing cache row after extraction failure.
+- Browser acceptance now includes the missing-code OAuth callback branch,
+  original-only retention, Settings full deletion, account deletion, and a
+  gated completed-export download check. The completed-export check requires
+  `RUN_EXPORT_E2E=1` and a running worker/storage environment.
+
+Fresh local rerun after these changes:
+
+| Area | Command | Result |
+|---|---|---|
+| Worker unit/integration tests | `cd apps/worker && uv run pytest -q` | **Passed: 389 passed, 1 skipped** |
+| Worker Ruff | `cd apps/worker && uv run ruff check .` | **Passed** |
+| Worker mypy | `cd apps/worker && uv run mypy jobmatch_worker` | **Passed — 49 files** |
+| Web tests | `corepack pnpm --dir apps/web test` | **Passed: 19 files, 153 tests** |
+| Web lint and TypeScript | `corepack pnpm --dir apps/web lint` and `tsc --noEmit --incremental false` | **Passed** |
+| Git whitespace check | `git diff --check` | **Passed** |
+
+The new browser tests were typechecked and linted but not executed because the
+normal Playwright command still stops in global setup when `apps/web/.env` is
+absent. SQL/RLS and Docker/Compose remain blocked by the missing Supabase CLI
+and Docker executables.
+
 ## Blocked integration gates
 
 | Area | Command | Result and unblock condition |
