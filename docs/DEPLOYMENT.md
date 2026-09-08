@@ -100,10 +100,15 @@ NINEROUTER_BASE_URL=http://localhost:20128/v1
 NINEROUTER_API_KEY=...
 NINEROUTER_MODEL=...
 NINEROUTER_EMBED_MODEL=
+EXPORTS_BUCKET=exports
+DAILY_DISCOVERY_HOUR_JAKARTA=7
+REQUIREMENT_EXTRACTION_ENABLED=true
 ```
 
 `NINEROUTER_MODEL` is required when `9router` is in the provider order. The
 API key is server-only and may be empty only for a keyless local gateway.
+The worker also accepts the legacy `EXPORT_BUCKET` and
+`DAILY_DISCOVERY_HOUR_ASIA_JAKARTA` names, but canonical names take precedence.
 
 ## 5. Provider behavior
 

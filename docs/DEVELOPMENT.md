@@ -71,6 +71,11 @@ Edit `.env` locally. Do not paste real secrets into chat, commit history, screen
 keeps newly discovered jobs flowing through requirement extraction and matching;
 set it to `false` only when an intentional discovery-only run is needed.
 
+Worker configuration uses `EXPORTS_BUCKET` and
+`DAILY_DISCOVERY_HOUR_JAKARTA`. Older `EXPORT_BUCKET` and
+`DAILY_DISCOVERY_HOUR_ASIA_JAKARTA` names remain accepted as compatibility
+aliases; canonical names win when both are present.
+
 The MVP uses the provider-neutral AI router backed by a 9Router OpenAI-compatible
 gateway. Configure `AI_PROVIDER_ORDER=9router`, `NINEROUTER_BASE_URL`, and
 `NINEROUTER_MODEL`; keep `NINEROUTER_API_KEY` server-side and leave it blank only
