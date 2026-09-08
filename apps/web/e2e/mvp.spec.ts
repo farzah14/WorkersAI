@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { inflateRawSync } from "node:zlib";
+import { inflateRawSync, inflateSync } from "node:zlib";
 
 // Full MVP acceptance journey. Worker-level criteria (partial source
 // success, normalization/dedup, cached requirements, daily scheduler,
@@ -62,6 +62,73 @@ function decodeXmlText(value: string): string {
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'");
+}
+
+function decodeAscii85(input: Buffer): Buffer {
+  const encoded = input.toString("ascii").replace(/\s+/g, "").replace(/~>$/, "");
+  const output: number[] = [];
+  let group: number[] = [];
+
+  const flush = (values: number[]): void => {
+    let accumulator = 0;
+    for (const value of values) accumulator = accumulator * 85 + value;
+    for (let index = 3; index >= 0; index -= 1) {
+      output.push((accumulator >>> (index * 8)) & 0xff);
+    }
+  };
+
+  for (const character of encoded) {
+    if (character === "z" && group.length === 0) {
+      output.push(0, 0, 0, 0);
+      continue;
+    }
+    group.push(character.charCodeAt(0) - 33);
+    if (group.length === 5) {
+      flush(group);
+      group = [];
+    }
+  }
+
+  if (group.length > 0) {
+    const originalLength = group.length;
+    while (group.length < 5) group.push("u".charCodeAt(0) - 33);
+    flush(group);
+    output.splice(output.length - (5 - originalLength));
+  }
+  return Buffer.from(output);
+}
+
+function readPdfText(pdf: Buffer): string {
+  const streamMarker = Buffer.from("stream");
+  const endMarker = Buffer.from("endstream");
+  const chunks: string[] = [];
+  let cursor = 0;
+
+  while (true) {
+    const streamOffset = pdf.indexOf(streamMarker, cursor);
+    if (streamOffset < 0) break;
+    let dataStart = streamOffset + streamMarker.length;
+    if (pdf[dataStart] === 13 && pdf[dataStart + 1] === 10) dataStart += 2;
+    else if (pdf[dataStart] === 10) dataStart += 1;
+    const endOffset = pdf.indexOf(endMarker, dataStart);
+    if (endOffset < 0) break;
+
+    const dictionaryStart = pdf.lastIndexOf(Buffer.from("<<"), streamOffset);
+    const dictionary = pdf.subarray(dictionaryStart, streamOffset).toString("latin1");
+    let dataEnd = endOffset;
+    while (dataEnd > dataStart && (pdf[dataEnd - 1] === 10 || pdf[dataEnd - 1] === 13)) dataEnd -= 1;
+    let decoded = pdf.subarray(dataStart, dataEnd);
+    try {
+      if (dictionary.includes("/ASCII85Decode")) decoded = decodeAscii85(decoded);
+      if (dictionary.includes("/FlateDecode")) decoded = inflateSync(decoded);
+      chunks.push(decoded.toString("latin1"));
+    } catch {
+      // Ignore non-content streams; report content streams are ASCII85/Flate encoded.
+    }
+    cursor = endOffset + endMarker.length;
+  }
+
+  return chunks.join("\n").replace(/\\([()\\])/g, "$1");
 }
 
 test("acceptance: email login and Google OAuth entry point", async ({ page }) => {
@@ -341,6 +408,7 @@ test("acceptance: original-only retention keeps profile data", async ({ page }) 
 });
 
 test("acceptance: completed exports download generated artifacts and preserve filters", async ({ page }) => {
+  test.setTimeout(180_000);
   test.skip(
     process.env.RUN_EXPORT_E2E !== "1",
     "Set RUN_EXPORT_E2E=1 with the worker and storage service running to verify completed exports.",
@@ -407,7 +475,14 @@ test("acceptance: completed exports download generated artifacts and preserve fi
       expect(titles).not.toContain("BI Developer");
       expect(titles).not.toContain("Receptionist");
     }
-    if (format === "pdf") expect(artifact.subarray(0, 5).toString()).toBe("%PDF-");
+    if (format === "pdf") {
+      expect(artifact.subarray(0, 5).toString()).toBe("%PDF-");
+      const pdfText = readPdfText(artifact);
+      expect(pdfText).toContain("Data Engineer (Airflow)");
+      expect(pdfText).toContain("Senior Data Analyst");
+      expect(pdfText).not.toContain("BI Developer");
+      expect(pdfText).not.toContain("Receptionist");
+    }
   }
 });
 
