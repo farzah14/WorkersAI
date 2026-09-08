@@ -81,4 +81,33 @@ The Playwright command started the Next.js web server successfully, then global 
 3. Validate `compose.production.yml` and build the worker image with a staging-only `.env.production`; ensure the 9Router URL is reachable from the container network.
 4. Enable the live AI test only when a test gateway/model and quota are intentionally available. Record pass or skip separately from normal CI.
 
-Until those steps are completed, local code gates are verified but SQL/RLS, authenticated E2E, and deployment readiness remain unverified.
+At the time of the runs above, local code gates were verified but SQL/RLS,
+authenticated E2E, and deployment readiness remained unverified. The update
+below supersedes the earlier SQL/tooling blocker.
+
+## Local database verification follow-up (2026-09-09)
+
+Verified on `fix/jobs-rls-and-discovery`, based on `2264300` with the
+`profiles_ai.sql` fixture correction committed alongside this record.
+Docker and the local Supabase instance `matcher_saas` are now available.
+No database reset was performed during this follow-up; the SQL suites use
+transactions and roll back their synthetic fixtures.
+
+- Reproduced the focused failure: the search-profile fixture referenced the
+  nonexistent `title` column, aborting after 13 of 18 planned assertions.
+- Corrected the fixture to reference an existing synthetic candidate profile
+  and supply the required region and target roles. Strengthened the linkage
+  assertion to verify the newly saved, confirmed profile rather than merely
+  checking a non-null foreign key. No application code or migrations changed.
+- `npx --no-install supabase test db supabase/tests/profiles_ai.sql`:
+  **PASS, 1 file / 18 tests, exit 0**.
+- `npx --no-install supabase test db`:
+  **PASS, 8 files / 301 tests, exit 0**, including `core_cv.sql` and
+  `jobs_visibility.sql`.
+- `git diff --check`: **PASS**.
+
+On this Ubuntu session, commands were executed through `sg docker -c` to use
+the user's existing Docker group membership without restarting the desktop.
+These results close the previously missing local SQL/RLS execution evidence.
+Authenticated browser flows, Compose validation/build, and real OAuth/provider
+verification were not run in this follow-up and remain separate gates.

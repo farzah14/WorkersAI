@@ -143,9 +143,15 @@ values
     ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'cv1.pdf', 'application/pdf', 'path1', true, 'extracted'),
     ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'cv2.pdf', 'application/pdf', 'path2', false, 'extracted');
 
-insert into public.search_profiles (id, user_id, is_current, title)
+insert into public.candidate_profiles (id, user_id, cv_id, version, profile)
 values
-    ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', true, 'Default Search Profile');
+    ('30000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
+     '10000000-0000-0000-0000-000000000001', 1, '{"seniority":"junior"}'::jsonb);
+
+insert into public.search_profiles (id, user_id, candidate_profile_id, region, target_roles, is_current)
+values
+    ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
+     '30000000-0000-0000-0000-000000000001', 'indonesia', array['Data Engineer'], true);
 
 select set_config(
     'request.jwt.claims',
@@ -176,7 +182,13 @@ select is(
 );
 
 select is(
-    (select candidate_profile_id is not null from public.search_profiles where id = '20000000-0000-0000-0000-000000000001'),
+    (select sp.candidate_profile_id = cp.id
+     from public.search_profiles sp
+     join public.candidate_profiles cp
+       on cp.cv_id = '10000000-0000-0000-0000-000000000002'
+      and cp.version = 1
+      and cp.confirmed_at is not null
+     where sp.id = '20000000-0000-0000-0000-000000000001'),
     true,
     'search profile links to confirmed candidate profile'
 );
