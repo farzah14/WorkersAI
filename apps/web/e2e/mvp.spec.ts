@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { inflateRawSync } from "node:zlib";
 
 // Full MVP acceptance journey. Worker-level criteria (partial source
 // success, normalization/dedup, cached requirements, daily scheduler,
@@ -31,6 +32,36 @@ async function signIn(page: Page): Promise<void> {
   await page.getByLabel("Password").fill(SEED_PASSWORD);
   await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("**/dashboard");
+}
+
+function readZipEntry(zip: Buffer, entryName: string): Buffer {
+  for (let offset = 0; offset + 30 <= zip.length; ) {
+    if (zip.readUInt32LE(offset) !== 0x04034b50) break;
+    const compression = zip.readUInt16LE(offset + 8);
+    const compressedSize = zip.readUInt32LE(offset + 18);
+    const nameLength = zip.readUInt16LE(offset + 26);
+    const extraLength = zip.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
+    const dataStart = nameStart + nameLength + extraLength;
+    const name = zip.subarray(nameStart, dataStart - extraLength).toString("utf8");
+    const data = zip.subarray(dataStart, dataStart + compressedSize);
+    if (name === entryName) {
+      if (compression === 0) return data;
+      if (compression === 8) return inflateRawSync(data);
+      throw new Error(`Unsupported XLSX compression method: ${compression}`);
+    }
+    offset = dataStart + compressedSize;
+  }
+  throw new Error(`Missing XLSX entry: ${entryName}`);
+}
+
+function decodeXmlText(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
 }
 
 test("acceptance: email login and Google OAuth entry point", async ({ page }) => {
@@ -330,7 +361,7 @@ test("acceptance: completed exports download generated artifacts and preserve fi
         searchRunId: state.runId,
         format,
         scope: "current_filters",
-        filters: { min_score: 80, status: ["new"] },
+        filters: { min_score: 80 },
       },
     );
     expect(response.status).toBe(202);
@@ -366,7 +397,16 @@ test("acceptance: completed exports download generated artifacts and preserve fi
     expect(artifactPath).not.toBeNull();
     const artifact = readFileSync(artifactPath!);
     expect(artifact.byteLength).toBeGreaterThan(100);
-    if (format === "xlsx") expect(artifact.subarray(0, 2).toString()).toBe("PK");
+    if (format === "xlsx") {
+      expect(artifact.subarray(0, 2).toString()).toBe("PK");
+      const sheetXml = readZipEntry(artifact, "xl/worksheets/sheet1.xml").toString("utf8");
+      const titles = [...sheetXml.matchAll(/<c r="A\d+"[^>]*><is><t>(.*?)<\/t>/g)].map((match) =>
+        decodeXmlText(match[1]),
+      );
+      expect(titles).toEqual(expect.arrayContaining(["Data Engineer (Airflow)", "Senior Data Analyst"]));
+      expect(titles).not.toContain("BI Developer");
+      expect(titles).not.toContain("Receptionist");
+    }
     if (format === "pdf") expect(artifact.subarray(0, 5).toString()).toBe("%PDF-");
   }
 });
