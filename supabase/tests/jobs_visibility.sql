@@ -29,12 +29,12 @@ select is(
     'authenticated shared jobs select policy exists'
 );
 
-select has_table_privilege(
-    'authenticated', 'public.jobs', 'select',
+select ok(
+    has_table_privilege('authenticated', 'public.jobs', 'select'),
     'authenticated role can select the shared jobs catalog'
 );
-select has_table_privilege(
-    'service_role', 'public.jobs', 'select',
+select ok(
+    has_table_privilege('service_role', 'public.jobs', 'select'),
     'service role can select the shared jobs catalog'
 );
 select is(
