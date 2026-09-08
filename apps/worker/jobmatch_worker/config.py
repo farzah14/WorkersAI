@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     max_attempts: int = 3
     daily_discovery_hour_jakarta: int = 7
     scheduler_interval_minutes: int = 15
-    requirement_extraction_enabled: bool = False
+    requirement_extraction_enabled: bool = True
     ai_provider_order: str = "9router"
     ai_timeout_seconds: float = 30.0
     ninerouter_api_key: str = ""

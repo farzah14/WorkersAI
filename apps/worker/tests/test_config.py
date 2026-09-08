@@ -61,6 +61,16 @@ def test_default_connector_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.tavily_api_key == ""
     assert settings.greenhouse_board_token == ""
     assert settings.lever_site_name == ""
+    assert settings.requirement_extraction_enabled is True
+
+
+def test_requirement_extraction_can_be_disabled_explicitly(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_base_env(monkeypatch)
+    monkeypatch.setenv("NINEROUTER_MODEL", "gpt-4o-mini")
+    monkeypatch.setenv("REQUIREMENT_EXTRACTION_ENABLED", "false")
+    settings = Settings(_env_file=None)
     assert settings.requirement_extraction_enabled is False
 
 
