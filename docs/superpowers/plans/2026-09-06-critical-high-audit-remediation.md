@@ -928,8 +928,8 @@ The follow-up review corrected the new `jobs_visibility.sql` privilege calls to
 use PostgreSQL's supported three-argument `has_table_privilege` form inside
 pgTAP `ok(...)` assertions. It also added Settings failure-state coverage,
 requirements boundary/prompt/cache-preservation coverage, and browser checks
-for OAuth callback routing, CV retention/deletion, export downloads, and
-account deletion. These changes pass the available local gates, but Step 3
+for OAuth callback routing, CV retention/deletion, filtered export downloads,
+and account deletion. These changes pass the available local gates, but Step 3
 remains open because Supabase CLI, Docker/Compose, and the authenticated
 Playwright environment are still unavailable. Production readiness remains
 unverified.

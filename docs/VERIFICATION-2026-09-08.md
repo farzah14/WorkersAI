@@ -24,8 +24,8 @@ The skipped worker test is intentionally quota-free behavior. It does not prove 
 
 ## Review follow-up (2026-09-09)
 
-The reviewed follow-up commits are `8ffb0a9`, `ba6a88f`, `85de858`, and
-`f489c37`, on top of the original remediation sequence.
+The reviewed follow-up commits are `8ffb0a9`, `ba6a88f`, `85de858`, `f489c37`,
+and `2520ba7`, on top of the original remediation sequence.
 
 - `supabase/tests/jobs_visibility.sql` now wraps both role privilege checks in
   pgTAP `ok(...)` assertions. PostgreSQL documents `has_table_privilege` with
@@ -39,8 +39,9 @@ The reviewed follow-up commits are `8ffb0a9`, `ba6a88f`, `85de858`, and
   existing cache row after extraction failure.
 - Browser acceptance now includes the missing-code OAuth callback branch,
   original-only retention, Settings full deletion, account deletion, and a
-  gated completed-export download check. The completed-export check requires
-  `RUN_EXPORT_E2E=1` and a running worker/storage environment.
+  gated completed-export download check. The completed-export check verifies
+  XLSX magic bytes and filtered worksheet titles, plus PDF magic bytes. It
+  requires `RUN_EXPORT_E2E=1` and a running worker/storage environment.
 
 Fresh local rerun after these changes:
 
