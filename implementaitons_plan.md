@@ -479,4 +479,4 @@ Fill a row only during implementation, using real command output. An em dash bel
 | 8 | Complete | `b68eab5` | Default extraction regression red then green; explicit false remains covered | 19 config/discovery tests passed | Provider availability remains an operational prerequisite |
 | 9 | Complete | `19750d4` | Legacy/canonical alias and bounds regressions passed | 20 scheduler/export tests plus worker checks passed | None |
 | 10 | Verification-blocked | — | Full local gates passed; SQL, Compose, and Playwright commands blocked by missing tools/env | Worker 387 passed/1 skipped; web 152 passed; lint/type/build passed | See `docs/VERIFICATION-2026-09-08.md` |
-| 11 | Complete | `pending docs commit` | Verification record and historical checklist correction reviewed | `git diff --check`, plan structure check, and secret scan passed | SQL/Compose/Playwright remain open under Task 10 |
+| 11 | Complete | `4277467` | Verification record and historical checklist correction reviewed | `git diff --check`, plan structure check, and secret scan passed | SQL/Compose/Playwright remain open under Task 10 |
