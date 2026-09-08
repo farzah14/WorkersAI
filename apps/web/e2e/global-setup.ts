@@ -87,6 +87,20 @@ async function seedMatches(
     .single();
   if (cvError || !cv) throw cvError ?? new Error("cv insert failed");
 
+  const storagePath = `${userId}/${cv.id}/e2e-cv.pdf`;
+  const { error: uploadError } = await client.storage.from("cvs").upload(
+    storagePath,
+    readFileSync(path.resolve(__dirname, "../../worker/tests/fixtures/sample.pdf")),
+    { contentType: "application/pdf", upsert: true },
+  );
+  if (uploadError) throw uploadError;
+  const { error: storagePathError } = await client
+    .from("cvs")
+    .update({ storage_path: storagePath })
+    .eq("id", cv.id)
+    .eq("user_id", userId);
+  if (storagePathError) throw storagePathError;
+
   const profile = {
     name: "E2E Candidate",
     current_role: "Data Engineer",

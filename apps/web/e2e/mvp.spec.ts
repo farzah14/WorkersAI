@@ -33,12 +33,18 @@ async function signIn(page: Page): Promise<void> {
   await page.waitForURL("**/dashboard");
 }
 
-test("acceptance: email login and Google OAuth callback contract", async ({ page }) => {
+test("acceptance: email login and Google OAuth entry point", async ({ page }) => {
   await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
   await page.goto("/login");
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
   await signIn(page);
   await expect(page).toHaveURL(/\/dashboard/);
+});
+
+test("acceptance: OAuth callback without a code returns to sign in", async ({ page }) => {
+  await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
+  await page.goto("/auth/callback");
+  await expect(page).toHaveURL(/\/login\?error=oauth_callback/);
 });
 
 test("acceptance: register rejects mismatched password confirmation", async ({ page }) => {
@@ -278,4 +284,144 @@ test("acceptance: cross-user data denial", async ({ page }) => {
   const response = await page.goto(`/jobs/${state.otherUserMatchId}`);
   expect(response?.status()).toBe(404);
   await expect(page.locator("h1")).toContainText("404");
+});
+
+test("acceptance: original-only retention keeps profile data", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/cvs");
+
+  const cvRow = page.locator("li").filter({ hasText: "e2e-cv.pdf" });
+  await expect(cvRow).toBeVisible();
+  const originalDelete = page.waitForResponse(
+    (response) => {
+      if (!response.url().includes("/api/cvs") || response.request().method() !== "DELETE") return false;
+      return new URL(response.url()).searchParams.get("mode") === "original";
+    },
+  );
+  await cvRow.getByRole("button", { name: "Delete original file for e2e-cv.pdf" }).click();
+  expect((await originalDelete).status()).toBe(200);
+  await page.reload();
+
+  const retainedRow = page.locator("li").filter({ hasText: "e2e-cv.pdf" });
+  await expect(retainedRow).toBeVisible();
+  await expect(retainedRow.getByRole("button", { name: /Delete original file/ })).toHaveCount(0);
+  await page.goto("/onboarding/profile");
+  await expect(page.getByLabel("Name")).toHaveValue("E2E Candidate");
+});
+
+test("acceptance: completed exports download generated artifacts and preserve filters", async ({ page }) => {
+  test.skip(
+    process.env.RUN_EXPORT_E2E !== "1",
+    "Set RUN_EXPORT_E2E=1 with the worker and storage service running to verify completed exports.",
+  );
+  await signIn(page);
+  const exportIds: Record<string, string> = {};
+  for (const format of ["xlsx", "pdf"] as const) {
+    const response = await page.evaluate(
+      async (request) => {
+        const res = await fetch("/api/exports", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(request),
+        });
+        return { status: res.status, body: await res.json() };
+      },
+      {
+        searchRunId: state.runId,
+        format,
+        scope: "current_filters",
+        filters: { min_score: 80, status: ["new"] },
+      },
+    );
+    expect(response.status).toBe(202);
+    exportIds[format] = response.body.id as string;
+  }
+
+  await expect
+    .poll(
+      async () => {
+        const response = await page.request.get("/api/exports");
+        const body = (await response.json()) as {
+          exports: Array<{ id: string; status: string; filter_json: { min_score?: number } }>;
+        };
+        return Object.entries(exportIds).every(([format, id]) => {
+          const row = body.exports.find((item) => item.id === id);
+          return row?.status === "completed" && row.filter_json.min_score === 80 && format.length > 0;
+        });
+      },
+      { timeout: 120_000, intervals: [1_000, 2_000, 5_000] },
+    )
+    .toBe(true);
+
+  await page.goto("/exports");
+  for (const [format, label] of [
+    ["xlsx", "Excel"],
+    ["pdf", "PDF"],
+  ] as const) {
+    const card = page.locator("li").filter({ hasText: label }).filter({ hasText: "Completed" }).first();
+    const downloadPromise = page.waitForEvent("download");
+    await card.getByRole("link", { name: "Download" }).click();
+    const download = await downloadPromise;
+    const artifactPath = await download.path();
+    expect(artifactPath).not.toBeNull();
+    const artifact = readFileSync(artifactPath!);
+    expect(artifact.byteLength).toBeGreaterThan(100);
+    if (format === "xlsx") expect(artifact.subarray(0, 2).toString()).toBe("PK");
+    if (format === "pdf") expect(artifact.subarray(0, 5).toString()).toBe("%PDF-");
+  }
+});
+
+test("acceptance: Settings full deletion removes a disposable CV", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/cvs");
+  const uploadResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/cvs") && response.request().method() === "POST",
+  );
+  await page.getByLabel("Choose a CV file").setInputFiles({
+    name: "settings-full-delete.pdf",
+    mimeType: "application/pdf",
+    buffer: readFileSync(path.resolve(__dirname, "../../worker/tests/fixtures/sample.pdf")),
+  });
+  await page.getByRole("button", { name: "Upload CV" }).click();
+  expect((await uploadResponse).status()).toBe(201);
+
+  await page.goto("/settings");
+  const settingsRow = page.locator("li").filter({ hasText: "settings-full-delete.pdf" });
+  await expect(settingsRow).toBeVisible();
+  const fullDelete = page.waitForResponse(
+    (response) => {
+      if (!response.url().includes("/api/cvs") || response.request().method() !== "DELETE") return false;
+      return new URL(response.url()).searchParams.get("mode") === "full";
+    },
+  );
+  await settingsRow.getByRole("button", { name: "Delete" }).click();
+  expect((await fullDelete).status()).toBe(200);
+  await expect(page.locator("li").filter({ hasText: "settings-full-delete.pdf" })).toHaveCount(0);
+});
+
+test("acceptance: account deletion removes the authenticated session", async ({ page }) => {
+  const email = `e2e-account-${Date.now()}@example.test`;
+  await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
+  await page.goto("/register");
+  await page.getByLabel("Email").fill(email);
+  await page.locator("#register-password").fill("E2e-password-123!");
+  await page.locator("#register-confirm-password").fill("E2e-password-123!");
+  await page.getByRole("button", { name: "Register" }).click();
+  await expect(page).toHaveURL(/\/login/);
+
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill("E2e-password-123!");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForURL("**/dashboard");
+  await page.goto("/settings");
+  await page.getByLabel("Type DELETE to confirm").fill("DELETE");
+  const deleteResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/account/delete") && response.request().method() === "DELETE",
+  );
+  await page.getByRole("button", { name: "Delete my account" }).click();
+  expect((await deleteResponse).status()).toBe(200);
+  await page.waitForURL("**/login");
+
+  await page.goto("/dashboard");
+  await page.waitForURL("**/login");
 });
