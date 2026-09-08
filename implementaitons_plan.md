@@ -471,9 +471,11 @@ set RUN_LIVE_AI_TESTS=
 **Review correction (2026-09-09):** The Playwright suite now contains explicit
 checks for the missing-code OAuth callback branch, original-only retention,
 Settings full deletion, account deletion, and completed export downloads. The
-completed-export test is intentionally gated by `RUN_EXPORT_E2E=1`; without a
-running worker/storage environment it remains skipped. The normal Playwright
-run is still blocked before global setup by the missing `apps/web/.env`.
+completed-export test has a 180-second test timeout for its 120-second worker
+poll and checks included/excluded titles in both XLSX and PDF artifacts. It is
+intentionally gated by `RUN_EXPORT_E2E=1`; without a running worker/storage
+environment it remains skipped. The normal Playwright run is still blocked
+before global setup by the missing `apps/web/.env`.
 
 ## Task 11: Reconcile completion records and deliver the final review
 
@@ -507,5 +509,5 @@ Fill a row only during implementation, using real command output. An em dash bel
 | 7 | Complete | `f4ab3db`, `85de858` | Tail, exact 100,000-character boundary, complete router prompt, oversized-input, versioned-cache, legacy hash, and failure-preserving-cache regressions passed | 389 worker tests passed/1 skipped; Ruff/mypy passed | Historical saved matches require a new search to regenerate |
 | 8 | Complete | `b68eab5` | Default extraction regression red then green; explicit false remains covered | 19 config/discovery tests passed | Provider availability remains an operational prerequisite |
 | 9 | Complete | `19750d4` | Legacy/canonical alias and bounds regressions passed | 20 scheduler/export tests plus worker checks passed | None |
-| 10 | Verification-blocked | `f489c37`, `2520ba7` | Browser acceptance expanded for OAuth callback routing, CV retention/deletion, account deletion, and filtered completed downloads | Worker 389 passed/1 skipped; web 153 passed; lint/type/build passed | SQL, Compose, and authenticated Playwright remain blocked; see `docs/VERIFICATION-2026-09-08.md` |
+| 10 | Verification-blocked | `f489c37`, `2520ba7`, `ec2d38e` | Browser acceptance expanded for OAuth callback routing, CV retention/deletion, account deletion, and filtered completed downloads with timeout coverage | Worker 389 passed/1 skipped; web 153 passed; lint/type/build passed | SQL, Compose, and authenticated Playwright remain blocked; see `docs/VERIFICATION-2026-09-08.md` |
 | 11 | Complete | `ee04062`, `ea7fdba` | Review findings, current local counts, and historical checklist correction recorded | `git diff --check`, web build, secret scan, and task-table review passed | SQL/Compose/Playwright remain open under Task 10 |
