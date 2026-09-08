@@ -56,4 +56,21 @@ describe("SettingsActions", () => {
 
     await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1));
   });
+
+  it("shows a sanitized error and re-enables the action when deletion fails", async () => {
+    global.fetch = vi.fn().mockResolvedValue({ ok: false });
+    render(
+      <SettingsActions
+        cv={{ id: "cv-1", original_name: "synthetic.pdf" }}
+        copy={copy}
+      />,
+    );
+
+    const button = screen.getByRole("button", { name: "Delete" });
+    fireEvent.click(button);
+
+    await waitFor(() => expect(screen.getByText(copy.error)).toBeInTheDocument());
+    expect(button).not.toBeDisabled();
+    expect(refreshMock).not.toHaveBeenCalled();
+  });
 });
