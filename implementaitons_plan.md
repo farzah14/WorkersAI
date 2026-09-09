@@ -8,21 +8,17 @@
 
 **Tech stack:** TypeScript, Next.js, Vitest, Playwright, Python 3.12+, pytest, Ruff, mypy, PostgreSQL, pgTAP, Supabase, Docker Compose.
 
-**Status:** Code fixes and executable regression coverage are complete on the audited feature branch. Mandatory SQL/RLS, authenticated browser, and Docker/provider checks remain verification-blocked. The execution table below is the authoritative status; unchecked step boxes are retained as the original task checklist, while the table records the actual red/green and verification boundaries.
+**Status:** The audited fixes and mandatory local acceptance gates are complete. SQL/RLS, authenticated Playwright, worker-backed filtered exports, and Docker Compose image builds passed on the post-merge follow-up branch. Real Google OAuth, live 9Router/provider reachability, and staging/production deployment remain external verification boundaries. The execution table below is the authoritative status; unchecked step boxes are retained as the original task checklist, while the table records the actual red/green and verification boundaries.
 
-**Execution update (2026-09-09):** Tasks 1 through 9 were implemented and
-committed on `fix/jobs-rls-and-discovery`. Review follow-up commits corrected
-the pgTAP privilege assertions, added the Settings failure-state regression,
-covered the requirements boundary/cache failure cases, and expanded browser
-acceptance coverage for OAuth callback routing, CV retention/deletion, export
-downloads, and account deletion. Task 3 remains verification-blocked until
-the CV SQL/RLS suite runs. Task 4 remains verification-blocked until the
-corrected SQL suite runs. Task 10 remains verification-blocked because
-Supabase CLI, Docker/Compose, and the authenticated Playwright environment
-are unavailable. The local worker/web gates pass with the new tests.
-Task 11 is now reconciled in this plan, the verification record, and the
-historical checklist; the remaining open items are explicit Task 3, Task 4,
-and Task 10 verification boundaries.
+**Execution update (2026-09-09):** PR #2 merged the audited branch to `main` at
+`451d251`. Follow-up acceptance work on `codex/fix-post-merge-acceptance`
+replayed the complete migration chain, ran 303 pgTAP assertions, and executed
+all authenticated browser journeys. That work found and fixed two integration
+defects: profile saving mutated a search-profile snapshot referenced by a
+completed run, and the export worker passed PostgreSQL UUID objects into a
+string-typed request model. Tasks 3 and 4 are now complete. Task 10's mandatory
+local gates pass; only real OAuth/provider and deployed-environment checks
+remain outside local merge readiness.
 
 ## 1. Baseline and scope
 
@@ -195,8 +191,8 @@ url.searchParams.set("mode", "full");
 **Review correction (2026-09-09):** The `mode=full` request and successful-refresh
 coverage are present. The component suite now also verifies sanitized failure
 feedback, action re-enablement, and no refresh after a failed response. The
-task is still verification-blocked because the disposable Supabase CV/RLS
-acceptance suite has not run.
+disposable Supabase CV/RLS suite and authenticated original-only/full-deletion
+browser journeys now pass, so this task is complete.
 
 ## Task 4: Align SQL acceptance tests with shared authenticated jobs access
 
@@ -239,7 +235,8 @@ select is(
 **Review correction (2026-09-09):** The two role-privilege checks in
 `jobs_visibility.sql` call PostgreSQL's three-argument `has_table_privilege`
 and pass their descriptions through pgTAP `ok(...)`. This removes the static
-SQL defect; execution is still required before the task can be marked complete.
+SQL defect. A clean local reset and the full 8-file, 303-assertion pgTAP suite
+now pass, so this task is complete.
 
 ## Task 5: Match blocked domains at hostname boundaries
 
@@ -474,8 +471,16 @@ Settings full deletion, account deletion, and completed export downloads. The
 completed-export test has a 180-second test timeout for its 120-second worker
 poll and checks included/excluded titles in both XLSX and PDF artifacts. It is
 intentionally gated by `RUN_EXPORT_E2E=1`; without a running worker/storage
-environment it remains skipped. The normal Playwright run is still blocked
-before global setup by the missing `apps/web/.env`.
+environment it remains skipped.
+
+**Local acceptance follow-up (2026-09-09):** A disposable local Supabase reset,
+the full SQL/RLS suite, the normal authenticated Playwright suite, the gated
+worker-backed export journey, Compose configuration, and both production image
+builds passed. The browser run exposed two defects that mocks had missed. Commit
+`a8c535f` preserves completed-run candidate snapshots by cloning the current
+search profile when a new candidate profile version is saved. Commit `f633c1b`
+normalizes PostgreSQL UUID values before constructing `ExportRequest`. Real
+Google OAuth, live 9Router, and staging/production deployment remain unverified.
 
 ## Task 11: Reconcile completion records and deliver the final review
 
@@ -502,12 +507,12 @@ Fill a row only during implementation, using real command output. An em dash bel
 |---|---|---|---|---|---|
 | 1 | Complete | `9a7eba5` | Active 9Router docs and test-gate variable reconciled; `git diff --check` passed | Documentation diff reviewed | Gateway reachability still belongs to Task 10 |
 | 2 | Complete | `352b9e5` | Ruff red baseline reproduced; focused worker tests, Ruff, mypy passed | 88 focused worker tests passed | None |
-| 3 | Verification-blocked | `eaa7b27`, `ba6a88f`, `f489c37` | Settings full-mode fix plus success/failure component coverage; browser retention/full-delete journeys added | Web 153 tests, lint, and TypeScript passed | Disposable Supabase CV/RLS acceptance required |
-| 4 | Verification-blocked | `54af1b7`, `8ffb0a9` | Existing RLS assertion corrected; privilege descriptions moved into pgTAP `ok(...)` assertions | SQL suite not executable without Supabase CLI | Disposable Supabase/Docker required |
+| 3 | Complete | `eaa7b27`, `ba6a88f`, `f489c37`, `a8c535f` | Settings full-mode fix plus success/failure coverage; original-only and full-deletion browser journeys passed | Web 153 tests; SQL/RLS 303 assertions; authenticated Playwright passed | None |
+| 4 | Complete | `54af1b7`, `8ffb0a9`, `a8c535f` | RLS assertions corrected; historical profile-link regression reproduced then passed | Clean migration reset; 8 SQL files / 303 assertions passed | None |
 | 5 | Complete | `b8600bb` | Four valid employer-domain regressions red then green; blocked-domain tests passed | 95 discovery/connector tests passed with Task 6 changes | None |
 | 6 | Complete | `56dd816` | Generic Open Graph location regression red then green | 96 discovery/connector tests passed; Ruff/mypy passed | None |
 | 7 | Complete | `f4ab3db`, `85de858` | Tail, exact 100,000-character boundary, complete router prompt, oversized-input, versioned-cache, legacy hash, and failure-preserving-cache regressions passed | 389 worker tests passed/1 skipped; Ruff/mypy passed | Historical saved matches require a new search to regenerate |
 | 8 | Complete | `b68eab5` | Default extraction regression red then green; explicit false remains covered | 19 config/discovery tests passed | Provider availability remains an operational prerequisite |
 | 9 | Complete | `19750d4` | Legacy/canonical alias and bounds regressions passed | 20 scheduler/export tests plus worker checks passed | None |
-| 10 | Verification-blocked | `f489c37`, `2520ba7`, `ec2d38e` | Browser acceptance expanded for OAuth callback routing, CV retention/deletion, account deletion, and filtered completed downloads with timeout coverage | Worker 389 passed/1 skipped; web 153 passed; lint/type/build passed | SQL, Compose, and authenticated Playwright remain blocked; see `docs/VERIFICATION-2026-09-08.md` |
-| 11 | Complete | `ee04062`, `ea7fdba`, `989456a` | Review findings, current local counts, and historical checklist correction recorded | `git diff --check`, web build, secret scan, and task-table review passed | SQL/Compose/Playwright remain open under Task 10 |
+| 10 | Locally complete | `f489c37`, `2520ba7`, `ec2d38e`, `a8c535f`, `f633c1b`, `ad42d8c` | Authenticated lifecycle and worker-backed filtered download journeys passed; two integration defects reproduced and fixed | SQL 303; Playwright 22 passed/1 gated plus gated export passed; Compose config and both images passed | Real Google OAuth, live provider, and deployed environment remain unverified |
+| 11 | Complete | `ee04062`, `ea7fdba`, `989456a` | Review findings and current local evidence reconciled | Full worker/web/SQL/browser/container gates and `git diff --check` passed | External boundaries remain recorded under Task 10 |
