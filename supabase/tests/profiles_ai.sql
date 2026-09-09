@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap;
-select plan(18);
+select plan(20);
 
 select is(
     (select count(*) from pg_tables where schemaname = 'public' and tablename = 'candidate_profiles'),
@@ -153,6 +153,18 @@ values
     ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
      '30000000-0000-0000-0000-000000000001', 'indonesia', array['Data Engineer'], true);
 
+insert into public.job_search_runs (
+    id, user_id, search_profile_id, candidate_profile_id, trigger, status
+)
+values (
+    '40000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    '20000000-0000-0000-0000-000000000001',
+    '30000000-0000-0000-0000-000000000001',
+    'manual',
+    'completed'
+);
+
 select set_config(
     'request.jwt.claims',
     '{"sub":"00000000-0000-0000-0000-000000000001","role":"authenticated"}',
@@ -188,9 +200,28 @@ select is(
        on cp.cv_id = '10000000-0000-0000-0000-000000000002'
       and cp.version = 1
       and cp.confirmed_at is not null
-     where sp.id = '20000000-0000-0000-0000-000000000001'),
+     where sp.user_id = '00000000-0000-0000-0000-000000000001'
+       and sp.is_current),
     true,
-    'search profile links to confirmed candidate profile'
+    'new current search profile links to confirmed candidate profile'
+);
+
+select is(
+    (select not is_current
+       and candidate_profile_id = '30000000-0000-0000-0000-000000000001'
+     from public.search_profiles
+     where id = '20000000-0000-0000-0000-000000000001'),
+    true,
+    'historical search profile keeps its candidate profile snapshot'
+);
+
+select is(
+    (select search_profile_id = '20000000-0000-0000-0000-000000000001'
+       and candidate_profile_id = '30000000-0000-0000-0000-000000000001'
+     from public.job_search_runs
+     where id = '40000000-0000-0000-0000-000000000001'),
+    true,
+    'completed search run keeps its original profile references'
 );
 
 select set_config(
