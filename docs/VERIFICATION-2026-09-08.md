@@ -164,3 +164,20 @@ was not staged. No real CV, production data, or provider quota was used.
 These results establish local merge readiness. They do not verify a real Google
 OAuth login, live 9Router/model reachability, or an actual staging/production
 deployment; those remain external release checks.
+
+## Five-job search limit follow-up (2026-09-09)
+
+The user approved a new MVP rule that each manual or daily discovery run retains
+at most five distinct jobs. Commit `97ae966` applies the limit after
+normalization and deduplication and before persistence, provenance, requirement
+extraction, and matching.
+
+- RED: the new seven-distinct-job regression persisted all seven jobs.
+- GREEN: it persists the first five jobs, records five provenance rows, queues
+  five requirement-extraction items, reports `discovered_count=7` and
+  `normalized_count=5`, and keeps `duplicate_count=0`.
+- `uv run pytest tests/test_discovery_handler.py -q`: **13 passed**.
+- `uv run pytest -q`: **390 passed, 1 optional live-AI test skipped**.
+- `uv run ruff check .`: **passed**.
+- `uv run mypy jobmatch_worker`: **passed, 49 source files**.
+- `git diff --check`: **passed**.

@@ -68,7 +68,7 @@ These are historical baseline results, not proof that any future implementation 
 
 The audit reproduced individual function behavior with synthetic inputs. It did not prove a production incident or inspect production user data.
 
-Do not reopen fixes already present merely because an older report lists them: scheduler returning identifiers, quota ownership enforcement, CV upload compensation, signup session retention, atomic profile save, removal of the two-job limit, hybrid provenance, export controls, and terminal run accounting. Retain their regression coverage and investigate only fresh failures.
+Do not reopen fixes already present merely because an older report lists them: scheduler returning identifiers, quota ownership enforcement, CV upload compensation, signup session retention, atomic profile save, hybrid provenance, export controls, and terminal run accounting. The former unlimited-run decision is superseded by the user-approved five-job MVP limit in Task 12.
 
 Do not treat a partially failed source as a new confirmed bug: the discovery handler retains successful jobs, uses partial run status, and retries sources only when no usable jobs remain. Preserve that behavior.
 
@@ -499,6 +499,28 @@ Google OAuth, live 9Router, and staging/production deployment remain unverified.
 
 **Done when:** All eight reported defect groups have a concrete disposition, every unfinished gate is either passed or honestly left open, and completion claims match the reviewed code and command output.
 
+## Task 12: Limit every job-search run to five jobs
+
+**Priority:** User-approved MVP product rule.
+
+**Design:** `docs/superpowers/specs/2026-09-09-five-job-search-limit-design.md`.
+
+**Implementation:** `apps/worker/jobmatch_worker/handlers/discovery.py` and
+`apps/worker/tests/test_discovery_handler.py`.
+
+Apply the limit after normalization and true deduplication and before canonical
+job persistence, run linkage, provenance, requirement extraction, and matching.
+Retain at most the first five distinct jobs in deterministic discovery order.
+Keep `discovered_count` as the source total, set `normalized_count` to the
+retained count, and do not report intentionally omitted jobs as duplicates.
+
+**Execution result (2026-09-09):** The seven-distinct-job regression failed
+because all seven were persisted. Commit `97ae966` adds the five-job run limit
+and skips provenance entries outside the selected survivor set. The focused
+test and all 13 discovery-handler tests pass. The full worker suite passes with
+390 tests and one optional live-AI skip; Ruff and mypy pass across 49 source
+files.
+
 ## 4. Per-task execution record
 
 Fill a row only during implementation, using real command output. An em dash below means no execution evidence exists yet.
@@ -516,3 +538,4 @@ Fill a row only during implementation, using real command output. An em dash bel
 | 9 | Complete | `19750d4` | Legacy/canonical alias and bounds regressions passed | 20 scheduler/export tests plus worker checks passed | None |
 | 10 | Locally complete | `f489c37`, `2520ba7`, `ec2d38e`, `a8c535f`, `f633c1b`, `ad42d8c` | Authenticated lifecycle and worker-backed filtered download journeys passed; two integration defects reproduced and fixed | SQL 303; Playwright 22 passed/1 gated plus gated export passed; Compose config and both images passed | Real Google OAuth, live provider, and deployed environment remain unverified |
 | 11 | Complete | `ee04062`, `ea7fdba`, `989456a` | Review findings and current local evidence reconciled | Full worker/web/SQL/browser/container gates and `git diff --check` passed | External boundaries remain recorded under Task 10 |
+| 12 | Complete | `97ae966` | Seven distinct jobs failed at seven persisted, then passed at five persisted/provenance/downstream jobs with source total 7 and duplicate total 0 | 13 discovery tests; worker 390 passed/1 skipped; Ruff/mypy passed | Five are selected before match scoring, in deterministic discovery order |

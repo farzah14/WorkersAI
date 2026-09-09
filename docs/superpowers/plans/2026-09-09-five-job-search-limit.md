@@ -16,7 +16,7 @@
 - Modify: `apps/worker/tests/test_discovery_handler.py`
 - Modify: `apps/worker/jobmatch_worker/handlers/discovery.py`
 
-- [ ] **Step 1: Write the failing discovery regression**
+- [x] **Step 1: Write the failing discovery regression**
 
 Add a test that sends seven distinct jobs through one connector and inspects the
 existing production-shaped connection fake:
@@ -81,7 +81,7 @@ async def test_discovery_run_persists_at_most_five_distinct_jobs() -> None:
     assert final_update[1:5] == (7, 5, 0, 0)
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [x] **Step 2: Run the focused test and verify RED**
 
 Run:
 
@@ -93,7 +93,7 @@ uv run pytest tests/test_discovery_handler.py::test_discovery_run_persists_at_mo
 Expected: fail because seven job inserts, provenance rows, and requirement items
 are produced and `normalized_count` is seven.
 
-- [ ] **Step 3: Implement the minimum product limit**
+- [x] **Step 3: Implement the minimum product limit**
 
 Add the named constant beside the existing discovery safety limits:
 
@@ -111,7 +111,7 @@ upsert_result = await upsert_jobs(conn, search_run_id=run_id, jobs=kept)
 
 Do not add omitted valid jobs to `duplicate_count`.
 
-- [ ] **Step 4: Verify GREEN and broader worker gates**
+- [x] **Step 4: Verify GREEN and broader worker gates**
 
 Run:
 
@@ -128,7 +128,7 @@ git diff --check
 Expected: focused and full worker suites pass, the optional live AI test remains
 skipped, Ruff and mypy pass, and Git reports no whitespace errors.
 
-- [ ] **Step 5: Commit the behavior and regression**
+- [x] **Step 5: Commit the behavior and regression**
 
 ```bash
 git add apps/worker/tests/test_discovery_handler.py apps/worker/jobmatch_worker/handlers/discovery.py
@@ -143,19 +143,19 @@ git commit -m "feat: limit each job search to five results"
 - Modify: `docs/VERIFICATION-2026-09-08.md`
 - Modify: `docs/superpowers/specs/2026-09-06-critical-high-audit-remediation-design.md`
 
-- [ ] **Step 1: Mark the former unlimited-run statement as superseded**
+- [x] **Step 1: Mark the former unlimited-run statement as superseded**
 
 Add a dated note to the older remediation design that the user-approved
 five-job MVP rule in `2026-09-09-five-job-search-limit-design.md` supersedes its
 instruction to remove the output cap.
 
-- [ ] **Step 2: Record the implementation outcome**
+- [x] **Step 2: Record the implementation outcome**
 
 Add Task 12 to `implementaitons_plan.md` with the exact commit and fresh test
 counts. Append the same focused and broad verification evidence to
 `docs/VERIFICATION-2026-09-08.md` without rewriting its historical results.
 
-- [ ] **Step 3: Review and commit documentation**
+- [x] **Step 3: Review and commit documentation**
 
 Run:
 
@@ -174,7 +174,7 @@ git diff --cached --check
 git commit -m "docs: record five-job search limit"
 ```
 
-- [ ] **Step 4: Push the reviewed commits**
+- [x] **Step 4: Push the reviewed commits**
 
 ```bash
 git push origin codex/fix-post-merge-acceptance

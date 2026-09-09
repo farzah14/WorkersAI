@@ -599,6 +599,13 @@ git diff --cached --check
 git commit -m "fix: retain all distinct discovery results"
 ```
 
+**Superseded 2026-09-09:** This task removed the defective two-job truncation
+and its incorrect duplicate accounting. The later user-approved MVP rule in
+`docs/superpowers/specs/2026-09-09-five-job-search-limit-design.md` now retains
+at most five distinct jobs per run after deduplication without counting omitted
+valid jobs as duplicates. See commit `97ae966` and Task 12 in
+`implementaitons_plan.md`.
+
 ### Task 8: Wire hybrid sources and preserve duplicate provenance
 
 **Files:**
