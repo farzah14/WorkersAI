@@ -33,6 +33,9 @@ Thumbs.db
 dev-server.log
 worker.log
 
+# Local project documentation
+docs/
+
 apps/web/e2e/.seed-state.json
 
 # Design tool artifacts
