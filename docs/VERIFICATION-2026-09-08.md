@@ -111,3 +111,73 @@ the user's existing Docker group membership without restarting the desktop.
 These results close the previously missing local SQL/RLS execution evidence.
 Authenticated browser flows, Compose validation/build, and real OAuth/provider
 verification were not run in this follow-up and remain separate gates.
+
+## Post-merge acceptance follow-up (2026-09-09)
+
+PR #2 merged to `main` at `451d251`. Verification continued from that exact
+commit on `codex/fix-post-merge-acceptance`, using only synthetic users and the
+disposable local Supabase project `matcher_saas`.
+
+The first authenticated browser run reproduced seven acceptance failures. Six
+were stale or state-leaking test assumptions: successful registration now keeps
+the session and redirects to `/dashboard`, while the active-CV test selected an
+uploaded CV without a confirmed candidate profile and did not reliably restore
+the seeded active CV. The fixture and journeys now match the approved product
+behavior. Missing `settings.subheading` messages in both locales were also
+added and covered by the i18n parity test.
+
+The remaining browser failures exposed two application defects:
+
+- `save_candidate_profile` tried to change `candidate_profile_id` on a current
+  search profile already referenced by `job_search_runs`. PostgreSQL correctly
+  rejected that mutation through the composite history foreign key. Commit
+  `a8c535f` adds an append-only migration that retires the old current row and
+  clones its criteria onto a new current search profile linked to the new
+  candidate-profile version. The focused pgTAP test failed at the foreign key
+  before the migration and passes with 20 assertions after it.
+- The export worker received UUID objects from psycopg for `user_id` and
+  `search_run_id`, then passed them into string-typed `ExportRequest` fields.
+  Commit `f633c1b` normalizes those values at the database boundary. The focused
+  production-shaped worker test failed with a UUID/string mismatch before the
+  change and passes afterward.
+
+Fresh results after the fixes:
+
+| Area | Command | Result |
+|---|---|---|
+| Clean migration replay | `npx --no-install supabase db reset --local` | **Passed: all migrations through `202609090001` applied** |
+| SQL/RLS | `npx --no-install supabase test db` | **Passed: 8 files / 303 assertions** |
+| Authenticated browser suite | `pnpm exec playwright test` | **Passed: 22; skipped: 1 explicitly gated export test** |
+| Worker-backed export acceptance | `RUN_EXPORT_E2E=1 pnpm exec playwright test ... --grep "completed exports"` with worker/storage running | **Passed: XLSX and PDF downloads and filtered contents** |
+| Web tests | `pnpm test` | **Passed: 19 files / 153 tests** |
+| Web lint and TypeScript | `pnpm lint`; `pnpm exec tsc --noEmit` | **Passed** |
+| Web production build | `pnpm build` | **Passed: 26 routes** |
+| Worker tests | `uv run pytest -q` | **Passed: 389; skipped: 1 optional live AI test** |
+| Worker Ruff and mypy | `uv run ruff check .`; `uv run mypy jobmatch_worker` | **Passed: 49 production files** |
+| Production Compose | `docker compose -f compose.production.yml config --quiet`; `docker compose -f compose.production.yml build` | **Passed: worker and scheduler images built** |
+| Whitespace | `git diff --check` | **Passed** |
+
+The temporary `.env.production` used for quiet Compose validation contained
+only local test settings and was removed after the build. Ignored `apps/web/.env`
+was not staged. No real CV, production data, or provider quota was used.
+
+These results establish local merge readiness. They do not verify a real Google
+OAuth login, live 9Router/model reachability, or an actual staging/production
+deployment; those remain external release checks.
+
+## Five-job search limit follow-up (2026-09-09)
+
+The user approved a new MVP rule that each manual or daily discovery run retains
+at most five distinct jobs. Commit `97ae966` applies the limit after
+normalization and deduplication and before persistence, provenance, requirement
+extraction, and matching.
+
+- RED: the new seven-distinct-job regression persisted all seven jobs.
+- GREEN: it persists the first five jobs, records five provenance rows, queues
+  five requirement-extraction items, reports `discovered_count=7` and
+  `normalized_count=5`, and keeps `duplicate_count=0`.
+- `uv run pytest tests/test_discovery_handler.py -q`: **13 passed**.
+- `uv run pytest -q`: **390 passed, 1 optional live-AI test skipped**.
+- `uv run ruff check .`: **passed**.
+- `uv run mypy jobmatch_worker`: **passed, 49 source files**.
+- `git diff --check`: **passed**.

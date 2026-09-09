@@ -71,6 +71,8 @@ describe("i18n message parity", () => {
       "exports.title",
       "exports.xlsx",
       "exports.pdf",
+      "settings.subheading",
+      "settings.cvsHint",
       "settings.language",
     ];
     const idKeys = new Set(collectKeys(idMessages as MessageNode));

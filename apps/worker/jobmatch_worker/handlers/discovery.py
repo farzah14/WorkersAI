@@ -43,6 +43,7 @@ from jobmatch_worker.queue import complete_item, enqueue_item, fail_item, retry_
 _SOURCE_CONCURRENCY = 4
 _MAX_SOURCE_RESULTS = 200
 _MAX_CAREER_CANDIDATES = 120
+_MAX_JOBS_PER_RUN = 5
 _MAX_TITLE_CHARS = 300
 _MAX_COMPANY_CHARS = 300
 _MAX_LOCATION_CHARS = 300
@@ -330,7 +331,7 @@ async def _persist_provenance(
             None,
         )
         if survivor is None:
-            raise RuntimeError("could not map job provenance to a survivor")
+            continue
         await conn.execute(
             """
             insert into public.job_provenance
@@ -499,6 +500,7 @@ async def handle_discover_jobs(
             except (SourceError, ValueError):
                 continue
         kept, duplicate_count = dedupe_jobs(normalized)
+        kept = kept[:_MAX_JOBS_PER_RUN]
         upsert_result = await upsert_jobs(conn, search_run_id=run_id, jobs=kept)
         await _persist_provenance(
             conn,

@@ -124,6 +124,40 @@ async function seedMatches(
     .single();
   if (candidateError || !candidate) throw candidateError ?? new Error("candidate profile insert failed");
 
+  const { data: alternateCv, error: alternateCvError } = await client
+    .from("cvs")
+    .insert({
+      user_id: userId,
+      original_name: "e2e-switch.docx",
+      mime_type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      is_active: false,
+      extraction_status: "extracted",
+      retain_original: false,
+    })
+    .select("id")
+    .single();
+  if (alternateCvError || !alternateCv) {
+    throw alternateCvError ?? new Error("alternate cv insert failed");
+  }
+
+  const { error: alternateProfileError } = await client.from("candidate_profiles").insert({
+    user_id: userId,
+    cv_id: alternateCv.id,
+    version: 1,
+    profile: {
+      name: "Jane Doe",
+      current_role: "Software Engineer",
+      seniority: "mid",
+      target_roles: ["Software Engineer"],
+      skills: ["Python", "TypeScript"],
+      experience_years: 5,
+      languages: ["English"],
+      education: ["Bachelor"],
+    },
+    confirmed_at: new Date().toISOString(),
+  });
+  if (alternateProfileError) throw alternateProfileError;
+
   const { data: searchProfile, error: searchError } = await client
     .from("search_profiles")
     .insert({

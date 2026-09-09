@@ -304,6 +304,67 @@ async def test_discovery_run_keeps_successful_sources_when_one_fails(
 
 
 @pytest.mark.asyncio
+async def test_discovery_run_persists_at_most_five_distinct_jobs() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-limited",
+        "status": "queued",
+        "region": "global",
+        "target_roles": ["Engineer"],
+        "locations": [],
+        "work_modes": [],
+        "excluded_keywords": [],
+    }
+    jobs = [
+        _job(
+            source_key="greenhouse",
+            url=f"https://jobs.example.com/engineer-{number}",
+            title=f"Engineer {number}",
+        )
+        for number in range(1, 8)
+    ]
+    connection = _Connection(run_row)
+
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-limited", "payload": {"search_run_id": "run-limited"}},
+        SimpleNamespace(requirement_extraction_enabled=True, max_attempts=3),
+        connectors={"greenhouse": _Connector("greenhouse", jobs)},
+    )
+
+    job_inserts = [
+        params
+        for query, params in connection.executed
+        if "insert into public.jobs" in query.lower()
+    ]
+    provenance = [
+        params
+        for query, params in connection.executed
+        if "insert into public.job_provenance" in query.lower()
+    ]
+    requirement_items = [
+        params
+        for query, params in connection.executed
+        if "insert into public.work_items" in query.lower()
+        and params[0] == "extract_job_requirements"
+    ]
+    run_updates = [
+        params
+        for query, params in connection.executed
+        if "update public.job_search_runs" in query.lower()
+    ]
+    final_update = next(params for params in run_updates if params[0] == "processing")
+
+    assert [params[1] for params in job_inserts] == [
+        f"Engineer {number}" for number in range(1, 6)
+    ]
+    assert len(provenance) == 5
+    assert len(requirement_items) == 5
+    assert final_update[1:5] == (7, 5, 0, 0)
+
+
+@pytest.mark.asyncio
 async def test_discovery_enqueues_match_for_cached_requirements() -> None:
     from jobmatch_worker.handlers.discovery import handle_discover_jobs
 

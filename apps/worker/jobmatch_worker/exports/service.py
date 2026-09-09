@@ -106,7 +106,12 @@ async def _load_export(
         (export_id,),
     )
     found = await row.fetchone()
-    return dict(found) if found else None
+    if found is None:
+        return None
+    export = dict(found)
+    export["user_id"] = str(export["user_id"])
+    export["search_run_id"] = str(export["search_run_id"])
+    return export
 
 
 async def _load_run(

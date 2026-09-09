@@ -156,15 +156,14 @@ test("acceptance: register rejects mismatched password confirmation", async ({ p
   await expect(page).toHaveURL(/error=password_mismatch/);
 });
 
-test("acceptance: register sends the user to sign in first", async ({ page }) => {
+test("acceptance: register keeps the new user signed in", async ({ page }) => {
   await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
   await page.goto("/register");
   await page.getByLabel("Email").fill(`e2e-register-${Date.now()}@example.test`);
   await page.locator("#register-password").fill("E2e-password-123!");
   await page.locator("#register-confirm-password").fill("E2e-password-123!");
   await page.getByRole("button", { name: "Register" }).click();
-  await expect(page.getByText("Account created. Please sign in.")).toBeVisible();
-  await expect(page).toHaveURL(/\/login/);
+  await expect(page).toHaveURL(/\/dashboard/);
 });
 
 test("acceptance: register rejects passwords without letters, numbers, and symbols", async ({ page }) => {
@@ -240,21 +239,24 @@ test("acceptance: setting a CV active syncs the candidate profile page", async (
   await page.goto("/onboarding/profile");
   await expect(page.getByLabel("Name")).toHaveValue("E2E Candidate");
   await page.goto("/dashboard/profile");
-  const row = page.locator("li").filter({ hasText: "sample.docx" });
-  await row.getByRole("button", { name: "Set active" }).click();
-  await expect(row.getByRole("button", { name: "Active" })).toBeVisible();
+  try {
+    const row = page.locator("li").filter({ hasText: "e2e-switch.docx" });
+    await row.getByRole("button", { name: "Set active" }).click();
+    await expect(row.getByRole("button", { name: "Active" })).toBeVisible();
 
-  const banner = page.locator("section").filter({ hasText: "Current Active CV" });
-  await expect(banner.getByText("sample.docx", { exact: true })).toBeVisible();
+    const banner = page.locator("section").filter({ hasText: "Current Active CV" });
+    await expect(banner.getByText("e2e-switch.docx", { exact: true })).toBeVisible();
 
-  await page.getByRole("link", { name: "Edit Candidate Profile" }).click();
-  await page.waitForURL("**/onboarding/profile");
-  await expect(page.getByLabel("Name")).toHaveValue("Jane Doe", { timeout: 30_000 });
-
-  await page.goto("/dashboard/profile");
-  const seededRow = page.locator("li").filter({ hasText: "e2e-cv.pdf" });
-  await seededRow.getByRole("button", { name: "Set active" }).click();
-  await expect(seededRow.getByRole("button", { name: "Active" })).toBeVisible();
+    await page.getByRole("link", { name: "Edit Candidate Profile" }).click();
+    await page.waitForURL("**/onboarding/profile");
+    await expect(page.getByLabel("Name")).toHaveValue("Jane Doe");
+  } finally {
+    await page.goto("/dashboard/profile");
+    const seededRow = page.locator("li").filter({ hasText: "e2e-cv.pdf" });
+    const activateButton = seededRow.getByRole("button", { name: "Set active" });
+    if (await activateButton.isVisible()) await activateButton.click();
+    await expect(seededRow.getByRole("button", { name: "Active" })).toBeVisible();
+  }
 });
 
 test("acceptance: schema-valid editable candidate profile", async ({ page }) => {
@@ -522,11 +524,6 @@ test("acceptance: account deletion removes the authenticated session", async ({ 
   await page.locator("#register-password").fill("E2e-password-123!");
   await page.locator("#register-confirm-password").fill("E2e-password-123!");
   await page.getByRole("button", { name: "Register" }).click();
-  await expect(page).toHaveURL(/\/login/);
-
-  await page.getByLabel("Email").fill(email);
-  await page.getByLabel("Password").fill("E2e-password-123!");
-  await page.getByRole("button", { name: "Sign in" }).click();
   await page.waitForURL("**/dashboard");
   await page.goto("/settings");
   await page.getByLabel("Type DELETE to confirm").fill("DELETE");

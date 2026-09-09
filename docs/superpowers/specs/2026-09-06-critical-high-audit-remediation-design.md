@@ -75,6 +75,11 @@ Move profile persistence and active-CV transition behind one server-authorized P
 
 Remove the two-job run cap. Retain the existing bounded per-source and career-candidate safety limits. Duplicate counts must contain only actual in-run or database duplicates; distinct jobs may not be reclassified as duplicates because of an arbitrary output cap. The Plan 3 acceptance-shaped test must yield four normalized jobs from five inputs containing one real duplicate.
 
+**Superseded 2026-09-09:** The user-approved MVP rule in
+`2026-09-09-five-job-search-limit-design.md` now limits each search run to five
+distinct jobs after normalization and deduplication. Omitted valid jobs still
+must not increase `duplicate_count`.
+
 ### 8. Hybrid sources and provenance
 
 Build production sources from Tavily, Greenhouse, and Lever using their existing connector interfaces and configuration. A missing or invalid source configuration becomes an isolated source failure rather than disabling successful sources.

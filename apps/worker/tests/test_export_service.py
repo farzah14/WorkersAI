@@ -1,5 +1,6 @@
 from datetime import date
 from typing import Any
+from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
@@ -128,8 +129,8 @@ class ExportQueryConnection:
             raise AssertionError("export query omitted the status column")
         return ExportQueryCursor(
             {
-                "user_id": "user-1",
-                "search_run_id": "run-1",
+                "user_id": UUID("00000000-0000-0000-0000-000000000001"),
+                "search_run_id": UUID("00000000-0000-0000-0000-000000000002"),
                 "format": "xlsx",
                 "scope": "all",
                 "filter_json": {},
@@ -145,6 +146,8 @@ async def test_load_export_reads_status_for_worker_idempotency() -> None:
 
     assert export is not None
     assert export["status"] == "queued"
+    assert export["user_id"] == "00000000-0000-0000-0000-000000000001"
+    assert export["search_run_id"] == "00000000-0000-0000-0000-000000000002"
 
 
 def test_candidate_summary_maps_profile_json() -> None:
