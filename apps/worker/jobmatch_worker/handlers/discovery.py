@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import Any
@@ -23,6 +22,8 @@ from jobmatch_worker.jobs.connectors.career_page import (
     CareerPageContent,
     CareerPageFetcher,
 )
+from jobmatch_worker.jobs.connectors.greenhouse import GreenhouseConnector
+from jobmatch_worker.jobs.connectors.lever import LeverConnector
 from jobmatch_worker.jobs.connectors.tavily import TavilyConnector
 from jobmatch_worker.jobs.dedupe import (
     dedupe_jobs,
@@ -33,16 +34,19 @@ from jobmatch_worker.jobs.dedupe import (
 from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
 from jobmatch_worker.jobs.normalize import NormalizedJob, normalize_job
 from jobmatch_worker.jobs.query import SearchQuery, build_queries
+from jobmatch_worker.matching.cache_key import (
+    MAX_REQUIREMENT_TEXT_CHARS,
+    requirements_cache_key,
+)
 from jobmatch_worker.queue import complete_item, enqueue_item, fail_item, retry_item
 
 _SOURCE_CONCURRENCY = 4
 _MAX_SOURCE_RESULTS = 200
 _MAX_CAREER_CANDIDATES = 120
-_MAX_JOBS_PER_RUN = 2
 _MAX_TITLE_CHARS = 300
 _MAX_COMPANY_CHARS = 300
 _MAX_LOCATION_CHARS = 300
-_MAX_DESCRIPTION_CHARS = 100_000
+_MAX_DESCRIPTION_CHARS = MAX_REQUIREMENT_TEXT_CHARS
 _RUN_SELECT_SQL = """
 select r.id, r.status, r.trigger, r.candidate_profile_id,
        sp.region, sp.target_roles, sp.locations, sp.work_modes,
@@ -85,9 +89,13 @@ def _error_code(error: SourceError) -> str:
 
 
 def _build_sources(settings: Settings) -> dict[str, SourceConnector]:
-    # MVP discovery uses Tavily only; ATS connectors remain available for a
-    # future explicitly configured source rollout.
-    return {"tavily": TavilyConnector(api_key=settings.tavily_api_key)}
+    return {
+        "tavily": TavilyConnector(api_key=settings.tavily_api_key),
+        "greenhouse": GreenhouseConnector(
+            board_token=settings.greenhouse_board_token
+        ),
+        "lever": LeverConnector(site_name=settings.lever_site_name),
+    }
 
 
 def _candidate_title(candidate: DiscoveryCandidateUrl, text: str) -> str:
@@ -368,7 +376,7 @@ async def _enqueue_requirement_work(
 
     has_downstream_work = False
     for job, job_id in zip(jobs, job_ids, strict=True):
-        description_hash = hashlib.sha256(job.description.encode("utf-8")).hexdigest()
+        description_hash = requirements_cache_key(job.description)
         if cached_hashes.get(str(job_id)) == description_hash:
             await enqueue_item(
                 conn,
@@ -491,14 +499,11 @@ async def handle_discover_jobs(
             except (SourceError, ValueError):
                 continue
         kept, duplicate_count = dedupe_jobs(normalized)
-        if len(kept) > _MAX_JOBS_PER_RUN:
-            duplicate_count += len(kept) - _MAX_JOBS_PER_RUN
-            kept = kept[:_MAX_JOBS_PER_RUN]
         upsert_result = await upsert_jobs(conn, search_run_id=run_id, jobs=kept)
         await _persist_provenance(
             conn,
             run_id=run_id,
-            all_jobs=kept,
+            all_jobs=normalized,
             kept_jobs=kept,
             job_ids=upsert_result.job_ids,
         )

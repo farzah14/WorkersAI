@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
+import { ExportRequestForm } from "@/components/export-request-form";
 import { createClient } from "@/lib/supabase/server";
 
 type ExportRow = {
@@ -32,6 +33,14 @@ export default async function ExportsPage() {
     redirect("/login");
   }
 
+  const { data: latestRun } = await supabase
+    .from("job_search_runs")
+    .select("id")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const { data: rows } = await supabase
     .from("exports")
     .select("id, format, scope, status, error_code, created_at, completed_at, storage_path")
@@ -56,6 +65,15 @@ export default async function ExportsPage() {
           <h1 className="text-4xl font-semibold tracking-[-0.05em]">{t("exports.heading")}</h1>
           <p className="mt-2 text-[#53616a]">{t("exports.subheading")}</p>
         </header>
+
+        {latestRun && (
+          <section className="space-y-3">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-[#53616a]">
+              {t("exports.request")}
+            </h2>
+            <ExportRequestForm runId={latestRun.id} />
+          </section>
+        )}
 
         {exports.length === 0 && (
           <section className="rounded-3xl border border-[#d9d5cc] bg-white p-8 text-center">

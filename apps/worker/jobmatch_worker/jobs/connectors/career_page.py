@@ -313,41 +313,101 @@ def _extract_job_posting_metadata(soup: BeautifulSoup) -> _JobPostingMetadata:
 def _extract_meta_job_metadata(
     soup: BeautifulSoup, *, is_closed: bool
 ) -> _JobPostingMetadata:
-    description = _meta_content(soup, "name", "description") or ""
-    page_title = _meta_content(soup, "property", "og:title") or ""
-    if not page_title and soup.title is not None:
-        page_title = collapse_whitespace(soup.title.get_text(" "))
+    description = (
+        _meta_content(soup, "name", "description")
+        or _meta_content(soup, "property", "og:description")
+        or ""
+    )
+    og_title = _meta_content(soup, "property", "og:title") or ""
+    html_title = collapse_whitespace(soup.title.get_text(" ")) if soup.title is not None else ""
+    page_title = og_title or html_title
+    site_name = _meta_content(soup, "property", "og:site_name") or _meta_content(
+        soup, "name", "author"
+    )
 
     title: str | None = None
     company: str | None = None
     location: str | None = None
-    summary_match = re.search(
-        r"\bapply\s+for\s+(?P<title>.+?)\s+at\s+(?P<company>[^.]+)\.",
-        description,
-        flags=re.IGNORECASE,
-    )
-    if summary_match:
-        title = clean_optional_str(summary_match.group("title"))
-        company = clean_optional_str(summary_match.group("company"))
-    else:
-        title_match = re.search(
-            r"^(?P<title>.+?)\s+jobs?\s+at\s+(?P<company>[^,|()]+)"
-            r"(?:,\s*(?P<location>[^|()]+))?",
-            page_title,
+
+    for candidate_heading in (html_title, page_title):
+        app_match = re.search(
+            r"job\s+application\s+for\s+(?P<title>.+?)\s+at\s+(?P<company>[^–—|()]+)",
+            candidate_heading,
             flags=re.IGNORECASE,
         )
-        if title_match:
-            title = clean_optional_str(title_match.group("title"))
-            company = clean_optional_str(title_match.group("company"))
-            location = clean_optional_str(title_match.group("location"))
+        if app_match:
+            title = clean_optional_str(app_match.group("title"))
+            company = clean_optional_str(app_match.group("company"))
+            break
 
-    location_match = re.search(
-        r"\bjob\s+location\s*:\s*(?P<location>[^.;|]+)",
-        description,
-        flags=re.IGNORECASE,
-    )
-    if location_match:
-        location = clean_optional_str(location_match.group("location"))
+    if not title or not company:
+        summary_match = re.search(
+            r"\bapply\s+for\s+(?P<title>.+?)\s+at\s+(?P<company>[^.]+)\.",
+            description,
+            flags=re.IGNORECASE,
+        )
+        if summary_match:
+            title = title or clean_optional_str(summary_match.group("title"))
+            company = company or clean_optional_str(summary_match.group("company"))
+        else:
+            title_match = re.search(
+                r"^(?P<title>.+?)\s+jobs?\s+at\s+(?P<company>[^,|()]+)"
+                r"(?:,\s*(?P<location>[^|()]+))?",
+                page_title,
+                flags=re.IGNORECASE,
+            )
+            if title_match:
+                title = title or clean_optional_str(title_match.group("title"))
+                company = company or clean_optional_str(title_match.group("company"))
+                location = location or clean_optional_str(title_match.group("location"))
+            else:
+                jobs_at_match = re.search(
+                    r"^jobs?\s+at\s+(?P<company>[^,|()–—-]+)",
+                    page_title,
+                    flags=re.IGNORECASE,
+                )
+                if jobs_at_match:
+                    company = company or clean_optional_str(jobs_at_match.group("company"))
+                else:
+                    dash_match = re.search(
+                        r"^(?P<title>.+?)\s+[-|–—]\s+(?P<company>[^–—|-]+)$",
+                        page_title,
+                    )
+                    if dash_match:
+                        title = title or clean_optional_str(dash_match.group("title"))
+                        company = company or clean_optional_str(dash_match.group("company"))
+                    else:
+                        at_match = re.search(
+                            r"^(?P<title>.+?)\s+(?:at|@)\s+(?P<company>[^,|()–—-]+)",
+                            page_title,
+                            flags=re.IGNORECASE,
+                        )
+                        if at_match:
+                            title = title or clean_optional_str(at_match.group("title"))
+                            company = company or clean_optional_str(at_match.group("company"))
+
+    if not company and site_name:
+        company = clean_optional_str(site_name)
+
+    if not title:
+        h1 = soup.find("h1")
+        if h1 is not None:
+            title = clean_optional_str(collapse_whitespace(h1.get_text(" ")))
+        if not title:
+            title = og_title or html_title or None
+
+    if not location:
+        location_match = re.search(
+            r"\bjob\s+location\s*:\s*(?P<location>[^.;|]+)",
+            description,
+            flags=re.IGNORECASE,
+        )
+        if location_match:
+            location = clean_optional_str(location_match.group("location"))
+        else:
+            loc_tag = soup.find(class_=lambda c: c and "location" in c.lower())
+            if loc_tag:
+                location = clean_optional_str(collapse_whitespace(loc_tag.get_text(" ")))
 
     return _JobPostingMetadata(
         title=title,
@@ -397,9 +457,23 @@ def _is_closed_page(soup: BeautifulSoup) -> bool:
     title = soup.title.get_text(" ") if soup.title is not None else ""
     visible = soup.get_text(" ")
     normalized = collapse_whitespace(f"{title} {visible}").casefold()
+    og_url = _meta_content(soup, "property", "og:url") or ""
+    if "error=true" in og_url.casefold():
+        return True
     return any(
         marker in normalized
-        for marker in ("this job was closed", "(closed)", "job is closed", "position has been filled")
+        for marker in (
+            "this job was closed",
+            "(closed)",
+            "job is closed",
+            "position has been filled",
+            "this job was removed",
+            "no longer available",
+            "no longer accepting applications",
+            "job has expired",
+            "posting has expired",
+            "this role has been filled",
+        )
     )
 
 

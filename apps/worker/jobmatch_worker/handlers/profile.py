@@ -8,9 +8,7 @@ from psycopg.errors import UniqueViolation
 from psycopg.types.json import Jsonb
 
 from jobmatch_worker.ai.base import AiProvider, PermanentAiError
-from jobmatch_worker.ai.nvidia import NvidiaProvider
-from jobmatch_worker.ai.ollama import OllamaProvider
-from jobmatch_worker.ai.openrouter import OpenRouterProvider
+from jobmatch_worker.ai.ninerouter import NineRouterProvider
 from jobmatch_worker.ai.router import AiAuditRecorder, AiRouter
 from jobmatch_worker.config import Settings
 from jobmatch_worker.profiles.extract import extract_candidate_profile
@@ -22,38 +20,20 @@ PROFILE_EXTRACT_OPERATION = "profile_extract"
 
 
 def build_ai_providers(settings: Settings) -> list[AiProvider]:
-    """Build the ordered AI provider list, skipping providers without credentials."""
+    """Build the ordered AI provider list, skipping providers without credentials or model."""
     providers: list[AiProvider] = []
     for name in (p.strip() for p in settings.ai_provider_order.split(",") if p.strip()):
-        if name == "nvidia" and settings.nvidia_api_key and settings.nvidia_model:
+        if name == "9router" and settings.ninerouter_model:
             providers.append(
-                NvidiaProvider(
-                    api_key=settings.nvidia_api_key,
-                    model=settings.nvidia_model,
-                    base_url=settings.nvidia_base_url,
-                    timeout=settings.ai_timeout_seconds,
-                )
-            )
-        elif name == "openrouter" and settings.openrouter_api_key and settings.openrouter_model:
-            providers.append(
-                OpenRouterProvider(
-                    api_key=settings.openrouter_api_key,
-                    model=settings.openrouter_model,
-                    base_url=settings.openrouter_base_url,
-                    timeout=settings.ai_timeout_seconds,
-                )
-            )
-        elif name == "ollama" and settings.ollama_api_key and settings.ollama_model:
-            providers.append(
-                OllamaProvider(
-                    api_key=settings.ollama_api_key,
-                    model=settings.ollama_model,
-                    base_url=settings.ollama_base_url,
+                NineRouterProvider(
+                    api_key=settings.ninerouter_api_key,
+                    model=settings.ninerouter_model,
+                    base_url=settings.ninerouter_base_url,
                     timeout=settings.ai_timeout_seconds,
                 )
             )
         else:
-            logger.warning("skipping AI provider %r: missing credentials or unknown name", name)
+            logger.warning("skipping AI provider %r: missing credentials, model or unknown name", name)
     return providers
 
 

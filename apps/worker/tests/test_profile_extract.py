@@ -373,33 +373,31 @@ async def test_profile_handler_audits_with_profile_extract_operation(
 # --- provider building from config ---
 
 
-def test_build_ai_providers_skips_missing_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_build_ai_providers_builds_ninerouter(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_base_env(monkeypatch)
-    monkeypatch.setenv("AI_PROVIDER_ORDER", "nvidia,openrouter,ollama")
-    monkeypatch.setenv("OPENROUTER_API_KEY", "ork")
-    monkeypatch.setenv("OPENROUTER_MODEL", "or-model")
-    monkeypatch.setenv("OLLAMA_API_KEY", "ok")
-    monkeypatch.setenv("OLLAMA_MODEL", "ollama-model")
+    monkeypatch.setenv("AI_PROVIDER_ORDER", "9router")
+    monkeypatch.setenv("NINEROUTER_MODEL", "gpt-4o-mini")
+    monkeypatch.setenv("NINEROUTER_API_KEY", "key-123")
     providers = build_ai_providers(Settings(_env_file=None))
-    assert [p.name for p in providers] == ["openrouter", "ollama"]
+    assert len(providers) == 1
+    assert providers[0].name == "9router"
+    assert providers[0].model == "gpt-4o-mini"
+    assert providers[0].api_key == "key-123"
 
 
-def test_build_ai_providers_preserves_order_and_skips_unknown(
+def test_build_ai_providers_skips_unknown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _set_base_env(monkeypatch)
-    monkeypatch.setenv("AI_PROVIDER_ORDER", "ollama,mystery,nvidia")
-    monkeypatch.setenv("OLLAMA_API_KEY", "ok")
-    monkeypatch.setenv("OLLAMA_MODEL", "m")
-    monkeypatch.setenv("NVIDIA_API_KEY", "nk")
-    monkeypatch.setenv("NVIDIA_MODEL", "nm")
+    monkeypatch.setenv("AI_PROVIDER_ORDER", "mystery,9router")
+    monkeypatch.setenv("NINEROUTER_MODEL", "gpt-4o-mini")
     providers = build_ai_providers(Settings(_env_file=None))
-    assert [p.name for p in providers] == ["ollama", "nvidia"]
+    assert [p.name for p in providers] == ["9router"]
 
 
-def test_build_ai_providers_empty_without_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_build_ai_providers_empty_without_model(monkeypatch: pytest.MonkeyPatch) -> None:
     _set_base_env(monkeypatch)
-    monkeypatch.setenv("AI_PROVIDER_ORDER", "nvidia,openrouter")
+    monkeypatch.setenv("AI_PROVIDER_ORDER", "mystery")
     assert build_ai_providers(Settings(_env_file=None)) == []
 
 

@@ -1,43 +1,31 @@
 # AI Providers Reference
 
-## Supported providers
+## Supported gateway
 
-The MVP supports three external providers through one internal contract:
+The system uses **9Router** as the unified OpenAI-compatible AI provider gateway.
 
-1. NVIDIA NIM
-2. OpenRouter
-3. Ollama Cloud
+9Router handles upstream model routing, load balancing, and provider access behind a single standardized HTTP interface:
 
-Default order:
-
-```text
-nvidia -> openrouter -> ollama
-```
-
-The order is configurable by task/operation.
+- Provider name: `9router`
+- Protocol: OpenAI Chat Completions (`/v1/chat/completions`) & Embeddings (`/v1/embeddings`)
+- Default endpoint: `http://localhost:20128/v1`
 
 ## Environment contract
 
 ```dotenv
-AI_PROVIDER_ORDER=nvidia,ollama,openrouter
+AI_PROVIDER_ORDER=9router
 AI_TIMEOUT_SECONDS=30
 AI_MAX_RETRIES=1
 
-NVIDIA_API_KEY=...
-NVIDIA_BASE_URL=...
-NVIDIA_MODEL=...
-
-OPENROUTER_API_KEY=...
-OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_MODEL=...
-
-OLLAMA_API_KEY=...
-OLLAMA_BASE_URL=https://ollama.com/api
-OLLAMA_MODEL=...
-OLLAMA_EMBED_MODEL=
+# 9Router configuration
+NINEROUTER_BASE_URL=http://localhost:20128/v1
+NINEROUTER_API_KEY=
+NINEROUTER_MODEL=gpt-4o-mini
+# Optional embedding model (if unset, semantic matching uses deterministic lexical fallback)
+NINEROUTER_EMBED_MODEL=
 ```
 
-All keys are server-only.
+All keys are server-only. `NINEROUTER_API_KEY` is optional if 9Router does not require bearer authorization.
 
 ## Internal contract
 
@@ -56,35 +44,30 @@ class AiProvider(Protocol):
     ) -> AiResult: ...
 ```
 
-Business modules must not import provider SDK details directly.
+Business modules must not import provider SDK details directly; all generative operations flow through `NineRouterProvider` or mock providers conforming to `AiProvider`.
 
 ## Structured output rule
 
 The application owns final schema validity.
 
-For every provider:
-
-1. request JSON/structured output using the strongest supported provider mechanism;
+1. request JSON/structured output using OpenAI standard `response_format: {"type": "json_object"}` or `json_schema`;
 2. parse JSON;
-3. validate with the same Pydantic model/schema;
+3. validate with the expected Pydantic model/schema;
 4. if invalid, perform only the bounded same-provider retry allowed by router policy;
-5. fall back when the error is classified as retryable;
-6. never persist invalid structured data.
+5. never persist invalid structured data.
 
-For Ollama Cloud specifically, do not assume the same native JSON-schema request field as NVIDIA/OpenRouter. Use JSON-only prompting plus application-side validation according to the approved plan.
+## Fallback and retry classification
 
-## Fallback classification
-
-Retry/fallback:
+Retry:
 
 - timeout;
 - HTTP 408;
 - HTTP 429;
 - transient 5xx;
-- temporary provider health/circuit failure;
+- temporary gateway health/circuit failure;
 - invalid JSON or schema-invalid output after the bounded same-provider retry.
 
-Do not fallback for:
+Do not retry for:
 
 - unsupported CV type;
 - missing profile;
@@ -102,56 +85,29 @@ MVP behavior:
 - allow a controlled half-open probe;
 - close after success.
 
-The circuit state may be in-process for the MVP.
-
-## Ollama Cloud rules
-
-Ollama is not a local runtime in this project.
-
-Prohibited MVP patterns:
-
-```text
-ollama serve
-localhost:11434
-ollama pull ...
-ollama/ollama Docker service
-GPU passthrough for Ollama
-local model volume
-```
-
-Required pattern:
-
-```text
-Worker
-  -> HTTPS
-  -> https://ollama.com/api
-  -> Authorization: Bearer OLLAMA_API_KEY
-```
-
-Model identifiers are configuration. Do not bake a permanent Ollama Cloud model name into matching/business logic.
+The circuit state is in-process for the worker runtime.
 
 ## Embeddings
 
-Semantic matching may use `OLLAMA_EMBED_MODEL` through the cloud adapter when configured. Only normalized candidate statements and normalized requirement text should be sent, not raw CV files.
+Semantic matching uses `NINEROUTER_EMBED_MODEL` through 9Router's `/v1/embeddings` endpoint when configured. Only normalized candidate statements and normalized requirement text should be sent, never raw CV files.
 
-If the embedding path is unavailable or unconfigured, matching uses the deterministic lexical fallback and records `semantic_degraded=true`. Generative-provider fallback is not used merely because the optional embedding helper is unavailable.
+If the embedding path is unavailable or unconfigured, matching uses the deterministic lexical fallback and records `semantic_degraded=true`.
 
 ## Observability
 
 Record:
 
 - operation;
-- provider;
+- provider (`9router`);
 - model;
 - latency;
 - success/failure class;
-- fallback source;
 - schema-validation result.
 
 Do not log prompts containing raw CV text, API keys, authorization headers, full provider response bodies with PII, or signed URLs.
 
 ## Testing
 
-Ordinary tests mock provider HTTP behavior. Live tests are optional and gated with `ENABLE_LIVE_AI_TESTS=1`.
+Ordinary tests mock provider HTTP behavior. Live tests against 9Router are optional and gated with `RUN_LIVE_AI_TESTS=1`.
 
-Provider contract tests must confirm that each adapter ultimately produces the same validated internal result shape.
+Provider contract tests confirm that the adapter produces the validated internal result shape.

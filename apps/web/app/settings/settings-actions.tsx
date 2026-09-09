@@ -38,6 +38,7 @@ export function SettingsActions({
     try {
       const url = new URL("/api/cvs", window.location.origin);
       url.searchParams.set("cv_id", cvId);
+      url.searchParams.set("mode", "full");
       const response = await fetch(url, { method: "DELETE" });
       if (!response.ok) throw new Error("failed");
       router.refresh();

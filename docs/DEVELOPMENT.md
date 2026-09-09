@@ -67,13 +67,24 @@ copy .env.example .env
 
 Edit `.env` locally. Do not paste real secrets into chat, commit history, screenshots, or issue text.
 
-The MVP uses cloud AI providers:
+`REQUIREMENT_EXTRACTION_ENABLED=true` is the default completed-MVP setting. It
+keeps newly discovered jobs flowing through requirement extraction and matching;
+set it to `false` only when an intentional discovery-only run is needed.
 
-```text
-NVIDIA NIM -> OpenRouter -> Ollama Cloud
-```
+Worker configuration uses `EXPORTS_BUCKET` and
+`DAILY_DISCOVERY_HOUR_JAKARTA`. Older `EXPORT_BUCKET` and
+`DAILY_DISCOVERY_HOUR_ASIA_JAKARTA` names remain accepted as compatibility
+aliases; canonical names win when both are present.
 
-There is no local Ollama setup step.
+The MVP uses the provider-neutral AI router backed by a 9Router OpenAI-compatible
+gateway. Configure `AI_PROVIDER_ORDER=9router`, `NINEROUTER_BASE_URL`, and
+`NINEROUTER_MODEL`; keep `NINEROUTER_API_KEY` server-side and leave it blank only
+when the gateway is configured for keyless access. The default endpoint is
+`http://localhost:20128/v1`; production containers must override it when the
+gateway is outside the container network namespace.
+
+Live provider checks are opt-in with `RUN_LIVE_AI_TESTS=1`. There is no local
+Ollama setup step or port `11434` production dependency.
 
 ## 5. Execute plans in order
 

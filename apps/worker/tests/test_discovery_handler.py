@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 from types import SimpleNamespace
 from typing import Any
 
@@ -10,6 +9,7 @@ from jobmatch_worker.handlers.discovery import _build_sources
 from jobmatch_worker.jobs.connectors.base import SourceDataError, SourceUnavailable
 from jobmatch_worker.jobs.connectors.career_page import CareerPageContent
 from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
+from jobmatch_worker.matching.cache_key import requirements_cache_key
 
 
 class _Cursor:
@@ -84,8 +84,9 @@ async def test_build_sources_uses_tavily_for_web_search() -> None:
         )
     )
 
-    assert set(sources) == {"tavily"}
-    assert sources["tavily"].source_key == "tavily"
+    assert set(sources) == {"tavily", "greenhouse", "lever"}
+    assert sources["greenhouse"].source_key == "greenhouse"
+    assert sources["lever"].source_key == "lever"
 
     for source in sources.values():
         await source.aclose()  # type: ignore[attr-defined]
@@ -174,7 +175,7 @@ def _job(*, source_key: str, url: str, title: str) -> DiscoveredJob:
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("requirement_extraction_enabled", "expected_requirement_items"),
-    [(False, 0), (True, 2)],
+    [(False, 0), (True, 4)],
 )
 async def test_discovery_run_keeps_successful_sources_when_one_fails(
     requirement_extraction_enabled: bool,
@@ -246,22 +247,37 @@ async def test_discovery_run_keeps_successful_sources_when_one_fails(
     expected_status = "processing" if requirement_extraction_enabled else "partial"
     assert any(params[0] == expected_status for params in run_updates)
     final_update = next(params for params in run_updates if params[0] == expected_status)
-    assert final_update[1:5] == (5, 2, 3, 1)
+    assert final_update[1:5] == (5, 4, 1, 1)
 
     job_inserts = [
         (query, params)
         for query, params in connection.executed
         if "insert into public.jobs" in query.lower()
     ]
-    assert len(job_inserts) == 2
+    assert len(job_inserts) == 4
 
     provenance = [
         params
         for query, params in connection.executed
         if "insert into public.job_provenance" in query.lower()
     ]
-    assert len(provenance) == 2
-    assert {params[3] for params in provenance} == {"greenhouse"}
+    source_keys = [params[3] for params in provenance]
+    assert len(provenance) == 5
+    assert source_keys.count("greenhouse") == 3
+    assert source_keys.count("tavily") == 2
+    assert {params[0] for params in provenance if params[3] in {"greenhouse", "tavily"}}
+    duplicate_job_ids = {
+        params[0]
+        for params in provenance
+        if params[5] == "https://jobs.example.com/data-engineer"
+    }
+    assert len(duplicate_job_ids) == 1
+    duplicate_sources = {
+        params[3]
+        for params in provenance
+        if params[5] == "https://jobs.example.com/data-engineer"
+    }
+    assert duplicate_sources == {"greenhouse", "tavily"}
 
     requirement_items = [
         params
@@ -303,7 +319,7 @@ async def test_discovery_enqueues_match_for_cached_requirements() -> None:
     connection = _Connection(
         run_row,
         cached_job_hashes={
-            "job-1": hashlib.sha256(b"Description for Data Engineer").hexdigest()
+            "job-1": requirements_cache_key("Description for Data Engineer")
         },
     )
 

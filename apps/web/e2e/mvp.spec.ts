@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { inflateRawSync, inflateSync } from "node:zlib";
 
 // Full MVP acceptance journey. Worker-level criteria (partial source
 // success, normalization/dedup, cached requirements, daily scheduler,
@@ -33,12 +34,115 @@ async function signIn(page: Page): Promise<void> {
   await page.waitForURL("**/dashboard");
 }
 
-test("acceptance: email login and Google OAuth callback contract", async ({ page }) => {
+function readZipEntry(zip: Buffer, entryName: string): Buffer {
+  for (let offset = 0; offset + 30 <= zip.length; ) {
+    if (zip.readUInt32LE(offset) !== 0x04034b50) break;
+    const compression = zip.readUInt16LE(offset + 8);
+    const compressedSize = zip.readUInt32LE(offset + 18);
+    const nameLength = zip.readUInt16LE(offset + 26);
+    const extraLength = zip.readUInt16LE(offset + 28);
+    const nameStart = offset + 30;
+    const dataStart = nameStart + nameLength + extraLength;
+    const name = zip.subarray(nameStart, dataStart - extraLength).toString("utf8");
+    const data = zip.subarray(dataStart, dataStart + compressedSize);
+    if (name === entryName) {
+      if (compression === 0) return data;
+      if (compression === 8) return inflateRawSync(data);
+      throw new Error(`Unsupported XLSX compression method: ${compression}`);
+    }
+    offset = dataStart + compressedSize;
+  }
+  throw new Error(`Missing XLSX entry: ${entryName}`);
+}
+
+function decodeXmlText(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
+function decodeAscii85(input: Buffer): Buffer {
+  const encoded = input.toString("ascii").replace(/\s+/g, "").replace(/~>$/, "");
+  const output: number[] = [];
+  let group: number[] = [];
+
+  const flush = (values: number[]): void => {
+    let accumulator = 0;
+    for (const value of values) accumulator = accumulator * 85 + value;
+    for (let index = 3; index >= 0; index -= 1) {
+      output.push((accumulator >>> (index * 8)) & 0xff);
+    }
+  };
+
+  for (const character of encoded) {
+    if (character === "z" && group.length === 0) {
+      output.push(0, 0, 0, 0);
+      continue;
+    }
+    group.push(character.charCodeAt(0) - 33);
+    if (group.length === 5) {
+      flush(group);
+      group = [];
+    }
+  }
+
+  if (group.length > 0) {
+    const originalLength = group.length;
+    while (group.length < 5) group.push("u".charCodeAt(0) - 33);
+    flush(group);
+    output.splice(output.length - (5 - originalLength));
+  }
+  return Buffer.from(output);
+}
+
+function readPdfText(pdf: Buffer): string {
+  const streamMarker = Buffer.from("stream");
+  const endMarker = Buffer.from("endstream");
+  const chunks: string[] = [];
+  let cursor = 0;
+
+  while (true) {
+    const streamOffset = pdf.indexOf(streamMarker, cursor);
+    if (streamOffset < 0) break;
+    let dataStart = streamOffset + streamMarker.length;
+    if (pdf[dataStart] === 13 && pdf[dataStart + 1] === 10) dataStart += 2;
+    else if (pdf[dataStart] === 10) dataStart += 1;
+    const endOffset = pdf.indexOf(endMarker, dataStart);
+    if (endOffset < 0) break;
+
+    const dictionaryStart = pdf.lastIndexOf(Buffer.from("<<"), streamOffset);
+    const dictionary = pdf.subarray(dictionaryStart, streamOffset).toString("latin1");
+    let dataEnd = endOffset;
+    while (dataEnd > dataStart && (pdf[dataEnd - 1] === 10 || pdf[dataEnd - 1] === 13)) dataEnd -= 1;
+    let decoded = pdf.subarray(dataStart, dataEnd);
+    try {
+      if (dictionary.includes("/ASCII85Decode")) decoded = decodeAscii85(decoded);
+      if (dictionary.includes("/FlateDecode")) decoded = inflateSync(decoded);
+      chunks.push(decoded.toString("latin1"));
+    } catch {
+      // Ignore non-content streams; report content streams are ASCII85/Flate encoded.
+    }
+    cursor = endOffset + endMarker.length;
+  }
+
+  return chunks.join("\n").replace(/\\([()\\])/g, "$1");
+}
+
+test("acceptance: email login and Google OAuth entry point", async ({ page }) => {
   await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
   await page.goto("/login");
   await expect(page.getByRole("button", { name: "Continue with Google" })).toBeVisible();
   await signIn(page);
   await expect(page).toHaveURL(/\/dashboard/);
+});
+
+test("acceptance: OAuth callback without a code returns to sign in", async ({ page }) => {
+  await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
+  await page.goto("/auth/callback");
+  await expect(page).toHaveURL(/\/login\?error=oauth_callback/);
 });
 
 test("acceptance: register rejects mismatched password confirmation", async ({ page }) => {
@@ -278,4 +382,161 @@ test("acceptance: cross-user data denial", async ({ page }) => {
   const response = await page.goto(`/jobs/${state.otherUserMatchId}`);
   expect(response?.status()).toBe(404);
   await expect(page.locator("h1")).toContainText("404");
+});
+
+test("acceptance: original-only retention keeps profile data", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/cvs");
+
+  const cvRow = page.locator("li").filter({ hasText: "e2e-cv.pdf" });
+  await expect(cvRow).toBeVisible();
+  const originalDelete = page.waitForResponse(
+    (response) => {
+      if (!response.url().includes("/api/cvs") || response.request().method() !== "DELETE") return false;
+      return new URL(response.url()).searchParams.get("mode") === "original";
+    },
+  );
+  await cvRow.getByRole("button", { name: "Delete original file for e2e-cv.pdf" }).click();
+  expect((await originalDelete).status()).toBe(200);
+  await page.reload();
+
+  const retainedRow = page.locator("li").filter({ hasText: "e2e-cv.pdf" });
+  await expect(retainedRow).toBeVisible();
+  await expect(retainedRow.getByRole("button", { name: /Delete original file/ })).toHaveCount(0);
+  await page.goto("/onboarding/profile");
+  await expect(page.getByLabel("Name")).toHaveValue("E2E Candidate");
+});
+
+test("acceptance: completed exports download generated artifacts and preserve filters", async ({ page }) => {
+  test.setTimeout(180_000);
+  test.skip(
+    process.env.RUN_EXPORT_E2E !== "1",
+    "Set RUN_EXPORT_E2E=1 with the worker and storage service running to verify completed exports.",
+  );
+  await signIn(page);
+  const exportIds: Record<string, string> = {};
+  for (const format of ["xlsx", "pdf"] as const) {
+    const response = await page.evaluate(
+      async (request) => {
+        const res = await fetch("/api/exports", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(request),
+        });
+        return { status: res.status, body: await res.json() };
+      },
+      {
+        searchRunId: state.runId,
+        format,
+        scope: "current_filters",
+        filters: { min_score: 80 },
+      },
+    );
+    expect(response.status).toBe(202);
+    exportIds[format] = response.body.id as string;
+  }
+
+  await expect
+    .poll(
+      async () => {
+        const response = await page.request.get("/api/exports");
+        const body = (await response.json()) as {
+          exports: Array<{ id: string; status: string; filter_json: { min_score?: number } }>;
+        };
+        return Object.entries(exportIds).every(([format, id]) => {
+          const row = body.exports.find((item) => item.id === id);
+          return row?.status === "completed" && row.filter_json.min_score === 80 && format.length > 0;
+        });
+      },
+      { timeout: 120_000, intervals: [1_000, 2_000, 5_000] },
+    )
+    .toBe(true);
+
+  await page.goto("/exports");
+  for (const [format, label] of [
+    ["xlsx", "Excel"],
+    ["pdf", "PDF"],
+  ] as const) {
+    const card = page.locator("li").filter({ hasText: label }).filter({ hasText: "Completed" }).first();
+    const downloadPromise = page.waitForEvent("download");
+    await card.getByRole("link", { name: "Download" }).click();
+    const download = await downloadPromise;
+    const artifactPath = await download.path();
+    expect(artifactPath).not.toBeNull();
+    const artifact = readFileSync(artifactPath!);
+    expect(artifact.byteLength).toBeGreaterThan(100);
+    if (format === "xlsx") {
+      expect(artifact.subarray(0, 2).toString()).toBe("PK");
+      const sheetXml = readZipEntry(artifact, "xl/worksheets/sheet1.xml").toString("utf8");
+      const titles = [...sheetXml.matchAll(/<c r="A\d+"[^>]*><is><t>(.*?)<\/t>/g)].map((match) =>
+        decodeXmlText(match[1]),
+      );
+      expect(titles).toEqual(expect.arrayContaining(["Data Engineer (Airflow)", "Senior Data Analyst"]));
+      expect(titles).not.toContain("BI Developer");
+      expect(titles).not.toContain("Receptionist");
+    }
+    if (format === "pdf") {
+      expect(artifact.subarray(0, 5).toString()).toBe("%PDF-");
+      const pdfText = readPdfText(artifact);
+      expect(pdfText).toContain("Data Engineer (Airflow)");
+      expect(pdfText).toContain("Senior Data Analyst");
+      expect(pdfText).not.toContain("BI Developer");
+      expect(pdfText).not.toContain("Receptionist");
+    }
+  }
+});
+
+test("acceptance: Settings full deletion removes a disposable CV", async ({ page }) => {
+  await signIn(page);
+  await page.goto("/cvs");
+  const uploadResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/cvs") && response.request().method() === "POST",
+  );
+  await page.getByLabel("Choose a CV file").setInputFiles({
+    name: "settings-full-delete.pdf",
+    mimeType: "application/pdf",
+    buffer: readFileSync(path.resolve(__dirname, "../../worker/tests/fixtures/sample.pdf")),
+  });
+  await page.getByRole("button", { name: "Upload CV" }).click();
+  expect((await uploadResponse).status()).toBe(201);
+
+  await page.goto("/settings");
+  const settingsRow = page.locator("li").filter({ hasText: "settings-full-delete.pdf" });
+  await expect(settingsRow).toBeVisible();
+  const fullDelete = page.waitForResponse(
+    (response) => {
+      if (!response.url().includes("/api/cvs") || response.request().method() !== "DELETE") return false;
+      return new URL(response.url()).searchParams.get("mode") === "full";
+    },
+  );
+  await settingsRow.getByRole("button", { name: "Delete" }).click();
+  expect((await fullDelete).status()).toBe(200);
+  await expect(page.locator("li").filter({ hasText: "settings-full-delete.pdf" })).toHaveCount(0);
+});
+
+test("acceptance: account deletion removes the authenticated session", async ({ page }) => {
+  const email = `e2e-account-${Date.now()}@example.test`;
+  await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
+  await page.goto("/register");
+  await page.getByLabel("Email").fill(email);
+  await page.locator("#register-password").fill("E2e-password-123!");
+  await page.locator("#register-confirm-password").fill("E2e-password-123!");
+  await page.getByRole("button", { name: "Register" }).click();
+  await expect(page).toHaveURL(/\/login/);
+
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill("E2e-password-123!");
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForURL("**/dashboard");
+  await page.goto("/settings");
+  await page.getByLabel("Type DELETE to confirm").fill("DELETE");
+  const deleteResponse = page.waitForResponse(
+    (response) => response.url().includes("/api/account/delete") && response.request().method() === "DELETE",
+  );
+  await page.getByRole("button", { name: "Delete my account" }).click();
+  expect((await deleteResponse).status()).toBe(200);
+  await page.waitForURL("**/login");
+
+  await page.goto("/dashboard");
+  await page.waitForURL("**/login");
 });

@@ -38,10 +38,6 @@ export function isVersionRace(error: SupabaseError | null | undefined): boolean 
   return error?.code === "23505" && error?.message === "profile_version_conflict";
 }
 
-function isInsertVersionConflict(error: SupabaseError | null | undefined): boolean {
-  return isUniqueViolation(error) && !isActiveCvConflict(error);
-}
-
 function toSupabaseError(error: { code?: string | null; message: string } | null): SupabaseError | null {
   if (!error) return null;
   return { code: error.code ?? null, message: error.message };
@@ -134,30 +130,26 @@ export async function makeCvActive(
   return { ok: false, error: activeCvConflictError() };
 }
 
+export type ProfileRpcClient = {
+  rpc: (
+    fn: string,
+    args: Record<string, unknown>,
+  ) => PromiseLike<{ data: unknown; error: { code?: string | null; message: string } | null }>;
+};
+
 export async function saveCandidateProfile(
-  repo: ProfileRepo,
-  input: { userId: string; cvId: string; profile: CandidateProfile },
+  client: ProfileRpcClient,
+  input: { userId?: string; cvId: string; profile: CandidateProfile },
 ): Promise<{ ok: true; version: number } | { ok: false; error: SupabaseError }> {
-  const { userId, cvId, profile } = input;
+  const { cvId, profile } = input;
+  const { data, error } = await client.rpc("save_candidate_profile", {
+    p_cv_id: cvId,
+    p_profile: profile,
+  });
 
-  const firstVersion = await repo.nextVersion(cvId);
-  if (firstVersion.error) return { ok: false, error: firstVersion.error };
-  let version = firstVersion.version;
-
-  let insertResult = await repo.insertProfile(userId, cvId, version, profile);
-  if (insertResult.error && isInsertVersionConflict(insertResult.error)) {
-    const reread = await repo.nextVersion(cvId);
-    if (reread.error) return { ok: false, error: reread.error };
-    version = reread.version;
-    insertResult = await repo.insertProfile(userId, cvId, version, profile);
-  }
-  if (insertResult.error) {
-    if (isInsertVersionConflict(insertResult.error)) return { ok: false, error: versionRaceError() };
-    return { ok: false, error: insertResult.error };
+  if (error) {
+    return { ok: false, error: toSupabaseError(error)! };
   }
 
-  const activeResult = await makeCvActive(repo, { userId, cvId });
-  if (!activeResult.ok) return { ok: false, error: activeResult.error };
-
-  return { ok: true, version };
+  return { ok: true, version: Number(data) };
 }

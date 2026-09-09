@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap;
-select plan(11);
+select plan(18);
 
 select is(
     (select count(*) from pg_tables where schemaname = 'public' and tablename = 'candidate_profiles'),
@@ -115,6 +115,101 @@ select is(
     true,
     'handle_new_user execute is restricted to the owner'
 );
+
+select has_function(
+    'public',
+    'save_candidate_profile',
+    array['uuid', 'jsonb'],
+    'save_candidate_profile function exists'
+);
+
+select is(
+    (select case when exists (select 1 from pg_roles where rolname = 'authenticated')
+                      and exists (select 1 from pg_roles where rolname = 'anon')
+                 then has_function_privilege('authenticated', 'public.save_candidate_profile(uuid, jsonb)', 'execute')
+                  and not has_function_privilege('anon', 'public.save_candidate_profile(uuid, jsonb)', 'execute')
+                 else false end),
+    true,
+    'authenticated has execute on save_candidate_profile and anon does not'
+);
+
+insert into auth.users (id, email)
+values
+    ('00000000-0000-0000-0000-000000000001', 'profile-owner@example.com'),
+    ('00000000-0000-0000-0000-000000000002', 'other-profile@example.com');
+
+insert into public.cvs (id, user_id, original_name, mime_type, storage_path, is_active, extraction_status)
+values
+    ('10000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'cv1.pdf', 'application/pdf', 'path1', true, 'extracted'),
+    ('10000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'cv2.pdf', 'application/pdf', 'path2', false, 'extracted');
+
+insert into public.candidate_profiles (id, user_id, cv_id, version, profile)
+values
+    ('30000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
+     '10000000-0000-0000-0000-000000000001', 1, '{"seniority":"junior"}'::jsonb);
+
+insert into public.search_profiles (id, user_id, candidate_profile_id, region, target_roles, is_current)
+values
+    ('20000000-0000-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001',
+     '30000000-0000-0000-0000-000000000001', 'indonesia', array['Data Engineer'], true);
+
+select set_config(
+    'request.jwt.claims',
+    '{"sub":"00000000-0000-0000-0000-000000000001","role":"authenticated"}',
+    true
+);
+set local role authenticated;
+
+select is(
+    public.save_candidate_profile(
+        '10000000-0000-0000-0000-000000000002'::uuid,
+        '{"seniority":"mid","skills":["Python","SQL"]}'::jsonb
+    ),
+    1,
+    'save_candidate_profile returns version 1'
+);
+
+select is(
+    (select is_active from public.cvs where id = '10000000-0000-0000-0000-000000000002'),
+    true,
+    'target cv is now active'
+);
+
+select is(
+    (select is_active from public.cvs where id = '10000000-0000-0000-0000-000000000001'),
+    false,
+    'previous active cv is deactivated'
+);
+
+select is(
+    (select sp.candidate_profile_id = cp.id
+     from public.search_profiles sp
+     join public.candidate_profiles cp
+       on cp.cv_id = '10000000-0000-0000-0000-000000000002'
+      and cp.version = 1
+      and cp.confirmed_at is not null
+     where sp.id = '20000000-0000-0000-0000-000000000001'),
+    true,
+    'search profile links to confirmed candidate profile'
+);
+
+select set_config(
+    'request.jwt.claims',
+    '{"sub":"00000000-0000-0000-0000-000000000002","role":"authenticated"}',
+    true
+);
+
+select throws_ok(
+    $$select public.save_candidate_profile(
+        '10000000-0000-0000-0000-000000000002'::uuid,
+        '{"seniority":"senior"}'::jsonb
+    )$$,
+    'P0001',
+    'cv_not_found',
+    'cross-user save_candidate_profile raises cv_not_found'
+);
+
+set local role postgres;
 
 select * from finish();
 rollback;

@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 
 from jobmatch_worker.ai.base import AiResult, RetryableAiError
+from jobmatch_worker.matching.cache_key import requirements_cache_key
 
 PROFILE_JSON = {
     "name": "Rina",
@@ -61,6 +62,7 @@ class _Connection:
         pending: int = 0,
         failed: int = 0,
         match_run_ids: list[str] | None = None,
+        successful_matches: int | None = None,
     ) -> None:
         self.run_row = run_row
         self.profile_row = profile_row
@@ -68,6 +70,7 @@ class _Connection:
         self.pending = pending
         self.failed = failed
         self.match_run_ids = match_run_ids or []
+        self.successful_matches = successful_matches
         self.executed: list[tuple[str, tuple[Any, ...]]] = []
 
     async def execute(self, query: str, params: tuple[Any, ...] = ()) -> _Cursor:
@@ -83,6 +86,13 @@ class _Connection:
             if "status in ('queued', 'processing')" in lowered:
                 return _Cursor({"pending": self.pending})
             return _Cursor({"failed": self.failed})
+        if "from public.job_matches" in lowered and "count(*)" in lowered:
+            matched_count = (
+                self.successful_matches
+                if self.successful_matches is not None
+                else sum(1 for q, _ in self.executed if "insert into public.job_matches" in q.lower())
+            )
+            return _Cursor({"matched": matched_count})
         if "from public.job_search_run_jobs" in lowered:
             return _RowsCursor(
                 [{"search_run_id": run_id} for run_id in self.match_run_ids]
@@ -112,10 +122,11 @@ class _FailingRouter:
 def _settings(**overrides: Any) -> SimpleNamespace:
     values: dict[str, Any] = {
         "max_attempts": 3,
-        "ollama_embed_model": "",
-        "ollama_api_key": "",
-        "ollama_base_url": "https://ollama.com/api",
-        "ai_provider_order": "nvidia",
+        "ninerouter_embed_model": "",
+        "ninerouter_api_key": "",
+        "ninerouter_model": "",
+        "ninerouter_base_url": "http://localhost:20128/v1",
+        "ai_provider_order": "9router",
         "ai_timeout_seconds": 1.0,
     }
     values.update(overrides)
@@ -271,7 +282,7 @@ async def test_extract_job_requirements_handler_persists_cache() -> None:
     ]
     assert len(inserts) == 1
     assert inserts[0][0] == "job-5"
-    assert inserts[0][1] == "h5"
+    assert inserts[0][1] == requirements_cache_key("Python required")
 
     completed_items = [
         params
@@ -308,9 +319,10 @@ async def test_extract_job_requirements_enqueues_matches_for_related_runs() -> N
         and params[0] == "match_job"
     ]
     assert len(match_items) == 2
+    description_hash = requirements_cache_key("Python required")
     assert {params[1] for params in match_items} == {
-        "match_job:run-5:job-6:h6",
-        "match_job:run-6:job-6:h6",
+        f"match_job:run-5:job-6:{description_hash}",
+        f"match_job:run-6:job-6:{description_hash}",
     }
     payloads = [params[2] for params in match_items]
     assert all(isinstance(payload, Jsonb) for payload in payloads)
@@ -345,3 +357,53 @@ async def test_extract_job_requirements_preserves_provider_reason_after_final_re
         if "update public.work_items" in query.lower() and "failed" in query.lower()
     ]
     assert failed_items == [("requirement extraction failed: nvidia HTTP 429", "item-7")]
+
+
+@pytest.mark.asyncio
+async def test_match_job_without_provider_completes_run_accounting() -> None:
+    from jobmatch_worker.handlers.matching import handle_match_job
+
+    connection = _Connection(
+        run_row={"user_id": "user-1", "candidate_profile_id": "prof-1", "locations": []},
+        profile_row={"profile": PROFILE_JSON, "confirmed_at": "2026-08-16T00:00:00Z"},
+        job_row={"description": "Python required"},
+        pending=0,
+        failed=1,
+    )
+    await handle_match_job(
+        connection,
+        {"id": "item-no-provider", "payload": {"search_run_id": "run-9", "job_id": "job-9"}},
+        _settings(),
+    )
+    assert any(
+        params[0] in {"partial", "failed"} and params[2] == "run-9"
+        for query, params in connection.executed
+        if "update public.job_search_runs" in query.lower()
+    )
+
+
+@pytest.mark.asyncio
+async def test_extract_job_requirements_without_provider_completes_run_accounting() -> None:
+    from jobmatch_worker.handlers.matching import handle_extract_job_requirements
+
+    connection = _Connection(
+        run_row={"user_id": "user-1", "candidate_profile_id": "prof-1", "locations": []},
+        profile_row={"profile": PROFILE_JSON},
+        job_row={"description": "Python required"},
+        pending=0,
+        failed=1,
+        match_run_ids=["run-9"],
+    )
+    await handle_extract_job_requirements(
+        connection,
+        {
+            "id": "item-no-provider-req",
+            "payload": {"job_id": "job-9", "description_hash": "h9"},
+        },
+        _settings(),
+    )
+    assert any(
+        params[0] in {"partial", "failed"} and params[2] == "run-9"
+        for query, params in connection.executed
+        if "update public.job_search_runs" in query.lower()
+    )

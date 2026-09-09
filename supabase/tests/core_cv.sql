@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap;
 
-select plan(13);
+select plan(24);
 
 select is(
     (select count(*) from pg_tables where schemaname = 'public' and tablename = 'profiles'),
@@ -119,6 +119,155 @@ select is(
                  else false end),
     true,
     'service_role can operate on core user and worker tables'
+);
+
+select has_function(
+    'public',
+    'delete_original_cv',
+    array['uuid', 'uuid'],
+    'original CV deletion function exists'
+);
+select is(
+    (select case when exists (select 1 from pg_roles where rolname = 'service_role')
+                 then has_function_privilege('service_role', 'public.delete_original_cv(uuid, uuid)', 'execute')
+                   and not has_function_privilege('authenticated', 'public.delete_original_cv(uuid, uuid)', 'execute')
+                   and not has_function_privilege('anon', 'public.delete_original_cv(uuid, uuid)', 'execute')
+                   and not exists (
+                       select 1
+                       from pg_proc as procedure
+                       cross join lateral aclexplode(coalesce(procedure.proacl, acldefault('f', procedure.proowner))) as privilege
+                       where procedure.oid = 'public.delete_original_cv(uuid, uuid)'::regprocedure
+                         and privilege.grantee = 0
+                         and privilege.privilege_type = 'EXECUTE'
+                   )
+                 else false end),
+    true,
+    'only service_role can execute original CV deletion'
+);
+
+insert into auth.users (id, email)
+values
+    ('00000000-0000-0000-0000-000000000001', 'cv-owner@example.com'),
+    ('00000000-0000-0000-0000-000000000002', 'other-owner@example.com');
+
+insert into public.cvs (
+    id,
+    user_id,
+    original_name,
+    mime_type,
+    storage_path,
+    retain_original,
+    extraction_status
+)
+values (
+    '10000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    'resume.pdf',
+    'application/pdf',
+    '00000000-0000-0000-0000-000000000001/10000000-0000-0000-0000-000000000001/resume.pdf',
+    true,
+    'extracted'
+);
+
+insert into public.cvs (
+    id,
+    user_id,
+    original_name,
+    mime_type,
+    storage_path,
+    retain_original,
+    extraction_status
+)
+values (
+    '10000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000001',
+    'queued-resume.pdf',
+    'application/pdf',
+    '00000000-0000-0000-0000-000000000001/10000000-0000-0000-0000-000000000002/queued-resume.pdf',
+    true,
+    'queued'
+);
+
+insert into public.candidate_profiles (id, user_id, cv_id, version, profile)
+values (
+    '20000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001',
+    '10000000-0000-0000-0000-000000000001',
+    1,
+    '{}'::jsonb
+);
+
+select set_config('request.jwt.claims', '', true);
+select throws_ok(
+    $$select public.delete_original_cv(
+        '10000000-0000-0000-0000-000000000001',
+        '00000000-0000-0000-0000-000000000001'
+    )$$,
+    '42501',
+    'service_role_required',
+    'original CV deletion rejects callers without service claims'
+);
+
+select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+select throws_ok(
+    $$select public.delete_original_cv(
+        '10000000-0000-0000-0000-000000000001',
+        '00000000-0000-0000-0000-000000000001'
+    )$$,
+    '42501',
+    'service_role_required',
+    'original CV deletion rejects non-service callers'
+);
+
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select public.delete_original_cv(
+    '10000000-0000-0000-0000-000000000002',
+    '00000000-0000-0000-0000-000000000001'
+);
+select is(
+    (select storage_path from public.cvs where id = '10000000-0000-0000-0000-000000000002'),
+    '00000000-0000-0000-0000-000000000001/10000000-0000-0000-0000-000000000002/queued-resume.pdf',
+    'original deletion preserves storage path until extraction completes'
+);
+select is(
+    (select retain_original from public.cvs where id = '10000000-0000-0000-0000-000000000002'),
+    true,
+    'original deletion preserves retention until extraction completes'
+);
+
+select public.delete_original_cv(
+    '10000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000002'
+);
+select is(
+    (select storage_path from public.cvs where id = '10000000-0000-0000-0000-000000000001'),
+    '00000000-0000-0000-0000-000000000001/10000000-0000-0000-0000-000000000001/resume.pdf',
+    'wrong-owner deletion leaves the original reference unchanged'
+);
+
+select public.delete_original_cv(
+    '10000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000001'
+);
+select is(
+    (select count(*) from public.cvs where id = '10000000-0000-0000-0000-000000000001'),
+    1::bigint,
+    'original deletion preserves the CV row'
+);
+select is(
+    (select count(*) from public.candidate_profiles where id = '20000000-0000-0000-0000-000000000001'),
+    1::bigint,
+    'original deletion preserves the candidate profile'
+);
+select is(
+    (select storage_path from public.cvs where id = '10000000-0000-0000-0000-000000000001'),
+    null::text,
+    'original deletion clears the storage path'
+);
+select is(
+    (select retain_original from public.cvs where id = '10000000-0000-0000-0000-000000000001'),
+    false,
+    'original deletion disables original retention'
 );
 
 select * from finish();

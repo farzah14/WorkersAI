@@ -181,7 +181,12 @@
     "empty": "Belum ada ekspor.",
     "emptyHint": "Buat ekspor pertama untuk mengunduh hasil.",
     "openDashboard": "Buka Dasbor",
-    "download": "Unduh"
+    "download": "Unduh",
+    "createXlsx": "Ekspor Excel (.xlsx)",
+    "createPdf": "Ekspor PDF (.pdf)",
+    "creating": "Meminta ekspor…",
+    "requestAccepted": "Permintaan ekspor diterima. Sedang diproses di latar belakang.",
+    "requestFailed": "Gagal membuat permintaan ekspor. Silakan coba lagi."
   },
   "settings": {
     "title": "Pengaturan",

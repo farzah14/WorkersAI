@@ -25,9 +25,8 @@ If a plan conflicts with the approved design, stop and reconcile the plan before
 - Auth/data/storage: Supabase Auth + PostgreSQL + private Supabase Storage with RLS.
 - Worker: Python 3.12+ using asyncio, psycopg, Pydantic, HTTPX, PyMuPDF, and python-docx.
 - Queue: PostgreSQL-backed durable `work_items` queue using `FOR UPDATE SKIP LOCKED`.
-- AI providers: NVIDIA NIM, OpenRouter, and Ollama Cloud.
-- Default AI fallback order: `nvidia -> ollama -> openrouter`, configurable by operation.
-- Ollama: cloud API only through `OLLAMA_API_KEY`; no local Ollama runtime in the MVP.
+- AI provider gateway: 9Router (OpenAI-compatible AI gateway, default `http://localhost:20128/v1`).
+- AI provider: `9router`, configurable via `NINEROUTER_*` settings.
 - Deployment: Vercel + Supabase + one persistent VPS for worker/scheduler only.
 - Testing: Vitest + Playwright for web, pytest for worker, SQL/RLS checks for Supabase.
 
@@ -135,27 +134,15 @@ CV data is sensitive user data.
 
 ## AI provider rules
 
-All generative AI calls go through the provider-neutral router.
+All generative AI calls go through the provider-neutral router, backed by the 9Router OpenAI-compatible gateway.
 
 Provider names:
 
-- `nvidia`
-- `openrouter`
-- `ollama`
+- `9router`
 
-Default fallback:
+Default order: `AI_PROVIDER_ORDER=9router`
 
-```text
-NVIDIA NIM
-  -> retryable failure
-Ollama Cloud
-  -> retryable failure
-OpenRouter
-```
-
-The order is configuration, not business logic.
-
-Fallback is allowed for:
+Retry is allowed for:
 
 - timeout;
 - HTTP 408/429;
@@ -163,7 +150,7 @@ Fallback is allowed for:
 - temporary circuit-open/health state;
 - invalid structured output after the bounded same-provider retry.
 
-Do not fallback for:
+Do not retry for:
 
 - unsupported CV format;
 - invalid application input;
@@ -171,16 +158,12 @@ Do not fallback for:
 - authorization failure;
 - known permanent configuration errors that require operator action.
 
-## Ollama Cloud rules
+## 9Router rules
 
-- Use `OLLAMA_API_KEY` server-side only.
-- Use `OLLAMA_BASE_URL=https://ollama.com/api` unless an approved configuration change says otherwise.
-- `OLLAMA_MODEL` is configuration; do not hardcode a permanent model in business logic.
-- Optional embedding configuration uses `OLLAMA_EMBED_MODEL`.
-- Do not run `ollama serve` for production.
-- Do not create an Ollama Docker service.
-- Do not pull local models.
-- Do not depend on `localhost:11434` or expose port `11434`.
+- Use `NINEROUTER_API_KEY` server-side only (optional if local 9Router gateway requires no key).
+- Use `NINEROUTER_BASE_URL` (default `http://localhost:20128/v1`) unless an approved configuration change says otherwise.
+- `NINEROUTER_MODEL` is configuration; do not hardcode a permanent model in business logic.
+- Optional embedding configuration uses `NINEROUTER_EMBED_MODEL`.
 - Application-side JSON parsing and Pydantic validation are mandatory for structured results regardless of provider behavior.
 
 ## Matching invariants

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { render, screen, within } from "@testing-library/react";
 import { DELETE as deleteCv } from "@/app/api/cvs/route";
 import { DELETE as deleteAccount } from "@/app/api/account/delete/route";
+import CvsPage from "@/app/cvs/page";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 
@@ -9,6 +11,10 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 vi.mock("@supabase/supabase-js", () => ({
   createClient: vi.fn(),
+}));
+vi.mock("next/navigation", () => ({
+  redirect: vi.fn(),
+  useRouter: () => ({ refresh: vi.fn() }),
 }));
 
 const createServerClientMock = vi.mocked(createServerClient);
@@ -68,10 +74,11 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("DELETE /api/cvs (remove the CV and its extracted profile)", () => {
-  function makeRequest(cvId: string | null): Request {
+describe("DELETE /api/cvs", () => {
+  function makeRequest(cvId: string | null, mode?: "original" | "full" | string): Request {
     const url = new URL("http://localhost/api/cvs");
     if (cvId) url.searchParams.set("cv_id", cvId);
+    if (mode) url.searchParams.set("mode", mode);
     return new Request(url, { method: "DELETE" });
   }
 
@@ -93,7 +100,7 @@ describe("DELETE /api/cvs (remove the CV and its extracted profile)", () => {
     const serviceClient = cvServiceClient(removals);
     createServiceClientMock.mockReturnValue(serviceClient as never);
 
-    const response = await deleteCv(makeRequest(CV_ID));
+    const response = await deleteCv(makeRequest(CV_ID, "full"));
 
     expect(response.status).toBe(200);
     expect(removals).toEqual([{ bucket: "cvs", paths: [CV_PATH] }]);
@@ -103,12 +110,42 @@ describe("DELETE /api/cvs (remove the CV and its extracted profile)", () => {
     });
   });
 
+  it("deletes only the original object before preserving the CV profile", async () => {
+    authOnly(cvClient({
+      data: { id: CV_ID, storage_path: CV_PATH, extraction_status: "extracted" },
+      error: null,
+    }));
+    const calls: string[] = [];
+    const serviceClient = cvServiceClient([]);
+    serviceClient.storage.from = vi.fn(() => ({
+      remove: vi.fn(async () => {
+        calls.push("remove_original");
+        return { data: [], error: null };
+      }),
+    })) as never;
+    vi.mocked(serviceClient.rpc).mockImplementation(async (fn: string) => {
+      calls.push(fn);
+      return { data: null, error: null };
+    });
+    createServiceClientMock.mockReturnValue(serviceClient as never);
+
+    const response = await deleteCv(makeRequest(CV_ID, "original"));
+
+    expect(response.status).toBe(200);
+    expect(calls).toEqual(["remove_original", "delete_original_cv"]);
+    expect(serviceClient.rpc).toHaveBeenCalledWith("delete_original_cv", {
+      p_cv_id: CV_ID,
+      p_user_id: USER_ID,
+    });
+    expect(serviceClient.rpc).not.toHaveBeenCalledWith("delete_cv", expect.anything());
+  });
+
   it("returns 404 for a cv owned by another user", async () => {
     authOnly(cvClient({ data: null, error: null }));
     const serviceClient = cvServiceClient([]);
     createServiceClientMock.mockReturnValue(serviceClient as never);
 
-    const response = await deleteCv(makeRequest(CV_ID));
+    const response = await deleteCv(makeRequest(CV_ID, "full"));
 
     expect(response.status).toBe(404);
     expect(serviceClient.rpc).not.toHaveBeenCalled();
@@ -120,8 +157,30 @@ describe("DELETE /api/cvs (remove the CV and its extracted profile)", () => {
     });
     createServiceClientMock.mockReturnValue(cvServiceClient([]) as never);
 
-    expect((await deleteCv(makeRequest(null))).status).toBe(400);
-    expect((await deleteCv(makeRequest("not-a-uuid"))).status).toBe(400);
+    expect((await deleteCv(makeRequest(null, "full"))).status).toBe(400);
+    expect((await deleteCv(makeRequest("not-a-uuid", "full"))).status).toBe(400);
+  });
+
+  it("defaults legacy callers to non-destructive original deletion", async () => {
+    authOnly(cvClient({
+      data: { id: CV_ID, storage_path: null, extraction_status: "extracted" },
+      error: null,
+    }));
+    const serviceClient = cvServiceClient([]);
+    createServiceClientMock.mockReturnValue(serviceClient as never);
+
+    expect((await deleteCv(makeRequest(CV_ID))).status).toBe(200);
+    expect(serviceClient.rpc).toHaveBeenCalledWith("delete_original_cv", {
+      p_cv_id: CV_ID,
+      p_user_id: USER_ID,
+    });
+  });
+
+  it("rejects an unsupported deletion mode", async () => {
+    authOnly(cvClient({ data: { id: CV_ID, storage_path: null }, error: null }));
+    createServiceClientMock.mockReturnValue(cvServiceClient([]) as never);
+
+    expect((await deleteCv(makeRequest(CV_ID, "unsupported"))).status).toBe(400);
   });
 
   it("treats an already-missing object as idempotent success", async () => {
@@ -135,7 +194,7 @@ describe("DELETE /api/cvs (remove the CV and its extracted profile)", () => {
     })) as never;
     createServiceClientMock.mockReturnValue(serviceClient as never);
 
-    const response = await deleteCv(makeRequest(CV_ID));
+    const response = await deleteCv(makeRequest(CV_ID, "full"));
 
     expect(response.status).toBe(200);
     expect(serviceClient.rpc).toHaveBeenCalledWith("delete_cv", {
@@ -150,7 +209,7 @@ describe("DELETE /api/cvs (remove the CV and its extracted profile)", () => {
       cvServiceClient([], { message: "purge failed" }) as never,
     );
 
-    const response = await deleteCv(makeRequest(CV_ID));
+    const response = await deleteCv(makeRequest(CV_ID, "full"));
 
     expect(response.status).toBe(500);
   });
@@ -160,7 +219,95 @@ describe("DELETE /api/cvs (remove the CV and its extracted profile)", () => {
       auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }) },
     });
 
-    expect((await deleteCv(makeRequest(CV_ID))).status).toBe(401);
+    expect((await deleteCv(makeRequest(CV_ID, "full"))).status).toBe(401);
+  });
+
+  it("does not clear the database reference when object removal fails", async () => {
+    authOnly(cvClient({
+      data: { id: CV_ID, storage_path: CV_PATH, extraction_status: "extracted" },
+      error: null,
+    }));
+    const serviceClient = cvServiceClient([]);
+    serviceClient.storage.from = vi.fn(() => ({
+      remove: vi.fn().mockResolvedValue({
+        data: null,
+        error: { message: "storage is down" },
+      }),
+    })) as never;
+    createServiceClientMock.mockReturnValue(serviceClient as never);
+
+    const response = await deleteCv(makeRequest(CV_ID, "original"));
+
+    expect(response.status).toBe(500);
+    expect(serviceClient.rpc).not.toHaveBeenCalled();
+  });
+
+  it.each(["queued", "processing", "failed"])(
+    "rejects original deletion while extraction is %s",
+    async (extractionStatus) => {
+      authOnly(cvClient({
+        data: { id: CV_ID, storage_path: CV_PATH, extraction_status: extractionStatus },
+        error: null,
+      }));
+      const serviceClient = cvServiceClient([]);
+      createServiceClientMock.mockReturnValue(serviceClient as never);
+
+      const response = await deleteCv(makeRequest(CV_ID, "original"));
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toEqual({ error: "cv_not_ready" });
+      expect(serviceClient.storage.from).not.toHaveBeenCalled();
+      expect(serviceClient.rpc).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe("CV retention actions", () => {
+  it("shows original deletion only after extraction completes", async () => {
+    const cvs = [
+      {
+        id: "11111111-1111-1111-1111-111111111111",
+        original_name: "Ready CV",
+        extraction_status: "extracted",
+        is_active: true,
+        storage_path: "ready/resume.pdf",
+        created_at: "2026-09-06T00:00:00Z",
+      },
+      ...["queued", "processing", "failed"].map((status, index) => ({
+        id: `22222222-2222-2222-2222-22222222222${index}`,
+        original_name: `${status} CV`,
+        extraction_status: status,
+        is_active: false,
+        storage_path: `${status}/resume.pdf`,
+        created_at: "2026-09-06T00:00:00Z",
+      })),
+    ];
+    authOnly({
+      auth: { getUser: vi.fn().mockResolvedValue(authenticatedUser()) },
+      from: vi.fn(() => ({
+        select: vi.fn().mockReturnValue({
+          order: vi.fn().mockResolvedValue({ data: cvs, error: null }),
+        }),
+      })),
+    });
+
+    render(await CvsPage());
+
+    const readyRow = screen.getByText("Ready CV").closest("li");
+    expect(readyRow).not.toBeNull();
+    expect(
+      within(readyRow!).getByRole("button", { name: "Delete original file for Ready CV" }),
+    ).toBeDefined();
+
+    for (const status of ["queued", "processing", "failed"]) {
+      const row = screen.getByText(`${status} CV`).closest("li");
+      expect(row).not.toBeNull();
+      expect(
+        within(row!).queryByRole("button", {
+          name: `Delete original file for ${status} CV`,
+        }),
+      ).toBeNull();
+    }
   });
 });
 
@@ -173,7 +320,17 @@ describe("DELETE /api/account/delete", () => {
     });
   }
 
-  function makeClient({ cvs = [CV_PATH], exports: exportPaths = [] }: { cvs?: string[]; exports?: string[] }) {
+  function makeClient({
+    cvs = [CV_PATH],
+    exports: exportPaths = [],
+    cvError = null,
+    exportError = null,
+  }: {
+    cvs?: string[];
+    exports?: string[];
+    cvError?: unknown;
+    exportError?: unknown;
+  }) {
     return {
       auth: {
         getUser: vi.fn().mockResolvedValue(authenticatedUser()),
@@ -187,7 +344,7 @@ describe("DELETE /api/account/delete", () => {
                 then: (resolve: (value: unknown) => void) => {
                   resolve({
                     data: paths.map((p) => ({ storage_path: p })),
-                    error: null,
+                    error: table === "cvs" ? cvError : exportError,
                   });
                 },
               }),
@@ -313,6 +470,30 @@ describe("DELETE /api/account/delete", () => {
 
     expect(response.status).toBe(500);
     expect(deleteUser).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when CV storage-path enumeration fails", async () => {
+    authOnly(makeClient({ cvError: { message: "database unavailable" } }));
+    const serviceClient = accountServiceClient([]);
+    createServiceClientMock.mockReturnValue(serviceClient as never);
+
+    const response = await deleteAccount(makeRequest("DELETE"));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "storage_enumeration_failed" });
+    expect(serviceClient.auth.admin.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when export storage-path enumeration fails", async () => {
+    authOnly(makeClient({ exportError: { message: "database unavailable" } }));
+    const serviceClient = accountServiceClient([]);
+    createServiceClientMock.mockReturnValue(serviceClient as never);
+
+    const response = await deleteAccount(makeRequest("DELETE"));
+
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "storage_enumeration_failed" });
+    expect(serviceClient.auth.admin.deleteUser).not.toHaveBeenCalled();
   });
 
   it("returns 500 when the auth user deletion fails", async () => {

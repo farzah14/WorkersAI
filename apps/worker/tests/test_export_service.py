@@ -28,6 +28,16 @@ def test_export_filters_rejects_unknown_fields() -> None:
         )
 
 
+def test_web_shaped_export_filters_validate() -> None:
+    filters = ExportFilters.model_validate({
+        "region": ["indonesia"],
+        "work_mode": ["remote"],
+        "min_score": 80,
+        "status": ["saved"],
+    })
+    assert filters.region == ["indonesia"]
+
+
 def test_export_request_validates_scope_and_format() -> None:
     with pytest.raises(ValidationError):
         ExportRequest(

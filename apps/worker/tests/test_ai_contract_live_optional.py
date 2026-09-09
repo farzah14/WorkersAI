@@ -1,9 +1,9 @@
 """Opt-in live AI provider contract tests.
 
-These tests call real NVIDIA NIM / OpenRouter / Ollama Cloud endpoints and
-consume quota, so they are skipped unless ``RUN_LIVE_AI_TESTS=1`` is set.
-Ordinary CI never runs them. Each test builds a single-provider router and
-asserts that the provider returns Pydantic-schema-valid structured output
+These tests call the real 9Router endpoint and consume model quota,
+so they are skipped unless ``RUN_LIVE_AI_TESTS=1`` is set.
+Ordinary CI never runs them. The test builds a 9Router router and
+asserts that the gateway returns Pydantic-schema-valid structured output
 for the candidate profile extraction contract.
 """
 
@@ -46,29 +46,9 @@ def _assert_valid_profile(result: object) -> None:
 
 @LIVE
 @pytest.mark.asyncio
-async def test_live_nvidia_profile_contract() -> None:
+async def test_live_ninerouter_profile_contract() -> None:
     settings = Settings()  # type: ignore[call-arg]
     profile = await extract_candidate_profile(
-        SAMPLE_CV_TEXT, _router_for(settings, "nvidia")
-    )
-    _assert_valid_profile(profile)
-
-
-@LIVE
-@pytest.mark.asyncio
-async def test_live_openrouter_profile_contract() -> None:
-    settings = Settings()  # type: ignore[call-arg]
-    profile = await extract_candidate_profile(
-        SAMPLE_CV_TEXT, _router_for(settings, "openrouter")
-    )
-    _assert_valid_profile(profile)
-
-
-@LIVE
-@pytest.mark.asyncio
-async def test_live_ollama_profile_contract() -> None:
-    settings = Settings()  # type: ignore[call-arg]
-    profile = await extract_candidate_profile(
-        SAMPLE_CV_TEXT, _router_for(settings, "ollama")
+        SAMPLE_CV_TEXT, _router_for(settings, "9router")
     )
     _assert_valid_profile(profile)
