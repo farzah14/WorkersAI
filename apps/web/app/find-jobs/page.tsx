@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { candidateProfileSchema } from "@/lib/profile/schema";
 import { createClient } from "@/lib/supabase/client";
@@ -128,11 +129,11 @@ function EmptyState({ state }: { state: Exclude<LoadState, "loading" | "ready"> 
 }
 
 export default function FindJobsPage() {
+  const router = useRouter();
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [values, setValues] = useState<FormValues | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [runId, setRunId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -229,7 +230,6 @@ export default function FindJobsPage() {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
-    setRunId(null);
 
     const parsed = searchProfileSchema.safeParse({
       candidate_profile_id: currentValues.candidateProfileId,
@@ -269,7 +269,12 @@ export default function FindJobsPage() {
         return;
       }
 
-      if (data?.run_id) setRunId(data.run_id);
+      if (response.status !== 202 || !data?.run_id) {
+        setError("Could not start the job search.");
+        return;
+      }
+
+      router.push("/dashboard");
     } catch {
       setError("The search could not be started. Check your connection and try again.");
     } finally {
@@ -456,12 +461,6 @@ export default function FindJobsPage() {
               {error}
             </p>
           )}
-          {runId && (
-            <p role="status" className="rounded-xl border border-[#9bc6b7] bg-[#e5f0ec] px-4 py-3 text-sm text-[#1f6b59]">
-              Search queued. Run <span className="font-mono">{runId}</span> is ready for discovery.
-            </p>
-          )}
-
           <div className="flex flex-col gap-4 border-t border-[#d9d5cc] pt-8 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-[#6d787e]">You can adjust this brief each time you search.</p>
             <button
