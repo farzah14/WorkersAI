@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from typing import Any
 
@@ -197,6 +198,7 @@ def _job(
     location: str | None = "Jakarta",
     country: str | None = None,
     work_mode: str | None = None,
+    published_at: datetime | None = None,
 ) -> DiscoveredJob:
     return DiscoveredJob(
         source_name=source_key,
@@ -208,6 +210,7 @@ def _job(
         work_mode=work_mode,
         description=f"Description for {title}",
         original_url=url,
+        published_at=published_at or datetime.now(UTC),
     )
 
 
@@ -371,6 +374,77 @@ async def test_global_discovery_keeps_foreign_job_behavior() -> None:
     )
 
     assert any("insert into public.jobs" in query.lower() for query, _ in connection.executed)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("region", ["indonesia", "global"])
+async def test_discovery_enforces_thirty_day_publication_window(region: str) -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    now = datetime.now(UTC)
+    run_row = {
+        "id": f"run-thirty-day-{region}",
+        "status": "queued",
+        "region": region,
+        "target_roles": ["Data Engineer"],
+        "locations": ["Jakarta"] if region == "indonesia" else [],
+        "work_modes": [],
+        "excluded_keywords": [],
+    }
+    jobs = [
+        _job(
+            source_key="greenhouse",
+            url="https://boards.greenhouse.io/acme/jobs/recent",
+            title="Recent Job",
+            published_at=now - timedelta(days=1),
+        ),
+        _job(
+            source_key="greenhouse",
+            url="https://boards.greenhouse.io/acme/jobs/boundary",
+            title="Exactly Thirty Days",
+            published_at=now - timedelta(days=30),
+        ),
+        _job(
+            source_key="greenhouse",
+            url="https://boards.greenhouse.io/acme/jobs/old",
+            title="Old Job",
+            published_at=now - timedelta(days=31),
+        ),
+        _job(
+            source_key="greenhouse",
+            url="https://boards.greenhouse.io/acme/jobs/future",
+            title="Future Job",
+            published_at=now + timedelta(days=1),
+        ),
+        DiscoveredJob(
+            source_name="greenhouse",
+            source_key="greenhouse",
+            title="Undated Job",
+            company="Acme",
+            location="Jakarta",
+            description="Description for Undated Job",
+            original_url="https://boards.greenhouse.io/acme/jobs/undated",
+            published_at=None,
+        ),
+    ]
+    connection = _Connection(run_row)
+
+    await handle_discover_jobs(
+        connection,
+        {
+            "id": f"item-thirty-day-{region}",
+            "payload": {"search_run_id": f"run-thirty-day-{region}"},
+        },
+        SimpleNamespace(max_attempts=3, requirement_extraction_enabled=False),
+        connectors={"greenhouse": _Connector("greenhouse", jobs)},
+    )
+
+    inserted_titles = [
+        params[1]
+        for query, params in connection.executed
+        if "insert into public.jobs" in query.lower()
+    ]
+    assert inserted_titles == ["Recent Job", "Exactly Thirty Days"]
 
 
 @pytest.mark.asyncio
@@ -756,6 +830,8 @@ async def test_search_candidates_become_jobs_with_search_provenance() -> None:
             title="Backend Engineer",
             company="Acme Labs",
             location="Jakarta",
+            published_at=datetime.now(UTC),
+            is_job_posting=True,
         )
 
     await handle_discover_jobs(
