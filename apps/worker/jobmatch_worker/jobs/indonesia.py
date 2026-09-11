@@ -1,12 +1,11 @@
 """Strict, deterministic policy for Indonesia job discovery."""
 
-from collections.abc import Iterable, Sequence
-from datetime import UTC, datetime
 import re
 import urllib.parse
+from collections.abc import Iterable, Sequence
+from datetime import UTC, datetime
 
-from jobmatch_worker.jobs.models import DiscoveredJob
-
+from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
 
 DEFAULT_TRUSTED_DOMAINS = frozenset(
     {
@@ -202,10 +201,38 @@ def rank_indonesia_jobs(
     )
 
 
+def rank_indonesia_candidates(
+    candidates: Sequence[DiscoveryCandidateUrl],
+    *,
+    roles: Sequence[str],
+    locations: Sequence[str],
+) -> list[DiscoveryCandidateUrl]:
+    def score(candidate: DiscoveryCandidateUrl) -> float:
+        title_tokens = _tokens(candidate.title or "")
+        role_score = 0.0
+        for role in roles:
+            role_tokens = _tokens(role)
+            if role_tokens:
+                role_score = max(
+                    role_score,
+                    60.0 * len(title_tokens & role_tokens) / len(role_tokens),
+                )
+        context = f"{candidate.title or ''} {candidate.snippet or ''}".casefold()
+        location_score = 25.0 if any(
+            location.strip().casefold() in context
+            for location in locations
+            if location.strip()
+        ) else 0.0
+        return role_score + location_score
+
+    return sorted(candidates, key=score, reverse=True)
+
+
 __all__ = [
     "DEFAULT_TRUSTED_DOMAINS",
     "is_indonesia_eligible",
     "is_trusted_job_url",
     "parse_extra_trusted_domains",
+    "rank_indonesia_candidates",
     "rank_indonesia_jobs",
 ]

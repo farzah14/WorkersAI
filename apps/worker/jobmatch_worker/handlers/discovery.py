@@ -31,6 +31,13 @@ from jobmatch_worker.jobs.dedupe import (
     job_fingerprint,
     upsert_jobs,
 )
+from jobmatch_worker.jobs.indonesia import (
+    is_indonesia_eligible,
+    is_trusted_job_url,
+    parse_extra_trusted_domains,
+    rank_indonesia_candidates,
+    rank_indonesia_jobs,
+)
 from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
 from jobmatch_worker.jobs.normalize import NormalizedJob, normalize_job
 from jobmatch_worker.jobs.query import SearchQuery, build_queries
@@ -112,6 +119,8 @@ async def _candidate_to_job(
     candidate: DiscoveryCandidateUrl,
     fetch_page: FetchPage,
     source_key: str,
+    *,
+    require_specific: bool = False,
 ) -> DiscoveredJob | None:
     content = await fetch_page(candidate.url)
     text = content.text.strip()
@@ -119,6 +128,8 @@ async def _candidate_to_job(
         raise SourceDataError("career_page", "empty page text")
     if content.is_closed:
         raise SourceDataError(source_key, "job page is closed")
+    if require_specific and not content.is_job_posting:
+        raise SourceDataError(source_key, "page is not a specific job posting")
     if not content.company:
         raise SourceDataError(source_key, "job page missing company metadata")
     job = DiscoveredJob(
@@ -164,16 +175,40 @@ async def _run_source(
     queries: list[SearchQuery],
     fetch_page: FetchPage | None,
     semaphore: asyncio.Semaphore,
+    *,
+    candidate_limit: int = _MAX_CAREER_CANDIDATES,
+    require_specific: bool = False,
+    trusted_domains: frozenset[str] | None = None,
+    roles: tuple[str, ...] = (),
+    locations: tuple[str, ...] = (),
+    deadline_seconds: float | None = None,
 ) -> _SourceOutcome:
     jobs: list[DiscoveredJob] = []
     discovered_count = 0
     candidate_failures = 0
     candidate_retryable = False
     seen_candidates: set[str] = set()
+    seen_job_urls: set[str] = set()
+    candidates: list[DiscoveryCandidateUrl] = []
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + deadline_seconds if deadline_seconds is not None else None
+
+    def remaining_seconds() -> float | None:
+        if deadline is None:
+            return None
+        return max(0.0, deadline - loop.time())
+
     try:
         async with semaphore:
             for query in _queries_for_source(source_key, queries):
-                results = await connector.search(query)
+                remaining = remaining_seconds()
+                if remaining is not None and remaining <= 0:
+                    raise TimeoutError
+                if remaining is None:
+                    results = await connector.search(query)
+                else:
+                    async with asyncio.timeout(remaining):
+                        results = await connector.search(query)
                 for result in results:
                     discovered_count += 1
                     if discovered_count > _MAX_SOURCE_RESULTS:
@@ -190,25 +225,85 @@ async def _run_source(
                             continue
                         if candidate_url in seen_candidates:
                             continue
+                        if trusted_domains is not None and not is_trusted_job_url(
+                            result.url, trusted_domains
+                        ):
+                            continue
                         if len(seen_candidates) >= _MAX_CAREER_CANDIDATES:
                             raise SourceDataError(
                                 source_key, "career-page candidate limit exceeded"
                             )
                         seen_candidates.add(candidate_url)
-                        try:
-                            job = await _candidate_to_job(result, fetch_page, source_key)
-                        except SourceUnavailable:
-                            candidate_failures += 1
-                            candidate_retryable = True
-                            continue
-                        except SourceError:
-                            candidate_failures += 1
-                            continue
-                        if job is not None:
-                            jobs.append(job)
+                        candidates.append(result)
                     else:
                         _validate_job_size(result, source_key)
+                        canonical_url = canonicalize_url(
+                            result.original_url, source_key=source_key
+                        )
+                        if canonical_url in seen_job_urls:
+                            continue
+                        seen_job_urls.add(canonical_url)
                         jobs.append(result)
+
+            if require_specific:
+                candidates = rank_indonesia_candidates(
+                    candidates,
+                    roles=roles,
+                    locations=locations,
+                )[:candidate_limit]
+
+            candidate_semaphore = asyncio.Semaphore(_SOURCE_CONCURRENCY)
+            page_fetch = fetch_page
+
+            async def fetch_candidate(
+                candidate: DiscoveryCandidateUrl,
+            ) -> DiscoveredJob | None:
+                if page_fetch is None:
+                    return None
+                async with candidate_semaphore:
+                    return await _candidate_to_job(
+                        candidate,
+                        page_fetch,
+                        source_key,
+                        require_specific=require_specific,
+                    )
+
+            tasks = [asyncio.create_task(fetch_candidate(candidate)) for candidate in candidates]
+            done: set[asyncio.Task[DiscoveredJob | None]] = set()
+            pending: set[asyncio.Task[DiscoveredJob | None]] = set()
+            if tasks:
+                remaining = remaining_seconds()
+                done, pending = await asyncio.wait(tasks, timeout=remaining)
+            if pending:
+                candidate_failures += len(pending)
+                candidate_retryable = True
+                for task in pending:
+                    task.cancel()
+                await asyncio.gather(*pending, return_exceptions=True)
+
+            for task in tasks:
+                if task not in done:
+                    continue
+                try:
+                    job = task.result()
+                except SourceUnavailable:
+                    candidate_failures += 1
+                    candidate_retryable = True
+                    continue
+                except SourceError:
+                    candidate_failures += 1
+                    continue
+                if job is not None:
+                    jobs.append(job)
+    except TimeoutError:
+        return _SourceOutcome(
+            source_key=source_key,
+            status="failed",
+            jobs=tuple(jobs),
+            error_code="unavailable",
+            discovered_count=discovered_count,
+            retryable=True,
+        )
     except SourceError as error:
         return _SourceOutcome(
             source_key=source_key,
@@ -483,9 +578,29 @@ async def handle_discover_jobs(
             )
 
         semaphore = asyncio.Semaphore(_SOURCE_CONCURRENCY)
+        indonesia_mode = str(run["region"]).casefold() == "indonesia"
+        extra_trusted_domains = parse_extra_trusted_domains(
+            getattr(settings, "indonesia_trusted_job_domains", "")
+        )
         outcomes = await asyncio.gather(
             *(
-                _run_source(source_key, source, queries, fetch_page, semaphore)
+                _run_source(
+                    source_key,
+                    source,
+                    queries,
+                    fetch_page,
+                    semaphore,
+                    candidate_limit=20 if indonesia_mode else _MAX_CAREER_CANDIDATES,
+                    require_specific=indonesia_mode,
+                    trusted_domains=(
+                        extra_trusted_domains
+                        if indonesia_mode and source_key == "tavily"
+                        else None
+                    ),
+                    roles=tuple(run["target_roles"]),
+                    locations=tuple(run["locations"]),
+                    deadline_seconds=60.0 if indonesia_mode else None,
+                )
                 for source_key, source in sources.items()
             )
         )
@@ -493,6 +608,13 @@ async def handle_discover_jobs(
             await _record_source(conn, run_id=run_id, outcome=outcome)
 
         all_jobs = [job for outcome in outcomes for job in outcome.jobs]
+        if indonesia_mode:
+            all_jobs = rank_indonesia_jobs(
+                [job for job in all_jobs if is_indonesia_eligible(job)],
+                roles=tuple(run["target_roles"]),
+                locations=tuple(run["locations"]),
+                work_modes=tuple(run["work_modes"] or ()),
+            )
         normalized: list[NormalizedJob] = []
         for job in all_jobs:
             try:
@@ -540,7 +662,7 @@ async def handle_discover_jobs(
         if has_downstream_work:
             status = "processing"
         elif not kept:
-            status = "failed"
+            status = "completed" if indonesia_mode and not failed_outcomes else "failed"
         elif failed_outcomes:
             status = "partial"
         else:

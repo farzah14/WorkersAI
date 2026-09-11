@@ -1376,6 +1376,7 @@ async def test_career_page_extracts_company_from_og_site_name() -> None:
 </html>"""
     content = _extract_page_content(html, source_key="career_page")
     assert content.company == "Michael Page Indonesia"
+    assert content.is_job_posting is False
 
 
 async def test_generic_og_description_is_not_a_location() -> None:
@@ -1410,6 +1411,7 @@ async def test_career_page_extracts_greenhouse_application_format() -> None:
     assert content.company == "DKatalis"
     assert content.title == "Cloud Infrastructure Engineer"
     assert content.location == "Jakarta, Indonesia"
+    assert content.is_job_posting is True
 
 
 async def test_career_page_detects_removed_job() -> None:
