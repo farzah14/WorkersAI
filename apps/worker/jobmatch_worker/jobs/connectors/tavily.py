@@ -16,6 +16,7 @@ from jobmatch_worker.jobs.connectors.base import (
 )
 from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
 from jobmatch_worker.jobs.query import SearchQuery
+from jobmatch_worker.jobs.validity import is_specific_job_url
 
 TAVILY_API_URL = "https://api.tavily.com/search"
 TAVILY_MAX_COUNT = 20
@@ -195,6 +196,8 @@ def _is_allowed_job_result(url: str, title: str | None) -> bool:
     if "error=true" in query:
         return False
     if any(marker in path for marker in _EXCLUDED_PATH_SUBSTRINGS):
+        return False
+    if not is_specific_job_url(url):
         return False
     if re.search(r"-(?:jobs|lowongan|vacancies)(?:/|$)", path) and not re.search(r"/jobs?/\d+", path):
         return False

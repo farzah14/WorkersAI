@@ -173,6 +173,35 @@ async def test_tavily_maps_results_to_candidates(httpx_mock: HTTPXMock) -> None:
     await connector.aclose()
 
 
+async def test_tavily_rejects_non_job_content_results(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        url=TAVILY_URL,
+        method="POST",
+        json={
+            "results": [
+                {
+                    "title": "Data Engineer Salary Guide",
+                    "url": "https://careers.acme.com/career-advice/roles/data-engineer/salary",
+                    "content": "Salary information for data engineers.",
+                },
+                {
+                    "title": "Data Engineer at Acme",
+                    "url": "https://careers.acme.com/jobs/data-engineer-123",
+                    "content": "Join the data team.",
+                },
+            ]
+        },
+    )
+    connector = TavilyConnector(api_key="test-key", client=httpx.AsyncClient())
+
+    candidates = await connector.search(QUERY)
+
+    assert [candidate.url for candidate in candidates] == [
+        "https://careers.acme.com/jobs/data-engineer-123"
+    ]
+    await connector.aclose()
+
+
 async def test_tavily_filters_excluded_keywords_locally(httpx_mock: HTTPXMock) -> None:
     httpx_mock.add_response(
         url=TAVILY_URL,
