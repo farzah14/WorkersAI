@@ -4,9 +4,10 @@ from jobmatch_worker.jobs.indonesia import (
     is_indonesia_eligible,
     is_trusted_job_url,
     parse_extra_trusted_domains,
+    rank_indonesia_candidates,
     rank_indonesia_jobs,
 )
-from jobmatch_worker.jobs.models import DiscoveredJob
+from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
 
 
 def _job(
@@ -101,3 +102,20 @@ def test_rank_indonesia_jobs_keeps_input_order_for_exact_ties() -> None:
     assert rank_indonesia_jobs(
         [first, second], roles=["Engineer"], locations=[], work_modes=[]
     ) == [first, second]
+
+
+def test_rank_indonesia_candidates_uses_role_and_requested_location() -> None:
+    weak = DiscoveryCandidateUrl(
+        url="https://glints.com/id/jobs/marketing",
+        title="Marketing Manager",
+        snippet="Jakarta, Indonesia",
+    )
+    relevant = DiscoveryCandidateUrl(
+        url="https://glints.com/id/jobs/data",
+        title="Data Engineer",
+        snippet="Jakarta, Indonesia",
+    )
+
+    assert rank_indonesia_candidates(
+        [weak, relevant], roles=["Data Engineer"], locations=["Jakarta"]
+    ) == [relevant, weak]

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from typing import Any
 
@@ -160,16 +161,293 @@ async def test_tavily_candidate_rejects_closed_job_page() -> None:
         await _candidate_to_job(candidate, fetch_page, "tavily")
 
 
-def _job(*, source_key: str, url: str, title: str) -> DiscoveredJob:
+@pytest.mark.asyncio
+async def test_indonesia_candidate_requires_a_specific_job_page() -> None:
+    from jobmatch_worker.handlers.discovery import _candidate_to_job
+
+    candidate = DiscoveryCandidateUrl(
+        url="https://glints.com/id/opportunities/jobs",
+        title="Data jobs in Indonesia",
+    )
+
+    async def fetch_page(_url: str) -> CareerPageContent:
+        return CareerPageContent(
+            text="Browse current jobs in Indonesia.",
+            title="Data jobs in Indonesia",
+            company="Glints",
+            location="Indonesia",
+            is_job_posting=False,
+        )
+
+    with pytest.raises(SourceDataError, match="specific job"):
+        await _candidate_to_job(
+            candidate,
+            fetch_page,
+            "tavily",
+            require_specific=True,
+        )
+
+
+def _job(
+    *,
+    source_key: str,
+    url: str,
+    title: str,
+    company: str = "Acme",
+    location: str | None = "Jakarta",
+    country: str | None = None,
+    work_mode: str | None = None,
+) -> DiscoveredJob:
     return DiscoveredJob(
         source_name=source_key,
         source_key=source_key,
         title=title,
-        company="Acme",
-        location="Jakarta",
+        company=company,
+        location=location,
+        country=country,
+        work_mode=work_mode,
         description=f"Description for {title}",
         original_url=url,
     )
+
+
+@pytest.mark.asyncio
+async def test_indonesia_candidate_rejects_untrusted_domain_without_fetch() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-untrusted",
+        "status": "queued",
+        "region": "indonesia",
+        "target_roles": ["Data Engineer"],
+        "locations": ["Jakarta"],
+        "work_modes": [],
+        "excluded_keywords": [],
+    }
+    candidate = DiscoveryCandidateUrl(
+        url="https://unknown.example/jobs/data-engineer",
+        title="Data Engineer Jakarta",
+    )
+    fetch_count = 0
+
+    async def fetch_page(_url: str) -> CareerPageContent:
+        nonlocal fetch_count
+        fetch_count += 1
+        return CareerPageContent(
+            text="Location: Jakarta, Indonesia",
+            title="Data Engineer",
+            company="Acme",
+            location="Jakarta",
+        )
+
+    connection = _Connection(run_row)
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-untrusted", "payload": {"search_run_id": "run-untrusted"}},
+        SimpleNamespace(
+            max_attempts=3,
+            requirement_extraction_enabled=False,
+            indonesia_trusted_job_domains="",
+        ),
+        connectors={"tavily": _Connector("tavily", [candidate])},
+        fetch_page=fetch_page,
+    )
+
+    assert fetch_count == 0
+    assert not any("insert into public.jobs" in query.lower() for query, _ in connection.executed)
+
+
+@pytest.mark.asyncio
+async def test_indonesia_filters_foreign_jobs_and_ranks_before_five_job_limit() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-ranked",
+        "status": "queued",
+        "region": "indonesia",
+        "target_roles": ["Data Engineer"],
+        "locations": ["Jakarta"],
+        "work_modes": ["hybrid"],
+        "excluded_keywords": [],
+    }
+    jobs = [
+        _job(source_key="greenhouse", url="https://jobs.example/marketing", title="Marketing Manager", company="Marketing Co"),
+        _job(source_key="greenhouse", url="https://jobs.example/foreign", title="Data Engineer", company="Foreign Co", location="Singapore", country="Singapore"),
+        _job(source_key="greenhouse", url="https://jobs.example/surabaya", title="Data Engineer", company="Surabaya Co", location="Surabaya"),
+        _job(source_key="greenhouse", url="https://jobs.example/jakarta-1", title="Data Engineer I", company="Jakarta One", work_mode="hybrid"),
+        _job(source_key="greenhouse", url="https://jobs.example/jakarta-2", title="Data Engineer II", company="Jakarta Two", work_mode="hybrid"),
+        _job(source_key="greenhouse", url="https://jobs.example/jakarta-3", title="Analytics Engineer", company="Analytics Co", work_mode="hybrid"),
+        _job(source_key="greenhouse", url="https://jobs.example/jakarta-4", title="Platform Engineer", company="Platform Co", work_mode="hybrid"),
+    ]
+    connection = _Connection(run_row)
+
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-ranked", "payload": {"search_run_id": "run-ranked"}},
+        SimpleNamespace(max_attempts=3, requirement_extraction_enabled=False),
+        connectors={"greenhouse": _Connector("greenhouse", jobs)},
+    )
+
+    inserted_titles = [
+        params[1]
+        for query, params in connection.executed
+        if "insert into public.jobs" in query.lower()
+    ]
+    assert inserted_titles == [
+        "Data Engineer I",
+        "Data Engineer II",
+        "Analytics Engineer",
+        "Platform Engineer",
+        "Data Engineer",
+    ]
+    assert "Marketing Manager" not in inserted_titles
+
+
+@pytest.mark.asyncio
+async def test_global_discovery_keeps_foreign_job_behavior() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-global-foreign",
+        "status": "queued",
+        "region": "global",
+        "target_roles": ["Data Engineer"],
+        "locations": [],
+        "work_modes": [],
+        "excluded_keywords": [],
+    }
+    connection = _Connection(run_row)
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-global-foreign", "payload": {"search_run_id": "run-global-foreign"}},
+        SimpleNamespace(max_attempts=3, requirement_extraction_enabled=False),
+        connectors={
+            "greenhouse": _Connector(
+                "greenhouse",
+                [_job(source_key="greenhouse", url="https://jobs.example/sg", title="Data Engineer", location="Singapore", country="Singapore")],
+            )
+        },
+    )
+
+    assert any("insert into public.jobs" in query.lower() for query, _ in connection.executed)
+
+
+@pytest.mark.asyncio
+async def test_indonesia_zero_valid_jobs_completes_when_sources_succeed() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-zero-valid",
+        "status": "queued",
+        "region": "indonesia",
+        "target_roles": ["Data Engineer"],
+        "locations": [],
+        "work_modes": [],
+        "excluded_keywords": [],
+    }
+    connection = _Connection(run_row)
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-zero-valid", "payload": {"search_run_id": "run-zero-valid"}},
+        SimpleNamespace(max_attempts=3, requirement_extraction_enabled=False),
+        connectors={"greenhouse": _Connector("greenhouse", [])},
+    )
+
+    statuses = [
+        params[0]
+        for query, params in connection.executed
+        if "update public.job_search_runs" in query.lower() and params
+    ]
+    assert statuses[-1] == "completed"
+
+
+@pytest.mark.asyncio
+async def test_indonesia_verifies_at_most_twenty_trusted_web_candidates() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-candidate-cap",
+        "status": "queued",
+        "region": "indonesia",
+        "target_roles": ["Data Engineer"],
+        "locations": ["Jakarta"],
+        "work_modes": [],
+        "excluded_keywords": [],
+    }
+    candidates = [
+        DiscoveryCandidateUrl(
+            url=f"https://glints.com/id/opportunities/jobs/data-engineer/{index}",
+            title=f"Data Engineer {index}",
+        )
+        for index in range(25)
+    ]
+    fetched: list[str] = []
+
+    async def fetch_page(url: str) -> CareerPageContent:
+        fetched.append(url)
+        return CareerPageContent(
+            text="Location: Jakarta, Indonesia",
+            title="Data Engineer",
+            company="Acme",
+            location="Jakarta",
+        )
+
+    connection = _Connection(run_row)
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-candidate-cap", "payload": {"search_run_id": "run-candidate-cap"}},
+        SimpleNamespace(max_attempts=3, requirement_extraction_enabled=False),
+        connectors={"tavily": _Connector("tavily", candidates)},
+        fetch_page=fetch_page,
+    )
+
+    assert len(fetched) == 20
+
+
+@pytest.mark.asyncio
+async def test_indonesia_deadline_preserves_jobs_verified_before_timeout() -> None:
+    from jobmatch_worker.handlers.discovery import _run_source
+    from jobmatch_worker.jobs.query import SearchQuery
+
+    candidates = [
+        DiscoveryCandidateUrl(
+            url="https://glints.com/id/jobs/fast",
+            title="Data Engineer Jakarta",
+        ),
+        DiscoveryCandidateUrl(
+            url="https://glints.com/id/jobs/slow",
+            title="Data Engineer Jakarta",
+        ),
+    ]
+
+    async def fetch_page(url: str) -> CareerPageContent:
+        if url.endswith("/slow"):
+            await asyncio.sleep(0.2)
+        return CareerPageContent(
+            text="Location: Jakarta, Indonesia",
+            title="Data Engineer",
+            company="Acme",
+            location="Jakarta",
+            is_job_posting=True,
+        )
+
+    outcome = await _run_source(
+        "tavily",
+        _Connector("tavily", candidates),
+        [SearchQuery("Data Engineer Jakarta Indonesia")],
+        fetch_page,
+        asyncio.Semaphore(1),
+        candidate_limit=20,
+        require_specific=True,
+        trusted_domains=frozenset(),
+        roles=("Data Engineer",),
+        locations=("Jakarta",),
+        deadline_seconds=0.05,
+    )
+
+    assert [job.title for job in outcome.jobs] == ["Data Engineer"]
+    assert outcome.status == "failed"
+    assert outcome.retryable is True
 
 
 @pytest.mark.asyncio
@@ -247,7 +525,7 @@ async def test_discovery_run_keeps_successful_sources_when_one_fails(
     expected_status = "processing" if requirement_extraction_enabled else "partial"
     assert any(params[0] == expected_status for params in run_updates)
     final_update = next(params for params in run_updates if params[0] == expected_status)
-    assert final_update[1:5] == (5, 4, 1, 1)
+    assert final_update[1:5] == (7, 4, 1, 1)
 
     job_inserts = [
         (query, params)

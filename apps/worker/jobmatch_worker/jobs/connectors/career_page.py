@@ -62,6 +62,7 @@ class CareerPageContent:
     published_at: datetime | None = None
     work_mode: WorkMode | None = None
     is_closed: bool = False
+    is_job_posting: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,6 +73,7 @@ class _JobPostingMetadata:
     published_at: datetime | None = None
     work_mode: WorkMode | None = None
     is_closed: bool = False
+    is_job_posting: bool = False
 
 
 _MAX_REDIRECTS = 3
@@ -292,6 +294,7 @@ def _extract_page_content(body: bytes, *, source_key: str) -> CareerPageContent:
         published_at=metadata.published_at,
         work_mode=metadata.work_mode,
         is_closed=metadata.is_closed,
+        is_job_posting=metadata.is_job_posting,
     )
 
 
@@ -306,6 +309,7 @@ def _extract_job_posting_metadata(soup: BeautifulSoup) -> _JobPostingMetadata:
             work_mode=_work_mode(node.get("jobLocationType"))
             or _work_mode(node.get("workplaceType")),
             is_closed=is_closed,
+            is_job_posting=True,
         )
     return _extract_meta_job_metadata(soup, is_closed=is_closed)
 
@@ -416,6 +420,13 @@ def _extract_meta_job_metadata(
         published_at=_meta_published_at(soup),
         work_mode=_work_mode_from_text(f"{page_title} {description}"),
         is_closed=is_closed,
+        is_job_posting=bool(title and company)
+        and not bool(
+            re.search(
+                r"\b(?:jobs?|lowongan|vacancies)\s+(?:in|di)\b|^jobs?\s+at\b",
+                title.casefold() if title else "",
+            )
+        ),
     )
 
 
