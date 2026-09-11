@@ -32,6 +32,7 @@ from jobmatch_worker.jobs.dedupe import (
     upsert_jobs,
 )
 from jobmatch_worker.jobs.indonesia import (
+    DEFAULT_TRUSTED_DOMAINS,
     is_indonesia_eligible,
     is_specific_job_url,
     is_trusted_job_url,
@@ -98,9 +99,21 @@ def _error_code(error: SourceError) -> str:
     return "source_error"
 
 
-def _build_sources(settings: Settings) -> dict[str, SourceConnector]:
+def _build_sources(
+    settings: Settings, *, region: str | None = None
+) -> dict[str, SourceConnector]:
+    indonesia_mode = (region or "").casefold() == "indonesia"
+    extra_trusted_domains = parse_extra_trusted_domains(
+        getattr(settings, "indonesia_trusted_job_domains", "")
+    )
+    indonesia_domains = tuple(sorted(DEFAULT_TRUSTED_DOMAINS | extra_trusted_domains))
     return {
-        "tavily": TavilyConnector(api_key=settings.tavily_api_key),
+        "tavily": TavilyConnector(
+            api_key=settings.tavily_api_key,
+            include_domains=indonesia_domains if indonesia_mode else (),
+            time_range="month" if indonesia_mode else None,
+            country="indonesia" if indonesia_mode else None,
+        ),
         "greenhouse": GreenhouseConnector(
             board_token=settings.greenhouse_board_token
         ),
@@ -540,7 +553,11 @@ async def handle_discover_jobs(
         (run_id,),
     )
 
-    sources = connectors if connectors is not None else _build_sources(settings)
+    sources = (
+        connectors
+        if connectors is not None
+        else _build_sources(settings, region=str(run["region"]))
+    )
     owned_sources = connectors is None
     page_fetcher: CareerPageFetcher | None = None
     if fetch_page is None:

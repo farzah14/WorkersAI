@@ -173,6 +173,27 @@ async def test_tavily_maps_results_to_candidates(httpx_mock: HTTPXMock) -> None:
     await connector.aclose()
 
 
+async def test_tavily_applies_optional_domain_date_and_country_filters(
+    httpx_mock: HTTPXMock,
+) -> None:
+    httpx_mock.add_response(url=TAVILY_URL, method="POST", json={"results": []})
+    connector = TavilyConnector(
+        api_key="test-key",
+        client=httpx.AsyncClient(),
+        include_domains=("glints.com", "kalibrr.com"),
+        time_range="month",
+        country="indonesia",
+    )
+
+    await connector.search(QUERY)
+
+    body = json.loads(httpx_mock.get_requests()[-1].content)
+    assert body["include_domains"] == ["glints.com", "kalibrr.com"]
+    assert body["time_range"] == "month"
+    assert body["country"] == "indonesia"
+    await connector.aclose()
+
+
 async def test_tavily_rejects_non_job_content_results(httpx_mock: HTTPXMock) -> None:
     httpx_mock.add_response(
         url=TAVILY_URL,
