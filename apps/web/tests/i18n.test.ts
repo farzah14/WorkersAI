@@ -68,6 +68,7 @@ describe("i18n message parity", () => {
       "tracking.saved",
       "tracking.applied",
       "tracking.ignored",
+      "dashboard.noRecentVerifiedJobs",
       "exports.title",
       "exports.xlsx",
       "exports.pdf",

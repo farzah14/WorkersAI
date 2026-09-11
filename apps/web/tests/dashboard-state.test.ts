@@ -43,24 +43,24 @@ describe("processingMessageKey", () => {
 });
 
 describe("dashboardEmptyMessageKey", () => {
-  it("explains strict verification when an Indonesia run has zero matches", () => {
-    expect(dashboardEmptyMessageKey("completed", 0, "indonesia")).toBe(
-      "dashboard.indonesiaNoVerifiedJobs",
+  it("explains strict freshness verification when a terminal run has zero matches", () => {
+    expect(dashboardEmptyMessageKey("completed", 0)).toBe(
+      "dashboard.noRecentVerifiedJobs",
     );
-    expect(dashboardEmptyMessageKey("partial", 0, "indonesia")).toBe(
-      "dashboard.indonesiaNoVerifiedJobs",
+    expect(dashboardEmptyMessageKey("partial", 0)).toBe(
+      "dashboard.noRecentVerifiedJobs",
+    );
+    expect(dashboardEmptyMessageKey("completed", 0)).toBe(
+      "dashboard.noRecentVerifiedJobs",
     );
   });
 
-  it("preserves processing, failure, and global empty messages", () => {
-    expect(dashboardEmptyMessageKey("processing", 0, "indonesia")).toBe(
+  it("preserves processing and failure messages", () => {
+    expect(dashboardEmptyMessageKey("processing", 0)).toBe(
       "dashboard.processingHint",
     );
-    expect(dashboardEmptyMessageKey("failed", 0, "indonesia")).toBe(
+    expect(dashboardEmptyMessageKey("failed", 0)).toBe(
       "dashboard.failedHint",
-    );
-    expect(dashboardEmptyMessageKey("completed", 0, "global")).toBe(
-      "dashboard.noMatchesHint",
     );
   });
 });
