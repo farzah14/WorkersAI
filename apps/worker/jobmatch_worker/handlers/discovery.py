@@ -648,6 +648,9 @@ async def handle_discover_jobs(
         )
 
         failed_outcomes = [outcome for outcome in outcomes if outcome.status == "failed"]
+        successful_outcomes = [
+            outcome for outcome in outcomes if outcome.status == "success"
+        ]
         retryable_outcomes = [outcome for outcome in outcomes if outcome.retryable]
         discovered_count = sum(outcome.discovered_count for outcome in outcomes)
         duplicate_total = duplicate_count + upsert_result.duplicates
@@ -670,7 +673,10 @@ async def handle_discover_jobs(
         if has_downstream_work:
             status = "processing"
         elif not kept:
-            status = "completed" if indonesia_mode and not failed_outcomes else "failed"
+            if successful_outcomes:
+                status = "partial" if failed_outcomes else "completed"
+            else:
+                status = "failed"
         elif failed_outcomes:
             status = "partial"
         else:
