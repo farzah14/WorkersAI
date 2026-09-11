@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     tavily_api_key: str = ""
     greenhouse_board_token: str = ""
     lever_site_name: str = ""
+    indonesia_trusted_job_domains: str = ""
     model_config = SettingsConfigDict(
         env_file=".env",
         extra="ignore",

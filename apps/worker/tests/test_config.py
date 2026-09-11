@@ -61,7 +61,25 @@ def test_default_connector_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.tavily_api_key == ""
     assert settings.greenhouse_board_token == ""
     assert settings.lever_site_name == ""
+    assert settings.indonesia_trusted_job_domains == ""
     assert settings.requirement_extraction_enabled is True
+
+
+def test_indonesia_trusted_domains_are_loaded_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_base_env(monkeypatch)
+    monkeypatch.setenv("NINEROUTER_MODEL", "gpt-4o-mini")
+    monkeypatch.setenv(
+        "INDONESIA_TRUSTED_JOB_DOMAINS",
+        "careers.acme.co.id,jobs.example.org",
+    )
+
+    settings = Settings(_env_file=None)
+
+    assert settings.indonesia_trusted_job_domains == (
+        "careers.acme.co.id,jobs.example.org"
+    )
 
 
 def test_requirement_extraction_can_be_disabled_explicitly(
