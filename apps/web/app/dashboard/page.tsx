@@ -5,6 +5,7 @@ import { DashboardRunStatus, SearchRunHistory } from "@/components/jobs/dashboar
 import { MatchTable } from "@/components/jobs/match-table";
 import { bucketForScore } from "@/lib/jobs/buckets";
 import {
+  SEARCH_RUN_REGION_EMBED,
   dashboardEmptyMessageKey,
   processingMessageKey,
   showIndonesiaCoverageNotice,
@@ -42,14 +43,14 @@ type SearchRun = {
   normalized_count: number;
   failed_count: number;
   created_at: string;
-  search_profiles: { region: string } | Array<{ region: string }> | null;
+  search_profile: { region: string } | Array<{ region: string }> | null;
 };
 
 function searchRunRegion(run: SearchRun): string {
-  const profiles = Array.isArray(run.search_profiles)
-    ? run.search_profiles
-    : run.search_profiles
-      ? [run.search_profiles]
+  const profiles = Array.isArray(run.search_profile)
+    ? run.search_profile
+    : run.search_profile
+      ? [run.search_profile]
       : [];
   return profiles[0]?.region ?? "global";
 }
@@ -86,21 +87,32 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const [{ data: run }, { data: runRows }] = await Promise.all([
+  const [
+    { data: run, error: runError },
+    { data: runRows, error: runRowsError },
+  ] = await Promise.all([
     supabase
       .from("job_search_runs")
-      .select("id, status, trigger, discovered_count, normalized_count, failed_count, created_at, search_profiles(region)")
+      .select(
+        `id, status, trigger, discovered_count, normalized_count, failed_count, created_at, ${SEARCH_RUN_REGION_EMBED}`,
+      )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
     supabase
       .from("job_search_runs")
-      .select("id, status, trigger, discovered_count, normalized_count, failed_count, created_at, search_profiles(region)")
+      .select(
+        `id, status, trigger, discovered_count, normalized_count, failed_count, created_at, ${SEARCH_RUN_REGION_EMBED}`,
+      )
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(20),
   ]);
+
+  if (runError || runRowsError) {
+    throw new Error("Unable to load dashboard search runs");
+  }
 
   if (!run) {
     return (

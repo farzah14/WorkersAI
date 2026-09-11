@@ -258,6 +258,47 @@ async def test_indonesia_candidate_rejects_untrusted_domain_without_fetch() -> N
 
 
 @pytest.mark.asyncio
+async def test_indonesia_candidate_rejects_non_job_content_without_fetch() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-content-page",
+        "status": "queued",
+        "region": "indonesia",
+        "target_roles": ["Information Technology Specialist"],
+        "locations": ["Jakarta"],
+        "work_modes": [],
+        "excluded_keywords": [],
+    }
+    candidate = DiscoveryCandidateUrl(
+        url="https://id.jobstreet.com/career-advice/role/information-technology-specialist/salary",
+        title="Information Technology Specialist Salary in ID",
+    )
+    fetch_count = 0
+
+    async def fetch_page(_url: str) -> CareerPageContent:
+        nonlocal fetch_count
+        fetch_count += 1
+        raise AssertionError("non-job content must be rejected before fetching")
+
+    connection = _Connection(run_row)
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-content-page", "payload": {"search_run_id": "run-content-page"}},
+        SimpleNamespace(
+            max_attempts=3,
+            requirement_extraction_enabled=False,
+            indonesia_trusted_job_domains="",
+        ),
+        connectors={"tavily": _Connector("tavily", [candidate])},
+        fetch_page=fetch_page,
+    )
+
+    assert fetch_count == 0
+    assert not any("insert into public.jobs" in query.lower() for query, _ in connection.executed)
+
+
+@pytest.mark.asyncio
 async def test_indonesia_filters_foreign_jobs_and_ranks_before_five_job_limit() -> None:
     from jobmatch_worker.handlers.discovery import handle_discover_jobs
 
