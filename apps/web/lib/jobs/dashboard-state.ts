@@ -20,14 +20,13 @@ export function processingMessageKey(status: SearchRunStatus): string {
 export function dashboardEmptyMessageKey(
   status: SearchRunStatus,
   matchCount: number,
-  region: string,
 ): string {
   if (status === "queued" || status === "processing") {
     return "dashboard.processingHint";
   }
   if (status === "failed") return "dashboard.failedHint";
-  if (matchCount === 0 && region === "indonesia") {
-    return "dashboard.indonesiaNoVerifiedJobs";
+  if (matchCount === 0) {
+    return "dashboard.noRecentVerifiedJobs";
   }
   return "dashboard.noMatchesHint";
 }

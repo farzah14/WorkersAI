@@ -161,7 +161,7 @@ export default async function DashboardPage() {
   const runRegion = searchRunRegion(typedRun);
   const history = ((runRows as SearchRun[] | null) ?? []).filter((item) => item.id !== typedRun.id);
   const emptyMessage = t(
-    dashboardEmptyMessageKey(typedRun.status, rows.length, runRegion),
+    dashboardEmptyMessageKey(typedRun.status, rows.length),
   );
   const showCoverageNotice = showIndonesiaCoverageNotice(
     typedRun.status,
