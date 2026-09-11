@@ -86,11 +86,17 @@ class TavilyConnector:
         timeout: float = 15.0,
         count: int = TAVILY_DEFAULT_COUNT,
         retries: int = 1,
+        include_domains: tuple[str, ...] = (),
+        time_range: str | None = None,
+        country: str | None = None,
     ) -> None:
         self._api_key = api_key
         self._timeout = timeout
         self._count = count
         self._retries = retries
+        self._include_domains = include_domains
+        self._time_range = time_range
+        self._country = country
         self._owns_client = client is None
         self._client = client if client is not None else httpx.AsyncClient(timeout=timeout)
 
@@ -110,20 +116,28 @@ class TavilyConnector:
                 self.source_key, f"count must be between 1 and {TAVILY_MAX_COUNT}"
             )
 
+        request_body: dict[str, Any] = {
+            "api_key": self._api_key,
+            "query": _job_query_terms(query),
+            "topic": "general",
+            "search_depth": TAVILY_SEARCH_DEPTH,
+            "max_results": self._count,
+            "include_answer": False,
+            "include_raw_content": False,
+            "include_images": False,
+        }
+        if self._include_domains:
+            request_body["include_domains"] = list(self._include_domains)
+        if self._time_range:
+            request_body["time_range"] = self._time_range
+        if self._country:
+            request_body["country"] = self._country
+
         response = await post_json_with_retry(
             self._client,
             url=TAVILY_API_URL,
             source_key=self.source_key,
-            json_body={
-                "api_key": self._api_key,
-                "query": _job_query_terms(query),
-                "topic": "general",
-                "search_depth": TAVILY_SEARCH_DEPTH,
-                "max_results": self._count,
-                "include_answer": False,
-                "include_raw_content": False,
-                "include_images": False,
-            },
+            json_body=request_body,
             timeout=self._timeout,
             headers={"Accept": "application/json"},
             retries=self._retries,

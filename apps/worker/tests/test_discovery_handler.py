@@ -99,6 +99,28 @@ async def test_build_sources_uses_tavily_for_web_search() -> None:
 
 
 @pytest.mark.asyncio
+async def test_build_sources_targets_recent_trusted_indonesia_jobs() -> None:
+    sources = _build_sources(
+        SimpleNamespace(
+            tavily_api_key="tavily-key",
+            greenhouse_board_token="",
+            lever_site_name="",
+            indonesia_trusted_job_domains="careers.example.id",
+        ),
+        region="indonesia",
+    )
+
+    tavily = sources["tavily"]
+    assert tavily._time_range == "month"  # type: ignore[attr-defined]
+    assert tavily._country == "indonesia"  # type: ignore[attr-defined]
+    assert "glints.com" in tavily._include_domains  # type: ignore[attr-defined]
+    assert "careers.example.id" in tavily._include_domains  # type: ignore[attr-defined]
+
+    for source in sources.values():
+        await source.aclose()  # type: ignore[attr-defined]
+
+
+@pytest.mark.asyncio
 async def test_tavily_candidate_requires_real_job_metadata() -> None:
     from jobmatch_worker.handlers.discovery import _candidate_to_job
 
