@@ -8,7 +8,11 @@ from typing import Any
 import pytest
 
 from jobmatch_worker.handlers.discovery import _build_sources
-from jobmatch_worker.jobs.connectors.base import SourceDataError, SourceUnavailable
+from jobmatch_worker.jobs.connectors.base import (
+    SourceConfigError,
+    SourceDataError,
+    SourceUnavailable,
+)
 from jobmatch_worker.jobs.connectors.career_page import CareerPageContent
 from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
 from jobmatch_worker.matching.cache_key import requirements_cache_key
@@ -477,6 +481,41 @@ async def test_indonesia_zero_valid_jobs_completes_when_sources_succeed() -> Non
 
 
 @pytest.mark.asyncio
+async def test_zero_valid_jobs_is_partial_when_one_source_succeeds() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-zero-partial",
+        "status": "queued",
+        "region": "indonesia",
+        "target_roles": ["Data Engineer"],
+        "locations": [],
+        "work_modes": [],
+        "excluded_keywords": [],
+    }
+    connection = _Connection(run_row)
+
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-zero-partial", "payload": {"search_run_id": "run-zero-partial"}},
+        SimpleNamespace(max_attempts=3, requirement_extraction_enabled=False),
+        connectors={
+            "tavily": _Connector("tavily", []),
+            "greenhouse": _Connector(
+                "greenhouse", SourceConfigError("greenhouse", "not configured")
+            ),
+        },
+    )
+
+    statuses = [
+        params[0]
+        for query, params in connection.executed
+        if "update public.job_search_runs" in query.lower() and params
+    ]
+    assert statuses[-1] == "partial"
+
+
+@pytest.mark.asyncio
 async def test_indonesia_verifies_at_most_twenty_trusted_web_candidates() -> None:
     from jobmatch_worker.handlers.discovery import handle_discover_jobs
 
@@ -861,7 +900,7 @@ async def test_search_candidates_become_jobs_with_search_provenance() -> None:
 
 
 @pytest.mark.asyncio
-async def test_discovery_run_is_failed_when_no_source_yields_jobs() -> None:
+async def test_discovery_run_is_failed_when_every_source_fails() -> None:
     from jobmatch_worker.handlers.discovery import handle_discover_jobs
 
     run_row = {
@@ -878,7 +917,7 @@ async def test_discovery_run_is_failed_when_no_source_yields_jobs() -> None:
         "greenhouse": _Connector(
             "greenhouse", SourceUnavailable("greenhouse", "timeout")
         ),
-        "lever": _Connector("lever", []),
+        "lever": _Connector("lever", SourceConfigError("lever", "not configured")),
     }
 
     await handle_discover_jobs(
@@ -894,7 +933,7 @@ async def test_discovery_run_is_failed_when_no_source_yields_jobs() -> None:
         if "update public.job_search_runs" in query.lower()
     ]
     final_update = next(params for params in run_updates if params[0] == "failed")
-    assert final_update[1:5] == (0, 0, 0, 1)
+    assert final_update[1:5] == (0, 0, 0, 2)
 
 
 @pytest.mark.asyncio
