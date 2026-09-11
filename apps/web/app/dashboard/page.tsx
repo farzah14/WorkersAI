@@ -5,8 +5,9 @@ import { DashboardRunStatus, SearchRunHistory } from "@/components/jobs/dashboar
 import { MatchTable } from "@/components/jobs/match-table";
 import { bucketForScore } from "@/lib/jobs/buckets";
 import {
-  dashboardEmptyState,
+  dashboardEmptyMessageKey,
   processingMessageKey,
+  showIndonesiaCoverageNotice,
   type SearchRunStatus,
 } from "@/lib/jobs/dashboard-state";
 import type { MatchRow, RegionValue } from "@/lib/jobs/filter";
@@ -41,7 +42,17 @@ type SearchRun = {
   normalized_count: number;
   failed_count: number;
   created_at: string;
+  search_profiles: { region: string } | Array<{ region: string }> | null;
 };
+
+function searchRunRegion(run: SearchRun): string {
+  const profiles = Array.isArray(run.search_profiles)
+    ? run.search_profiles
+    : run.search_profiles
+      ? [run.search_profiles]
+      : [];
+  return profiles[0]?.region ?? "global";
+}
 
 function toMatchRow(match: MatchWithJob, status: MatchRow["status"]): MatchRow {
   const jobs = Array.isArray(match.jobs) ? match.jobs : [match.jobs];
@@ -78,14 +89,14 @@ export default async function DashboardPage() {
   const [{ data: run }, { data: runRows }] = await Promise.all([
     supabase
       .from("job_search_runs")
-      .select("id, status, trigger, discovered_count, normalized_count, failed_count, created_at")
+      .select("id, status, trigger, discovered_count, normalized_count, failed_count, created_at, search_profiles(region)")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle(),
     supabase
       .from("job_search_runs")
-      .select("id, status, trigger, discovered_count, normalized_count, failed_count, created_at")
+      .select("id, status, trigger, discovered_count, normalized_count, failed_count, created_at, search_profiles(region)")
       .eq("user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(20),
@@ -135,14 +146,16 @@ export default async function DashboardPage() {
     { label: t("dashboard.published"), value: rows.filter((m) => m.publishedAt?.slice(0, 10) === today).length },
   ];
   const typedRun = run as SearchRun;
-  const emptyState = dashboardEmptyState(typedRun.status, rows.length);
+  const runRegion = searchRunRegion(typedRun);
   const history = ((runRows as SearchRun[] | null) ?? []).filter((item) => item.id !== typedRun.id);
-  const emptyMessage =
-    emptyState === "processing"
-      ? t("dashboard.processingHint")
-      : typedRun.status === "failed"
-        ? t("dashboard.failedHint")
-        : t("dashboard.noMatchesHint");
+  const emptyMessage = t(
+    dashboardEmptyMessageKey(typedRun.status, rows.length, runRegion),
+  );
+  const showCoverageNotice = showIndonesiaCoverageNotice(
+    typedRun.status,
+    rows.length,
+    runRegion,
+  );
   const runActive = typedRun.status === "queued" || typedRun.status === "processing";
 
   return (
@@ -181,6 +194,12 @@ export default async function DashboardPage() {
             </div>
           ))}
         </section>
+
+        {showCoverageNotice && (
+          <p className="rounded-2xl border border-[#d9d5cc] bg-white px-5 py-4 text-sm text-[#53616a]">
+            {t("dashboard.indonesiaVerifiedCount", { count: rows.length })}
+          </p>
+        )}
 
         <MatchTable rows={rows} emptyMessage={emptyMessage} />
 

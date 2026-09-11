@@ -138,6 +138,8 @@
     "processingTitle": "Your newest search is still processing.",
     "processingHint": "The worker is discovering jobs and calculating matches. This page refreshes automatically.",
     "failedHint": "This run finished without match results. Check the worker and AI provider configuration, then run a new search.",
+    "indonesiaNoVerifiedJobs": "No currently active, trusted jobs with explicit Indonesia eligibility were found. Adjust your role or location and search again.",
+    "indonesiaVerifiedCount": "Showing {count} verified Indonesia jobs. Fewer than five met the location and page-quality rules.",
     "refresh": "Refresh now",
     "historyTitle": "Previous searches",
     "historyHint": "Older runs are kept until you delete them.",

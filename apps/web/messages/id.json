@@ -138,6 +138,8 @@
     "processingTitle": "Pencarian terbaru masih diproses.",
     "processingHint": "Worker sedang menemukan lowongan dan menghitung kecocokan. Halaman ini akan diperbarui otomatis.",
     "failedHint": "Pencarian ini selesai tanpa hasil kecocokan. Periksa worker dan konfigurasi penyedia AI, lalu jalankan pencarian baru.",
+    "indonesiaNoVerifiedJobs": "Tidak ditemukan lowongan aktif dan tepercaya dengan kelayakan kerja di Indonesia yang dinyatakan secara jelas. Sesuaikan peran atau lokasi, lalu cari lagi.",
+    "indonesiaVerifiedCount": "Menampilkan {count} lowongan Indonesia yang terverifikasi. Kurang dari lima lowongan memenuhi aturan lokasi dan kualitas halaman.",
     "refresh": "Perbarui sekarang",
     "historyTitle": "Pencarian sebelumnya",
     "historyHint": "Pencarian lama tetap tersimpan sampai kamu menghapusnya.",
