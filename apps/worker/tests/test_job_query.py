@@ -8,6 +8,21 @@ def test_indonesia_query_mentions_country_and_role() -> None:
     assert any("Data Engineer" in x and "Jakarta" in x and "Indonesia" in x for x in q)
 
 
+def test_indonesia_queries_include_bahasa_and_english_variants() -> None:
+    queries = build_queries(
+        region="indonesia",
+        roles=["Data Engineer"],
+        locations=["Jakarta"],
+        excluded_keywords=["senior"],
+    )
+
+    assert [query.terms for query in queries] == [
+        "Data Engineer Jakarta Indonesia",
+        "lowongan Data Engineer Jakarta Indonesia",
+    ]
+    assert all(query.negative_terms == ("senior",) for query in queries)
+
+
 def test_global_query_supports_remote() -> None:
     q = build_queries(region="global", roles=["Data Engineer"], locations=[], remote=True)
     assert any("remote" in x.lower() for x in q)
@@ -116,8 +131,12 @@ def test_remote_location_search_adds_countrywide_fallback() -> None:
         remote=True,
     )
 
-    assert q[0].terms == "Robotics Teacher Jakarta Indonesia remote"
-    assert q[1].terms == "Robotics Teacher Indonesia remote"
+    assert [query.terms for query in q] == [
+        "Robotics Teacher Jakarta Indonesia remote",
+        "lowongan Robotics Teacher Jakarta Indonesia remote",
+        "Robotics Teacher Indonesia remote",
+        "lowongan Robotics Teacher Indonesia remote",
+    ]
 
 
 def test_query_builder_caps_excluded_keywords() -> None:

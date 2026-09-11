@@ -128,6 +128,18 @@ def build_queries(
             fallback = SearchQuery(terms=" ".join(parts), negative_terms=clean_exclusions)
             if fallback.terms not in existing_terms:
                 queries.append(fallback)
+
+    if normalized_region == "indonesia":
+        bilingual: list[SearchQuery] = []
+        for query in queries:
+            bilingual.append(query)
+            bilingual.append(
+                SearchQuery(
+                    terms=f"lowongan {query.terms}",
+                    negative_terms=query.negative_terms,
+                )
+            )
+        queries = bilingual
     return queries[:6]
 
 
