@@ -42,6 +42,7 @@ from jobmatch_worker.jobs.indonesia import (
 from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
 from jobmatch_worker.jobs.normalize import NormalizedJob, normalize_job
 from jobmatch_worker.jobs.query import SearchQuery, build_queries
+from jobmatch_worker.jobs.validity import is_recent_job
 from jobmatch_worker.matching.cache_key import (
     MAX_REQUIREMENT_TEXT_CHARS,
     requirements_cache_key,
@@ -593,7 +594,7 @@ async def handle_discover_jobs(
                     fetch_page,
                     semaphore,
                     candidate_limit=20 if indonesia_mode else _MAX_CAREER_CANDIDATES,
-                    require_specific=indonesia_mode,
+                    require_specific=True,
                     trusted_domains=(
                         extra_trusted_domains
                         if indonesia_mode and source_key == "tavily"
@@ -609,7 +610,12 @@ async def handle_discover_jobs(
         for outcome in outcomes:
             await _record_source(conn, run_id=run_id, outcome=outcome)
 
-        all_jobs = [job for outcome in outcomes for job in outcome.jobs]
+        all_jobs = [
+            job
+            for outcome in outcomes
+            for job in outcome.jobs
+            if is_recent_job(job)
+        ]
         if indonesia_mode:
             all_jobs = rank_indonesia_jobs(
                 [job for job in all_jobs if is_indonesia_eligible(job)],
