@@ -368,7 +368,10 @@ test("acceptance: Indonesia/Global preference and manual Find Jobs Now", async (
   await expect(page.locator('input[name="region"][value="global"]')).toBeChecked();
   await expect(page.locator('input[name="region"][value="indonesia"]')).not.toBeChecked();
   await page.getByRole("button", { name: "Find Jobs Now" }).click();
-  await expect(page.getByText(/Search queued/)).toBeVisible();
+  await expect(page).toHaveURL(/\/dashboard$/);
+  await expect(
+    page.getByRole("heading", { name: "See how jobs rank against your profile." }),
+  ).toBeVisible();
 });
 
 test("acceptance: daily discovery control is available", async ({ page }) => {
