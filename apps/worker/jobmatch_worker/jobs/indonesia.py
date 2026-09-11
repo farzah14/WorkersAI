@@ -30,6 +30,17 @@ _BLOCKED_DOMAINS = frozenset(
         "tumblr.com",
     }
 )
+_NON_JOB_PATH_MARKERS = (
+    "/articles/",
+    "/blog/",
+    "/career-advice/",
+    "/career-guide/",
+    "/job-search",
+    "/jobs/search",
+    "/resources/",
+    "/salaries/",
+    "/salary/",
+)
 _INDONESIA_TERMS = (
     "indonesia",
     "jakarta",
@@ -116,6 +127,17 @@ def is_trusted_job_url(
         domain.rstrip(".").casefold() for domain in extra_domains if domain
     }
     return any(_domain_matches(host, domain) for domain in trusted)
+
+
+def is_specific_job_url(url: str) -> bool:
+    """Reject known content, advice, salary, and search result URLs."""
+    try:
+        parsed = urllib.parse.urlsplit(url)
+    except ValueError:
+        return False
+    path = urllib.parse.unquote(parsed.path or "/").casefold()
+    normalized_path = f"{path.rstrip('/')}/"
+    return not any(marker in normalized_path for marker in _NON_JOB_PATH_MARKERS)
 
 
 def _contains_indonesia_term(value: str | None) -> bool:
@@ -231,6 +253,7 @@ def rank_indonesia_candidates(
 __all__ = [
     "DEFAULT_TRUSTED_DOMAINS",
     "is_indonesia_eligible",
+    "is_specific_job_url",
     "is_trusted_job_url",
     "parse_extra_trusted_domains",
     "rank_indonesia_candidates",

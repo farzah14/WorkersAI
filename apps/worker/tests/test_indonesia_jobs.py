@@ -2,6 +2,7 @@ from datetime import UTC, datetime, timedelta
 
 from jobmatch_worker.jobs.indonesia import (
     is_indonesia_eligible,
+    is_specific_job_url,
     is_trusted_job_url,
     parse_extra_trusted_domains,
     rank_indonesia_candidates,
@@ -45,6 +46,17 @@ def test_trusted_urls_reject_unknown_lookalike_and_content_hosts() -> None:
     assert not is_trusted_job_url("https://careers.unknown.example/jobs/123")
     assert not is_trusted_job_url("https://jobstreet.co.id.evil.example/jobs/123")
     assert not is_trusted_job_url("https://example.blogspot.com/jobs/123")
+
+
+def test_specific_job_urls_reject_advice_salary_and_listing_pages() -> None:
+    assert not is_specific_job_url(
+        "https://id.jobstreet.com/career-advice/role/information-technology-specialist/salary"
+    )
+    assert not is_specific_job_url("https://example.com/jobs/search?q=engineer")
+    assert not is_specific_job_url("https://example.com/blog/how-to-find-a-job")
+    assert is_specific_job_url(
+        "https://glints.com/id/en/opportunities/jobs/security-analyst/abc123"
+    )
 
 
 def test_operator_domains_are_normalized_but_cannot_override_blocked_hosts() -> None:

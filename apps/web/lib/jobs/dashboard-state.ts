@@ -1,4 +1,7 @@
 export type SearchRunStatus = "queued" | "processing" | "completed" | "partial" | "failed";
+
+export const SEARCH_RUN_REGION_EMBED =
+  "search_profile:search_profiles!job_search_runs_search_profile_id_fkey(region)";
 export type DashboardEmptyState = "processing" | "empty" | "matches";
 
 export function dashboardEmptyState(

@@ -1,10 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
+  SEARCH_RUN_REGION_EMBED,
   dashboardEmptyState,
   dashboardEmptyMessageKey,
   processingMessageKey,
   showIndonesiaCoverageNotice,
 } from "@/lib/jobs/dashboard-state";
+
+describe("SEARCH_RUN_REGION_EMBED", () => {
+  it("names the intended search profile foreign key", () => {
+    expect(SEARCH_RUN_REGION_EMBED).toBe(
+      "search_profile:search_profiles!job_search_runs_search_profile_id_fkey(region)",
+    );
+  });
+});
 
 describe("dashboardEmptyState", () => {
   it("reports an active newest run as processing instead of no results", () => {

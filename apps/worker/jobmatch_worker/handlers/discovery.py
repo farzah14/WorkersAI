@@ -33,6 +33,7 @@ from jobmatch_worker.jobs.dedupe import (
 )
 from jobmatch_worker.jobs.indonesia import (
     is_indonesia_eligible,
+    is_specific_job_url,
     is_trusted_job_url,
     parse_extra_trusted_domains,
     rank_indonesia_candidates,
@@ -225,10 +226,11 @@ async def _run_source(
                             continue
                         if candidate_url in seen_candidates:
                             continue
-                        if trusted_domains is not None and not is_trusted_job_url(
-                            result.url, trusted_domains
-                        ):
-                            continue
+                        if trusted_domains is not None:
+                            if not is_trusted_job_url(result.url, trusted_domains):
+                                continue
+                            if not is_specific_job_url(result.url):
+                                continue
                         if len(seen_candidates) >= _MAX_CAREER_CANDIDATES:
                             raise SourceDataError(
                                 source_key, "career-page candidate limit exceeded"
