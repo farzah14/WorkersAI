@@ -5,7 +5,6 @@ import pytest
 from jobmatch_worker.jobs.models import DiscoveredJob
 from jobmatch_worker.jobs.validity import is_recent_job, is_specific_job_url
 
-
 NOW = datetime(2026, 9, 11, 17, 0, tzinfo=UTC)
 
 
@@ -32,7 +31,7 @@ def test_recent_job_accepts_today_and_exactly_thirty_calendar_days() -> None:
         None,
         datetime(2026, 8, 11, 23, 59, tzinfo=UTC),
         datetime(2026, 9, 11, 17, 1, tzinfo=UTC),
-        datetime(2026, 9, 10, 12, 0),
+        datetime(2026, 9, 10, 12, 0, tzinfo=UTC).replace(tzinfo=None),
     ],
 )
 def test_recent_job_rejects_missing_old_future_and_naive_dates(
