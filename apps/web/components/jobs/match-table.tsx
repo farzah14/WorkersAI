@@ -12,7 +12,7 @@ import {
   type MatchRow,
 } from "@/lib/jobs/filter";
 
-type SortKey = "overallScore" | "title" | "company" | "publishedAt" | "sourceName";
+type SortKey = "overallScore" | "title" | "company" | "publishedAt";
 
 type SortState = { key: SortKey; direction: "asc" | "desc" };
 
@@ -21,7 +21,6 @@ const SORT_LABELS: Record<SortKey, string> = {
   title: "Job title",
   company: "Company",
   publishedAt: "Published",
-  sourceName: "Source",
 };
 
 function formatDate(value: string | null): string {
@@ -104,11 +103,11 @@ export function MatchTable({
     <div className="space-y-4">
       <MatchFiltersBar filters={filters} onChange={setFilters} />
       <div className="overflow-x-auto rounded-2xl border border-[#d9d5cc] bg-white">
-        <table className="w-full min-w-[880px] text-left text-sm">
+        <table className="w-full min-w-[800px] text-left text-sm">
           <caption className="sr-only">Ranked job matches</caption>
           <thead>
             <tr className="border-b border-[#d9d5cc] text-xs uppercase tracking-[0.14em] text-[#6d787e]">
-              {(["title", "company", "publishedAt", "sourceName", "overallScore"] as SortKey[]).map((key) => (
+              {(["title", "company", "publishedAt", "overallScore"] as SortKey[]).map((key) => (
                 <th
                   key={key}
                   scope="col"
@@ -157,7 +156,6 @@ export function MatchTable({
                   <td className="whitespace-nowrap px-4 py-3 text-xs text-[#6d787e]">
                     {formatDate(row.publishedAt)}
                   </td>
-                  <td className="px-4 py-3 text-xs text-[#6d787e]">{row.sourceName}</td>
                   <td className="px-4 py-3">
                     <ScoreBadge score={row.overallScore} />
                   </td>
@@ -193,7 +191,7 @@ export function MatchTable({
             })}
             {visibleRows.length === 0 && (
               <tr>
-                <td colSpan={9} className="px-4 py-10 text-center text-sm text-[#6d787e]">
+                <td colSpan={8} className="px-4 py-10 text-center text-sm text-[#6d787e]">
                   {emptyMessage}
                 </td>
               </tr>
