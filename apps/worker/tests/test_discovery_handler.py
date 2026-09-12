@@ -40,9 +40,11 @@ class _Connection:
         run_row: dict[str, Any],
         *,
         cached_job_hashes: dict[str, str] | None = None,
+        work_item_statuses: dict[str, str] | None = None,
     ) -> None:
         self.run_row = run_row
         self.cached_job_hashes = cached_job_hashes or {}
+        self.work_item_statuses = work_item_statuses or {}
         self.executed: list[tuple[str, tuple[Any, ...]]] = []
         self._job_number = 0
 
@@ -63,6 +65,17 @@ class _Connection:
         if "insert into public.jobs" in lowered:
             self._job_number += 1
             return _Cursor({"id": f"job-{self._job_number}", "inserted": True})
+        if "insert into public.work_items" in lowered:
+            dedupe_key = str(params[1])
+            if dedupe_key not in self.work_item_statuses or (
+                "do update" in lowered
+                and self.work_item_statuses[dedupe_key] == "failed"
+            ):
+                self.work_item_statuses[dedupe_key] = "queued"
+            return _Cursor(None)
+        if "select status from public.work_items" in lowered:
+            status = self.work_item_statuses.get(str(params[0]))
+            return _Cursor({"status": status} if status else None)
         return _Cursor(None)
 
     async def rollback(self) -> None:
@@ -816,6 +829,40 @@ async def test_discovery_run_persists_at_most_five_distinct_jobs() -> None:
     assert len(provenance) == 5
     assert len(requirement_items) == 5
     assert final_update[1:5] == (7, 5, 0, 0)
+
+
+@pytest.mark.asyncio
+async def test_discovery_requeues_failed_requirement_work_for_reused_job() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    job = _job(
+        source_key="greenhouse",
+        url="https://jobs.example.com/reused-engineer",
+        title="Reused Engineer",
+    )
+    description_hash = requirements_cache_key(job.description)
+    dedupe_key = f"extract_job_requirements:job-1:{description_hash}"
+    connection = _Connection(
+        {
+            "id": "run-reused",
+            "status": "queued",
+            "region": "global",
+            "target_roles": ["Engineer"],
+            "locations": [],
+            "work_modes": [],
+            "excluded_keywords": [],
+        },
+        work_item_statuses={dedupe_key: "failed"},
+    )
+
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-reused", "payload": {"search_run_id": "run-reused"}},
+        SimpleNamespace(requirement_extraction_enabled=True, max_attempts=3),
+        connectors={"greenhouse": _Connector("greenhouse", [job])},
+    )
+
+    assert connection.work_item_statuses[dedupe_key] == "queued"
 
 
 @pytest.mark.asyncio

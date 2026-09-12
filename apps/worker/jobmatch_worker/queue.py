@@ -11,12 +11,38 @@ values (%s, %s, %s)
 on conflict (dedupe_key) do nothing
 """
 
+RECOVERABLE_ENQUEUE_SQL = """
+insert into public.work_items (kind, dedupe_key, payload)
+values (%s, %s, %s)
+on conflict (dedupe_key) do update
+set kind = excluded.kind,
+    payload = excluded.payload,
+    status = 'queued',
+    attempts = 0,
+    available_at = now(),
+    locked_at = null,
+    locked_by = null,
+    last_error = null,
+    completed_at = null
+where work_items.status = 'failed'
+"""
+
 
 async def enqueue_item(
     conn: AsyncConnection[Any], *, kind: str, dedupe_key: str, payload: dict[str, Any]
 ) -> None:
     """Enqueue a work item idempotently; a duplicate dedupe_key is a no-op."""
     await conn.execute(ENQUEUE_SQL, (kind, dedupe_key, Jsonb(payload)))
+
+
+async def enqueue_item_recovering_failure(
+    conn: AsyncConnection[Any], *, kind: str, dedupe_key: str, payload: dict[str, Any]
+) -> None:
+    """Enqueue idempotently and reactivate a previously exhausted item."""
+    await conn.execute(
+        RECOVERABLE_ENQUEUE_SQL,
+        (kind, dedupe_key, Jsonb(payload)),
+    )
 
 
 CLAIM_SQL = """

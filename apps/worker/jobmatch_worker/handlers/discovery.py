@@ -48,7 +48,13 @@ from jobmatch_worker.matching.cache_key import (
     MAX_REQUIREMENT_TEXT_CHARS,
     requirements_cache_key,
 )
-from jobmatch_worker.queue import complete_item, enqueue_item, fail_item, retry_item
+from jobmatch_worker.queue import (
+    complete_item,
+    enqueue_item,
+    enqueue_item_recovering_failure,
+    fail_item,
+    retry_item,
+)
 
 _SOURCE_CONCURRENCY = 4
 _MAX_SOURCE_RESULTS = 200
@@ -502,7 +508,7 @@ async def _enqueue_requirement_work(
             continue
         # Plan 4 adds the persistent requirement cache; this key is the
         # interim idempotency boundary for discovery retries.
-        await enqueue_item(
+        await enqueue_item_recovering_failure(
             conn,
             kind="extract_job_requirements",
             dedupe_key=f"extract_job_requirements:{job_id}:{description_hash}",
