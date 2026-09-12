@@ -434,31 +434,31 @@ async def test_discovery_enforces_thirty_day_publication_window(region: str) -> 
         _job(
             source_key="greenhouse",
             url="https://boards.greenhouse.io/acme/jobs/recent",
-            title="Recent Job",
+            title="Recent Data Engineer",
             published_at=now - timedelta(days=1),
         ),
         _job(
             source_key="greenhouse",
             url="https://boards.greenhouse.io/acme/jobs/boundary",
-            title="Exactly Thirty Days",
+            title="Data Engineer Exactly Thirty Days",
             published_at=now - timedelta(days=30),
         ),
         _job(
             source_key="greenhouse",
             url="https://boards.greenhouse.io/acme/jobs/old",
-            title="Old Job",
+            title="Old Data Engineer",
             published_at=now - timedelta(days=31),
         ),
         _job(
             source_key="greenhouse",
             url="https://boards.greenhouse.io/acme/jobs/future",
-            title="Future Job",
+            title="Future Data Engineer",
             published_at=now + timedelta(days=1),
         ),
         DiscoveredJob(
             source_name="greenhouse",
             source_key="greenhouse",
-            title="Undated Job",
+            title="Undated Data Engineer",
             company="Acme",
             location="Jakarta",
             description="Description for Undated Job",
@@ -483,7 +483,10 @@ async def test_discovery_enforces_thirty_day_publication_window(region: str) -> 
         for query, params in connection.executed
         if "insert into public.jobs" in query.lower()
     ]
-    assert inserted_titles == ["Recent Job", "Exactly Thirty Days"]
+    assert inserted_titles == [
+        "Recent Data Engineer",
+        "Data Engineer Exactly Thirty Days",
+    ]
 
 
 @pytest.mark.asyncio

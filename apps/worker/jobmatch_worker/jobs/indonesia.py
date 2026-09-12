@@ -147,6 +147,11 @@ def _tokens(value: str) -> frozenset[str]:
     return frozenset(_TOKEN_RE.findall(value.casefold()))
 
 
+def _has_role_overlap(job: DiscoveredJob, roles: Sequence[str]) -> bool:
+    title_tokens = _tokens(job.title)
+    return any(title_tokens & _tokens(role) for role in roles)
+
+
 def _relevance_score(
     job: DiscoveredJob,
     *,
@@ -191,7 +196,7 @@ def rank_indonesia_jobs(
     work_modes: Sequence[str],
 ) -> list[DiscoveredJob]:
     return sorted(
-        jobs,
+        (job for job in jobs if _has_role_overlap(job, roles)),
         key=lambda job: _relevance_score(
             job,
             roles=roles,

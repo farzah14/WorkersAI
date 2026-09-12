@@ -104,7 +104,19 @@ def test_rank_indonesia_jobs_prefers_role_location_mode_and_freshness() -> None:
         work_modes=["hybrid"],
     )
 
-    assert ranked == [exact, old, wrong_location, wrong_role]
+    assert ranked == [exact, old, wrong_location]
+
+
+def test_rank_indonesia_jobs_rejects_zero_role_overlap_from_fixed_ats_board() -> None:
+    relevant = _job(title="Cybersecurity Analyst")
+    unrelated = _job(title="Staff Software Engineer")
+
+    assert rank_indonesia_jobs(
+        [unrelated, relevant],
+        roles=["Security Analyst", "GRC Analyst"],
+        locations=["Jakarta"],
+        work_modes=["on-site"],
+    ) == [relevant]
 
 
 def test_rank_indonesia_jobs_keeps_input_order_for_exact_ties() -> None:
