@@ -4,7 +4,6 @@ import React from "react";
 import { SidebarHeader } from "./sidebar-header";
 import { SidebarRegion } from "./sidebar-region";
 import { SidebarNav } from "./sidebar-nav";
-import { SidebarActiveCV } from "./sidebar-active-cv";
 import { SidebarFooter } from "./sidebar-footer";
 
 interface SidebarProps {
@@ -73,7 +72,6 @@ export function Sidebar({
             isCollapsed={isCollapsed && !isMobileOpen}
             onNavClick={onCloseMobile}
           />
-          <SidebarActiveCV isCollapsed={isCollapsed && !isMobileOpen} />
         </div>
 
         {/* Footer & Desktop Collapse Toggle */}
