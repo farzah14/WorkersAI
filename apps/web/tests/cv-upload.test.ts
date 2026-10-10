@@ -28,13 +28,23 @@ function makeRequest() {
   };
 }
 
-function makeUploadClient(pathError: unknown) {
+function makeUploadClient(pathError: unknown, activeCv: { id: string } | null = null) {
   const deleteEq = vi.fn().mockResolvedValue({ data: null, error: null });
   const remove = vi.fn().mockResolvedValue({ data: [], error: null });
   const upload = vi.fn().mockResolvedValue({ data: { path: CV_PATH }, error: null });
   const update = vi.fn().mockReturnValue({
     eq: vi.fn().mockResolvedValue({ data: null, error: pathError }),
   });
+  const insert = vi.fn().mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({ data: { id: CV_ID }, error: null }),
+    }),
+  });
+
+  const selectMaybeSingle = vi.fn().mockResolvedValue({ data: activeCv, error: null });
+  const selectIsActiveEq = vi.fn().mockReturnValue({ maybeSingle: selectMaybeSingle });
+  const selectUserEq = vi.fn().mockReturnValue({ eq: selectIsActiveEq });
+  const select = vi.fn().mockReturnValue({ eq: selectUserEq });
 
   return {
     client: {
@@ -48,11 +58,8 @@ function makeUploadClient(pathError: unknown) {
       from: vi.fn((table: string) => {
         if (table !== "cvs") throw new Error(`unexpected table ${table}`);
         return {
-          insert: vi.fn().mockReturnValue({
-            select: vi.fn().mockReturnValue({
-              single: vi.fn().mockResolvedValue({ data: { id: CV_ID }, error: null }),
-            }),
-          }),
+          select,
+          insert,
           update,
           delete: vi.fn().mockReturnValue({ eq: deleteEq }),
         };
@@ -64,6 +71,8 @@ function makeUploadClient(pathError: unknown) {
         }),
       },
     },
+    insert,
+    select,
     deleteEq,
     upload,
     update,
@@ -301,5 +310,37 @@ describe("POST /api/cvs cleanup after storage upload", () => {
       cleanup: "incomplete",
     });
     expect(remove).toHaveBeenCalledWith([CV_PATH]);
+  });
+});
+
+describe("POST /api/cvs active CV assignment", () => {
+  it("sets is_active to true when user has no existing active CV", async () => {
+    const { client, insert } = makeUploadClient(null, null);
+    const { client: serviceClient } = makeServiceClient();
+    createServerClientMock.mockResolvedValue(client as never);
+    createServiceClientMock.mockReturnValue(serviceClient as never);
+
+    const response = await POST(makeRequest() as never);
+    expect(response.status).toBe(201);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        is_active: true,
+      }),
+    );
+  });
+
+  it("leaves is_active false when user already has an active CV", async () => {
+    const { client, insert } = makeUploadClient(null, { id: "existing-active-cv" });
+    const { client: serviceClient } = makeServiceClient();
+    createServerClientMock.mockResolvedValue(client as never);
+    createServiceClientMock.mockReturnValue(serviceClient as never);
+
+    const response = await POST(makeRequest() as never);
+    expect(response.status).toBe(201);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        is_active: false,
+      }),
+    );
   });
 });

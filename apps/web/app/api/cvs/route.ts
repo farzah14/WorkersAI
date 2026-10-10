@@ -111,6 +111,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "quota check failed" }, { status: 500 });
   }
 
+  const { data: existingActive } = await supabase
+    .from("cvs")
+    .select("id")
+    .eq("user_id", user.id)
+    .eq("is_active", true)
+    .maybeSingle();
+
   const originalName = file.name || "cv.pdf";
   const { data: cvRow, error: insertError } = await supabase
     .from("cvs")
@@ -119,6 +126,7 @@ export async function POST(request: NextRequest) {
       original_name: originalName,
       mime_type: file.type,
       retain_original: true,
+      is_active: !existingActive,
     })
     .select("id")
     .single();
