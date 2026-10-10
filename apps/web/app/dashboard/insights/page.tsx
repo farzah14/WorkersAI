@@ -11,10 +11,10 @@ export default async function InsightsPage() {
   ];
 
   const buckets = [
-    { name: "Best Match", range: "85% - 100%", color: "bg-[#1f6b59] text-white", desc: "Exceptional alignment with all must-have criteria and strong skill overlap." },
-    { name: "Strong Match", range: "70% - 84%", color: "bg-[#d9623c] text-white", desc: "Strong overall profile fit with minor preferred skill or track variations." },
-    { name: "Potential", range: "50% - 69%", color: "bg-[#e5a93c] text-white", desc: "Viable role but may contain non-critical gaps or require skill bridging." },
-    { name: "Low Match", range: "< 50%", color: "bg-[#6d787e] text-white", desc: "Significant gaps in mandatory requirements or domain alignment." },
+    { name: "Best Match", range: "90% - 100%", color: "bg-[#1f6b59] text-white", desc: "Exceptional alignment with all must-have criteria and strong skill overlap." },
+    { name: "Strong Match", range: "80% - 89%", color: "bg-[#d9623c] text-white", desc: "Strong overall profile fit with minor preferred skill or track variations." },
+    { name: "Potential", range: "70% - 79%", color: "bg-[#e5a93c] text-white", desc: "Viable role but may contain non-critical gaps or require skill bridging." },
+    { name: "Low Match", range: "< 70%", color: "bg-[#6d787e] text-white", desc: "Significant gaps in mandatory requirements or domain alignment." },
   ];
 
   return (
