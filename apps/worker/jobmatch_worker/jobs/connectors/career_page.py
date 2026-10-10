@@ -441,8 +441,12 @@ def _meta_content(soup: BeautifulSoup, attribute: str, value: str) -> str | None
 def _meta_published_at(soup: BeautifulSoup) -> datetime | None:
     for attribute, value in (
         ("property", "article:published_time"),
+        ("property", "og:article:published_time"),
+        ("property", "og:published_time"),
         ("name", "datePosted"),
         ("name", "datePublished"),
+        ("name", "pubdate"),
+        ("name", "publishdate"),
     ):
         parsed = parse_iso_datetime(_meta_content(soup, attribute, value))
         if parsed is not None:
