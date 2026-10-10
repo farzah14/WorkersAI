@@ -38,14 +38,10 @@ raise SystemExit(asyncio.run(main()))
 PY
 
 if [ "${SMOKE_LIVE_AI_CHECKS:-0}" = "1" ]; then
-  echo "==> Optional live AI provider reachability (no keys, no response bodies)"
-  for url in \
-    "https://integrate.api.nvidia.com/v1" \
-    "https://openrouter.ai/api/v1" \
-    "https://ollama.com/api"; do
-    code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$url" || echo "000")
-    echo "OK: $url -> HTTP $code"
-  done
+  echo "==> Optional live AI gateway reachability (no keys, no response bodies)"
+  NINEROUTER_URL="${NINEROUTER_BASE_URL:-http://localhost:20128/v1}/models"
+  code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$NINEROUTER_URL" || echo "000")
+  echo "9Router health: $NINEROUTER_URL -> HTTP $code"
 else
   echo "==> Skipping live AI checks (set SMOKE_LIVE_AI_CHECKS=1 to enable)"
 fi
