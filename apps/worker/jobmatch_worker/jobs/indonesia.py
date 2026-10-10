@@ -136,7 +136,6 @@ def is_indonesia_eligible(job: DiscoveredJob) -> bool:
         return country in {"id", "idn", "indonesia", "republic of indonesia"}
     if _contains_indonesia_term(job.location):
         return True
-
     description = job.description.casefold()
     for prefix in _LOCATION_PREFIXES:
         for match in re.finditer(re.escape(prefix), description):

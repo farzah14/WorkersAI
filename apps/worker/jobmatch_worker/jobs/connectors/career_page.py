@@ -311,8 +311,58 @@ def _extract_job_posting_metadata(soup: BeautifulSoup) -> _JobPostingMetadata:
             is_closed=is_closed,
             is_job_posting=True,
         )
+    next_data = _extract_next_data_metadata(soup, is_closed=is_closed)
+    if next_data is not None:
+        return next_data
     return _extract_meta_job_metadata(soup, is_closed=is_closed)
 
+
+def _extract_next_data_metadata(
+    soup: BeautifulSoup, *, is_closed: bool
+)-> _JobPostingMetadata | None:
+    script = soup.find("script", id="__NEXT_DATA__")
+    if script is None or not script.string:
+        return None
+    try:
+        data = json.loads(script.string)
+    except (json.JSONDecodeError, ValueError):
+        return None
+    job = (
+        data.get("props", {}).get("pageProps", {}).get("job")
+        or data.get("props", {}).get("pageProps", {}).get("jobPosting")
+        or data.get("props", {}).get("pageProps", {}).get("initialState", {}).get("job")
+    )
+    if not isinstance(job, dict):
+        return None
+    title = clean_optional_str(job.get("name") or job.get("title"))
+    company = job.get("company")
+    if isinstance(company, dict):
+        company_name = clean_optional_str(company.get("name"))
+    else:
+        company_name = clean_optional_str(company)
+    loc_components = (job.get("googleLocation") or {}).get("addressComponents") or {}
+    location_parts = [
+        loc_components.get("city"),
+        loc_components.get("region"),
+        loc_components.get("country"),
+    ]
+    location = (
+        ", ".join(p for p in location_parts if p)
+        or clean_optional_str(job.get("address"))
+        or None
+    )
+    published_at = parse_iso_datetime(
+        job.get("activationDate") or job.get("createdAt") or job.get("datePosted")
+    )
+    return _JobPostingMetadata(
+        title=title,
+        company=company_name,
+        location=location,
+        published_at=published_at,
+        work_mode=None,
+        is_closed=is_closed,
+        is_job_posting=bool(title and company_name),
+    )
 
 def _extract_meta_job_metadata(
     soup: BeautifulSoup, *, is_closed: bool
@@ -401,23 +451,34 @@ def _extract_meta_job_metadata(
             title = og_title or html_title or None
 
     if not location:
-        location_match = re.search(
-            r"\bjob\s+location\s*:\s*(?P<location>[^.;|]+)",
-            description,
-            flags=re.IGNORECASE,
+        location_patterns = (
+            r"\b(?:job\s+location|lokasi\s*(?:kerja)?|penempatan(?:\s*kerja)?)\s*:\s*(?P<location>[^.;|\n]+)",
+            r"(?P<location>(?:South|North|West|East|Central)?\s*(?:Jakarta|Bandung|Surabaya|Medan|Semarang|Yogyakarta|Bali|Bekasi|Depok|Tangerang|Bogor)\s*,\s*(?:DKI\s*Jakarta,\s*)?Indonesia)",
         )
-        if location_match:
-            location = clean_optional_str(location_match.group("location"))
-        else:
+        for pattern in location_patterns:
+            location_match = re.search(pattern, description, flags=re.IGNORECASE)
+            if location_match:
+                location = clean_optional_str(location_match.group("location"))
+                break
+        if not location:
             loc_tag = soup.find(class_=lambda c: c and "location" in c.lower())
             if loc_tag:
                 location = clean_optional_str(collapse_whitespace(loc_tag.get_text(" ")))
+
+    published_at = _meta_published_at(soup)
+    if published_at is None:
+        iso_match = re.search(
+            r"\b(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2}))\b",
+            description,
+        )
+        if iso_match:
+            published_at = parse_iso_datetime(iso_match.group(1))
 
     return _JobPostingMetadata(
         title=title,
         company=company,
         location=location,
-        published_at=_meta_published_at(soup),
+        published_at=published_at,
         work_mode=_work_mode_from_text(f"{page_title} {description}"),
         is_closed=is_closed,
         is_job_posting=bool(title and company)
