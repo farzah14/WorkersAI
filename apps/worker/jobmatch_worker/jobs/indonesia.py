@@ -14,6 +14,7 @@ DEFAULT_TRUSTED_DOMAINS = frozenset(
         "jobstreet.com",
         "glints.com",
         "kalibrr.com",
+        "kalibrr.id",
         "dealls.com",
         "kitalulus.com",
         "greenhouse.io",
@@ -21,6 +22,8 @@ DEFAULT_TRUSTED_DOMAINS = frozenset(
         "workable.com",
         "ashbyhq.com",
         "smartrecruiters.com",
+        "karir.com",
+        "foundit.id",
     }
 )
 _BLOCKED_DOMAINS = frozenset(

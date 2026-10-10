@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from psycopg import AsyncConnection
@@ -162,7 +163,7 @@ async def _candidate_to_job(
         work_mode=content.work_mode,
         description=text,
         original_url=candidate.url,
-        published_at=content.published_at,
+        published_at=content.published_at or datetime.now(UTC),
     )
     _validate_job_size(job, source_key)
     return job
