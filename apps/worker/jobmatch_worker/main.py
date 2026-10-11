@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import logging
 import shutil
 import sys
 import tempfile
@@ -214,6 +215,9 @@ async def worker_loop(settings: Settings, logger: EventLogger | None = None) -> 
 
 
 async def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s"
+    )
     settings = Settings()  # type: ignore[call-arg]
     await worker_loop(settings)
 
