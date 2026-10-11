@@ -159,6 +159,7 @@ async def _emit_run_counters(
 async def worker_loop(settings: Settings, logger: EventLogger | None = None) -> None:
     events = logger or EventLogger()
     pool: AsyncConnectionPool = await create_pool(settings)
+    events.emit("worker_started", worker_id=settings.worker_id)
     try:
         while True:
             item = await claim_next_item(pool, settings.worker_id)
