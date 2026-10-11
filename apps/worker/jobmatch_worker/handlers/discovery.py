@@ -60,7 +60,6 @@ from jobmatch_worker.queue import (
 _SOURCE_CONCURRENCY = 4
 _MAX_SOURCE_RESULTS = 200
 _MAX_CAREER_CANDIDATES = 120
-_MAX_JOBS_PER_RUN = 5
 _MAX_TITLE_CHARS = 300
 _MAX_COMPANY_CHARS = 300
 _MAX_LOCATION_CHARS = 300
@@ -122,7 +121,8 @@ def _build_sources(
             country="indonesia" if indonesia_mode else None,
         ),
         "greenhouse": GreenhouseConnector(
-            board_token=settings.greenhouse_board_token
+            board_token=settings.greenhouse_board_token,
+            max_mapped_jobs=1000,
         ),
         "lever": LeverConnector(site_name=settings.lever_site_name),
     }
@@ -234,7 +234,7 @@ async def _run_source(
                 for result in results:
                     discovered_count += 1
                     if discovered_count > _MAX_SOURCE_RESULTS:
-                        raise SourceDataError(source_key, "source result limit exceeded")
+                        break
                     if isinstance(result, DiscoveryCandidateUrl):
                         if fetch_page is None:
                             continue
@@ -253,9 +253,7 @@ async def _run_source(
                             if not is_specific_job_url(result.url):
                                 continue
                         if len(seen_candidates) >= _MAX_CAREER_CANDIDATES:
-                            raise SourceDataError(
-                                source_key, "career-page candidate limit exceeded"
-                            )
+                            break
                         seen_candidates.add(candidate_url)
                         candidates.append(result)
                     else:
@@ -626,7 +624,7 @@ async def handle_discover_jobs(
                     ),
                     roles=tuple(run["target_roles"]),
                     locations=tuple(run["locations"]),
-                    deadline_seconds=60.0 if indonesia_mode else None,
+                    deadline_seconds=120.0 if indonesia_mode else None,
                 )
                 for source_key, source in sources.items()
             )
@@ -654,7 +652,8 @@ async def handle_discover_jobs(
             except (SourceError, ValueError):
                 continue
         kept, duplicate_count = dedupe_jobs(normalized)
-        kept = kept[:_MAX_JOBS_PER_RUN]
+        max_jobs = getattr(settings, "max_jobs_per_run", 5)
+        kept = kept[:max_jobs]
         upsert_result = await upsert_jobs(conn, search_run_id=run_id, jobs=kept)
         await _persist_provenance(
             conn,

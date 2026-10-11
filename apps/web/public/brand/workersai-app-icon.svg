@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="WorkersAI logo"><defs><linearGradient id="ribbon" x1="60" y1="290" x2="366" y2="123" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#b84620"/><stop offset="50%" stop-color="#d9623c"/><stop offset="100%" stop-color="#f28b68"/></linearGradient></defs><rect width="512" height="512" rx="112" fill="#15212b"/><g transform="translate(32 72) scale(1.02)"><g>
+          <path d="M 75 149 L 123 279 Q 129 296 139 279 L 200 170 Q 214 145 228 171 L 289 279 L 354 123" fill="none" stroke="url(#ribbon)" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M 334 106 L 387 107 L 375 162 Z" fill="#d9623c"/>
+          <circle cx="210" cy="89" r="34" fill="#d9623c"/>
+        </g></g></svg>

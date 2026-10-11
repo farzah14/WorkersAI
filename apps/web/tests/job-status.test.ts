@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const createServerClientMock = vi.hoisted(() => vi.fn());
+const createServiceClientMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@/lib/supabase/server", () => ({
   createClient: createServerClientMock,
 }));
+vi.mock("@supabase/supabase-js", () => ({
+  createClient: createServiceClientMock,
+}));
 
-import { POST } from "@/app/api/job-status/route";
+import { DELETE, POST } from "@/app/api/job-status/route";
 
 const JOB_ID = "00000000-0000-4000-8000-000000000001";
 
@@ -119,5 +123,56 @@ describe("POST /api/job-status", () => {
     const response = await POST(makeRequest({ jobId: JOB_ID, status: "saved" }));
 
     expect(response.status).toBe(500);
+  });
+});
+
+describe("DELETE /api/job-status", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("rejects an unauthenticated request", async () => {
+    createServerClientMock.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: null }, error: null }) },
+    });
+
+    const response = await DELETE(new Request(`http://localhost/api/job-status?job_id=${JOB_ID}`));
+    expect(response.status).toBe(401);
+  });
+
+  it("rejects a malformed job id", async () => {
+    setupAuthenticatedUser();
+
+    const response = await DELETE(new Request("http://localhost/api/job-status?job_id=invalid-id"));
+    expect(response.status).toBe(400);
+  });
+
+  it("permanently deletes user_jobs and job_matches", async () => {
+    setupAuthenticatedUser("test-user-id");
+
+    const matchesDelete = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+      }),
+    });
+    const userJobsDelete = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+      }),
+    });
+
+    createServiceClientMock.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "job_matches") return { delete: matchesDelete };
+        if (table === "user_jobs") return { delete: userJobsDelete };
+        throw new Error(`unexpected table: ${table}`);
+      }),
+    });
+
+    const response = await DELETE(new Request(`http://localhost/api/job-status?job_id=${JOB_ID}`));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ job_id: JOB_ID, deleted: true });
+    expect(matchesDelete).toHaveBeenCalled();
+    expect(userJobsDelete).toHaveBeenCalled();
   });
 });

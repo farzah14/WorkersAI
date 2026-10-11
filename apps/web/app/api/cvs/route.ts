@@ -125,7 +125,7 @@ export async function POST(request: NextRequest) {
       user_id: user.id,
       original_name: originalName,
       mime_type: file.type,
-      retain_original: true,
+      retain_original: formData.get("retain_original") !== "false",
       is_active: !existingActive,
     })
     .select("id")

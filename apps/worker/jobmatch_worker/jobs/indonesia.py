@@ -24,6 +24,11 @@ DEFAULT_TRUSTED_DOMAINS = frozenset(
         "smartrecruiters.com",
         "karir.com",
         "foundit.id",
+        "jobleads.com",
+        "pintarnya.com",
+        "jakartakerja.com",
+        "loker.id",
+        "linkedin.com",
     }
 )
 _BLOCKED_DOMAINS = frozenset(
@@ -136,6 +141,29 @@ def is_indonesia_eligible(job: DiscoveredJob) -> bool:
         return country in {"id", "idn", "indonesia", "republic of indonesia"}
     if _contains_indonesia_term(job.location):
         return True
+    if _contains_indonesia_term(job.title):
+        return True
+    try:
+        host = urllib.parse.urlsplit(job.original_url).hostname or ""
+        if any(
+            _domain_matches(host, dom)
+            for dom in (
+                "kitalulus.com",
+                "dealls.com",
+                "karir.com",
+                "kalibrr.id",
+                "kalibrr.com",
+                "jobstreet.co.id",
+                "foundit.id",
+                "jobleads.com",
+                "pintarnya.com",
+                "jakartakerja.com",
+                "loker.id",
+            )
+        ):
+            return True
+    except ValueError:
+        pass
     description = job.description.casefold()
     for prefix in _LOCATION_PREFIXES:
         for match in re.finditer(re.escape(prefix), description):

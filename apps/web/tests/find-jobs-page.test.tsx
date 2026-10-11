@@ -10,6 +10,20 @@ const profileMaybeSingleMock = vi.hoisted(() => vi.fn());
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
+  usePathname: () => "/find-jobs",
+  useSearchParams: () => new URLSearchParams(),
+}));
+
+import enMessages from "@/messages/en.json";
+
+vi.mock("next-intl", () => ({
+  useTranslations: (ns?: string) => (key: string) => {
+    const messages = enMessages as unknown as Record<string, Record<string, string>>;
+    if (ns && ns in messages) {
+      return messages[ns]?.[key] ?? key;
+    }
+    return (enMessages as unknown as Record<string, string>)[key] ?? key;
+  },
 }));
 
 vi.mock("@/lib/supabase/client", () => ({
@@ -87,7 +101,8 @@ describe("FindJobsPage search navigation", () => {
       json: async () => ({ run_id: "run-1" }),
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Find Jobs Now" }));
+    const submitButton = screen.getAllByRole("button", { name: "Find Jobs Now" }).find((b) => b.getAttribute("type") === "submit")!;
+    fireEvent.click(submitButton);
 
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/dashboard"));
     expect(screen.queryByText(/Search queued/)).not.toBeInTheDocument();
@@ -101,7 +116,8 @@ describe("FindJobsPage search navigation", () => {
       json: async () => ({ error: "quota_exceeded" }),
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Find Jobs Now" }));
+    const submitButton = screen.getAllByRole("button", { name: "Find Jobs Now" }).find((b) => b.getAttribute("type") === "submit")!;
+    fireEvent.click(submitButton);
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("quota_exceeded"));
     expect(pushMock).not.toHaveBeenCalled();
@@ -115,7 +131,8 @@ describe("FindJobsPage search navigation", () => {
       json: async () => ({}),
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "Find Jobs Now" }));
+    const submitButton = screen.getAllByRole("button", { name: "Find Jobs Now" }).find((b) => b.getAttribute("type") === "submit")!;
+    fireEvent.click(submitButton);
 
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Could not start the job search."));
     expect(pushMock).not.toHaveBeenCalled();

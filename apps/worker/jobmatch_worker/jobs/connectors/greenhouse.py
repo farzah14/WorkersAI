@@ -41,10 +41,12 @@ class GreenhouseConnector:
         client: httpx.AsyncClient | None = None,
         timeout: float = 15.0,
         retries: int = 1,
+        max_mapped_jobs: int = _MAX_MAPPED_JOBS,
     ) -> None:
         self._board_token = board_token
         self._timeout = timeout
         self._retries = retries
+        self._max_mapped_jobs = max_mapped_jobs
         self._owns_client = client is None
         self._client = client if client is not None else httpx.AsyncClient(timeout=timeout)
 
@@ -72,7 +74,7 @@ class GreenhouseConnector:
         jobs = body.get("jobs") if isinstance(body, dict) else None
         if not isinstance(jobs, list):
             raise SourceDataError(self.source_key, "unexpected response shape")
-        if len(jobs) > _MAX_MAPPED_JOBS:
+        if len(jobs) > self._max_mapped_jobs:
             raise SourceDataError(self.source_key, "source result limit exceeded")
 
         result: list[DiscoveredJob | DiscoveryCandidateUrl] = []

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { ExportRequestForm } from "@/components/export-request-form";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { createClient } from "@/lib/supabase/server";
 
 type ExportRow = {
@@ -58,8 +59,9 @@ export default async function ExportsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f1ea] px-5 py-10 text-[#15212b] sm:px-8">
-      <div className="mx-auto max-w-4xl space-y-8">
+    <DashboardShell>
+      <main className="min-h-screen bg-[#f4f1ea] px-5 py-10 text-[#15212b] sm:px-8">
+        <div className="mx-auto max-w-4xl space-y-8">
         <header className="border-b border-[#d9d5cc] pb-8">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#d9623c]">{t("nav.exports")}</p>
           <h1 className="text-4xl font-semibold tracking-[-0.05em]">{t("exports.heading")}</h1>
@@ -133,7 +135,8 @@ export default async function ExportsPage() {
             );
           })}
         </ul>
-      </div>
-    </main>
+        </div>
+      </main>
+    </DashboardShell>
   );
 }

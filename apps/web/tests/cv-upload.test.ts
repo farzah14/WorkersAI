@@ -344,3 +344,40 @@ describe("POST /api/cvs active CV assignment", () => {
     );
   });
 });
+
+describe("POST /api/cvs retain_original policy", () => {
+  it("defaults retain_original to true when omitted", async () => {
+    const { client, insert } = makeUploadClient(null, null);
+    const { client: serviceClient } = makeServiceClient();
+    createServerClientMock.mockResolvedValue(client as never);
+    createServiceClientMock.mockReturnValue(serviceClient as never);
+
+    const response = await POST(makeRequest() as never);
+    expect(response.status).toBe(201);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        retain_original: true,
+      }),
+    );
+  });
+
+  it("sets retain_original to false when retain_original is 'false'", async () => {
+    const { client, insert } = makeUploadClient(null, null);
+    const { client: serviceClient } = makeServiceClient();
+    createServerClientMock.mockResolvedValue(client as never);
+    createServiceClientMock.mockReturnValue(serviceClient as never);
+
+    const formData = new FormData();
+    formData.set("file", new File(["digital cv"], "Resume Final.pdf", { type: "application/pdf" }));
+    formData.set("retain_original", "false");
+    const req = { formData: vi.fn().mockResolvedValue(formData) };
+
+    const response = await POST(req as never);
+    expect(response.status).toBe(201);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        retain_original: false,
+      }),
+    );
+  });
+});

@@ -109,6 +109,11 @@ export default async function LoginPage({
                   placeholder={t("auth.passwordPlaceholder")}
                   className={styles.inputControl}
                 />
+                <div className="flex justify-end pt-1">
+                  <Link href="/forgot-password" className="text-xs text-[#d9623c] hover:underline">
+                    {t("auth.forgotPassword")}
+                  </Link>
+                </div>
               </div>
 
               <button type="submit" className={styles.primaryButton}>

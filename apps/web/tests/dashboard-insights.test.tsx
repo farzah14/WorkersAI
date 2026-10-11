@@ -22,8 +22,8 @@ describe("Dashboard InsightsPage", () => {
     render(page);
 
     expect(screen.getByText("90% - 100%")).toBeInTheDocument();
-    expect(screen.getByText("80% - 89%")).toBeInTheDocument();
-    expect(screen.getByText("70% - 79%")).toBeInTheDocument();
-    expect(screen.getByText("< 70%")).toBeInTheDocument();
+    expect(screen.getByText("71% - 89%")).toBeInTheDocument();
+    expect(screen.getByText("50% - 70%")).toBeInTheDocument();
+    expect(screen.getByText("< 50%")).toBeInTheDocument();
   });
 });

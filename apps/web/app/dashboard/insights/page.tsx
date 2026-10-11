@@ -15,9 +15,9 @@ export default async function InsightsPage() {
 
   const buckets = [
     { name: t("buckets.best"), range: "90% - 100%", color: "bg-[#1f6b59] text-white", desc: t("insights.bestDesc") },
-    { name: t("buckets.strong"), range: "80% - 89%", color: "bg-[#d9623c] text-white", desc: t("insights.strongDesc") },
-    { name: t("buckets.potential"), range: "70% - 79%", color: "bg-[#e5a93c] text-white", desc: t("insights.potentialDesc") },
-    { name: t("buckets.low"), range: "< 70%", color: "bg-[#6d787e] text-white", desc: t("insights.lowDesc") },
+    { name: t("buckets.strong"), range: "71% - 89%", color: "bg-[#d9623c] text-white", desc: t("insights.strongDesc") },
+    { name: t("buckets.potential"), range: "50% - 70%", color: "bg-[#e5a93c] text-white", desc: t("insights.potentialDesc") },
+    { name: t("buckets.low"), range: "< 50%", color: "bg-[#6d787e] text-white", desc: t("insights.lowDesc") },
   ];
 
   return (

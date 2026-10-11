@@ -1,7 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
+import { createClient } from "@/lib/supabase/client";
 
 interface SidebarRegionProps {
   isCollapsed: boolean;
@@ -9,12 +11,41 @@ interface SidebarRegionProps {
 
 export function SidebarRegion({ isCollapsed }: SidebarRegionProps) {
   const router = useRouter();
+  const t = useTranslations("sidebar");
   const [region, setRegion] = useState<"indonesia" | "global">("indonesia");
   const [isNavigating, setIsNavigating] = useState(false);
 
+  useEffect(() => {
+    async function loadInitialRegion() {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user) return;
+
+        const { data } = await supabase
+          .from("search_profiles")
+          .select("region")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (data?.region === "indonesia" || data?.region === "global") {
+          setRegion(data.region);
+        }
+      } catch {
+        // Fallback to default state
+      }
+    }
+
+    void loadInitialRegion();
+  }, []);
+
   const handleStartSearch = () => {
     setIsNavigating(true);
-    router.push("/find-jobs");
+    router.push(`/find-jobs?region=${region}`);
   };
 
   if (isCollapsed) {
@@ -23,7 +54,7 @@ export function SidebarRegion({ isCollapsed }: SidebarRegionProps) {
         <button
           type="button"
           onClick={handleStartSearch}
-          title="Find Jobs Now"
+          title={t("findJobsNow")}
           className="w-10 h-10 flex items-center justify-center bg-[#d9623c] hover:bg-[#bb4f2e] text-white rounded-xl shadow-sm transition-colors focus:outline-none focus:ring-2 focus:ring-[#d9623c]"
         >
           <svg
@@ -48,10 +79,10 @@ export function SidebarRegion({ isCollapsed }: SidebarRegionProps) {
       {/* Region Switcher */}
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-wider text-[#6d787e]">
-          Search Region
+          {t("searchRegion")}
         </span>
         <span className="text-[10px] font-mono font-medium text-[#d9623c]">
-          {region === "indonesia" ? "ID" : "Global"}
+          {region === "indonesia" ? t("regionId") : t("regionGlobal")}
         </span>
       </div>
 
@@ -103,7 +134,7 @@ export function SidebarRegion({ isCollapsed }: SidebarRegionProps) {
           <circle cx="11" cy="11" r="8" />
           <line x1="21" y1="21" x2="16.65" y2="16.65" />
         </svg>
-        <span>{isNavigating ? "Opening search..." : "Find Jobs Now"}</span>
+        <span>{isNavigating ? t("openingSearch") : t("findJobsNow")}</span>
       </button>
     </div>
   );

@@ -98,6 +98,7 @@ class LeverConnector:
             timeout=self._timeout,
             source_key=self.source_key,
             retries=self._retries,
+            max_bytes=10 * 1024 * 1024,
         )
         body = parse_json(self.source_key, response)
         if not isinstance(body, list):

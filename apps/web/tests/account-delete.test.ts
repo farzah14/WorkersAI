@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, within } from "@testing-library/react";
 import { DELETE as deleteCv } from "@/app/api/cvs/route";
 import { DELETE as deleteAccount } from "@/app/api/account/delete/route";
-import CvsPage from "@/app/cvs/page";
+import ProfileAndCvsPage from "@/app/dashboard/profile/page";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 
@@ -15,6 +15,12 @@ vi.mock("@supabase/supabase-js", () => ({
 vi.mock("next/navigation", () => ({
   redirect: vi.fn(),
   useRouter: () => ({ refresh: vi.fn() }),
+}));
+vi.mock("next-intl", () => ({
+  useTranslations: () => (key: string) => key,
+}));
+vi.mock("next-intl/server", () => ({
+  getTranslations: vi.fn().mockResolvedValue((key: string) => key),
 }));
 
 const createServerClientMock = vi.mocked(createServerClient);
@@ -286,14 +292,16 @@ describe("CV retention actions", () => {
       auth: { getUser: vi.fn().mockResolvedValue(authenticatedUser()) },
       from: vi.fn(() => ({
         select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            order: vi.fn().mockResolvedValue({ data: cvs, error: null }),
+          }),
           order: vi.fn().mockResolvedValue({ data: cvs, error: null }),
         }),
       })),
     });
 
-    render(await CvsPage());
-
-    const readyRow = screen.getByText("Ready CV").closest("li");
+    render(await ProfileAndCvsPage());
+    const readyRow = screen.getAllByText("Ready CV").find((el) => el.closest("li"))?.closest("li");
     expect(readyRow).not.toBeNull();
     expect(
       within(readyRow!).getByRole("button", { name: "Delete original file for Ready CV" }),

@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
 import { ProfileForm } from "@/components/profile-form";
 import { ProfileExtractionPending } from "@/components/profile-extraction-pending";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import type { CandidateProfile } from "@/lib/profile/schema";
 
 export default async function OnboardingProfilePage() {
+  const t = await getTranslations("profile");
   const supabase = await createClient();
   const {
     data: { user },
@@ -21,13 +24,15 @@ export default async function OnboardingProfilePage() {
 
   if (!activeCv) {
     return (
-      <main className="mx-auto flex max-w-3xl flex-col gap-4 p-8">
-        <h1 className="text-2xl font-semibold">Candidate profile</h1>
-        <p className="text-gray-600">Upload a CV first so we can build your profile from it.</p>
-        <Link href="/cvs" className="text-blue-600 underline">
-          Go to My CVs
-        </Link>
-      </main>
+      <DashboardShell>
+        <main className="mx-auto flex max-w-3xl flex-col gap-4 p-8">
+          <h1 className="text-2xl font-semibold">{t("form.heading")}</h1>
+          <p className="text-gray-600">{t("uploadCvFirst")}</p>
+          <Link href="/dashboard/profile" className="text-blue-600 underline">
+            {t("goToMyCvs")}
+          </Link>
+        </main>
+      </DashboardShell>
     );
   }
 
@@ -41,28 +46,34 @@ export default async function OnboardingProfilePage() {
 
   if (profileError) {
     return (
-      <main className="mx-auto flex max-w-3xl flex-col gap-4 p-8">
-        <h1 className="text-2xl font-semibold">Candidate profile</h1>
-        <p className="text-red-600">Could not load the profile. Please refresh and try again.</p>
-      </main>
+      <DashboardShell>
+        <main className="mx-auto flex max-w-3xl flex-col gap-4 p-8">
+          <h1 className="text-2xl font-semibold">{t("form.heading")}</h1>
+          <p className="text-red-600">{t("loadFailed")}</p>
+        </main>
+      </DashboardShell>
     );
   }
 
   if (!profileRow) {
     if (activeCv.extraction_status === "failed") {
       return (
-        <main className="mx-auto flex max-w-3xl flex-col gap-4 p-8">
-          <h1 className="text-2xl font-semibold">Candidate profile</h1>
-          <p className="text-red-600">This CV could not be extracted. Upload another CV and try again.</p>
-        </main>
+        <DashboardShell>
+          <main className="mx-auto flex max-w-3xl flex-col gap-4 p-8">
+            <h1 className="text-2xl font-semibold">{t("form.heading")}</h1>
+            <p className="text-red-600">{t("extractFailed")}</p>
+          </main>
+        </DashboardShell>
       );
     }
 
     return (
-      <main className="mx-auto flex max-w-3xl flex-col gap-6 p-8">
-        <h1 className="text-2xl font-semibold">Candidate profile</h1>
-        <ProfileExtractionPending cvName={activeCv.original_name} />
-      </main>
+      <DashboardShell>
+        <main className="mx-auto flex max-w-3xl flex-col gap-6 p-8">
+          <h1 className="text-2xl font-semibold">{t("form.heading")}</h1>
+          <ProfileExtractionPending cvName={activeCv.original_name} />
+        </main>
+      </DashboardShell>
     );
   }
 
@@ -70,14 +81,14 @@ export default async function OnboardingProfilePage() {
   const confirmed = profileRow != null && profileRow.confirmed_at != null;
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-6 p-8">
-      <h1 className="text-2xl font-semibold">Candidate profile</h1>
-      <p className="text-sm text-gray-600">
-        {confirmed
-          ? "Your profile is confirmed. Edit it below to save a new version."
-          : "Review and edit the profile extracted from your CV, then save it."}
-      </p>
-      <ProfileForm key={`${activeCv.id}:${profileRow.version}`} cvId={activeCv.id} initial={initial} />
-    </main>
+    <DashboardShell>
+      <main className="mx-auto flex max-w-3xl flex-col gap-6 p-8">
+        <h1 className="text-2xl font-semibold">{t("form.heading")}</h1>
+        <p className="text-sm text-gray-600">
+          {confirmed ? t("form.confirmedHint") : t("form.unconfirmedHint")}
+        </p>
+        <ProfileForm key={`${activeCv.id}:${profileRow.version}`} cvId={activeCv.id} initial={initial} />
+      </main>
+    </DashboardShell>
   );
 }

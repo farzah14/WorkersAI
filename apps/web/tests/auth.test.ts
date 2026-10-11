@@ -1,5 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { requiresAuth } from "@/lib/auth/routes";
+import CvsPage from "@/app/cvs/page";
+import SettingsPage from "@/app/settings/page";
+import SavedJobsPage from "@/app/saved/page";
+import ApplicationsPage from "@/app/applications/page";
+
+const redirectMock = vi.hoisted(() => vi.fn());
+vi.mock("next/navigation", () => ({
+  redirect: (to: string) => redirectMock(to),
+}));
 
 describe("requiresAuth", () => {
   it("protects dashboard and cv routes", () => {
@@ -21,5 +30,20 @@ describe("requiresAuth", () => {
     expect(requiresAuth("/login")).toBe(false);
     expect(requiresAuth("/register")).toBe(false);
     expect(requiresAuth("/auth/callback")).toBe(false);
+    expect(requiresAuth("/forgot-password")).toBe(false);
+  });
+
+  it("redirects legacy routes to dashboard equivalents", async () => {
+    await CvsPage();
+    expect(redirectMock).toHaveBeenCalledWith("/dashboard/profile");
+
+    await SettingsPage();
+    expect(redirectMock).toHaveBeenCalledWith("/dashboard/settings");
+
+    await SavedJobsPage();
+    expect(redirectMock).toHaveBeenCalledWith("/dashboard/tracker");
+
+    await ApplicationsPage();
+    expect(redirectMock).toHaveBeenCalledWith("/dashboard/tracker");
   });
 });

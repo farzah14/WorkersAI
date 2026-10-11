@@ -835,6 +835,50 @@ async def test_discovery_run_persists_at_most_five_distinct_jobs() -> None:
 
 
 @pytest.mark.asyncio
+async def test_discovery_run_respects_custom_max_jobs_per_run() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-custom-limit",
+        "status": "queued",
+        "region": "global",
+        "target_roles": ["Engineer"],
+        "locations": [],
+        "work_modes": [],
+        "excluded_keywords": [],
+    }
+    jobs = [
+        _job(
+            source_key="greenhouse",
+            url=f"https://jobs.example.com/engineer-{number}",
+            title=f"Engineer {number}",
+        )
+        for number in range(1, 8)
+    ]
+    connection = _Connection(run_row)
+
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-custom-limit", "payload": {"search_run_id": "run-custom-limit"}},
+        SimpleNamespace(
+            requirement_extraction_enabled=True,
+            max_attempts=3,
+            max_jobs_per_run=3,
+        ),
+        connectors={"greenhouse": _Connector("greenhouse", jobs)},
+    )
+
+    job_inserts = [
+        params
+        for query, params in connection.executed
+        if "insert into public.jobs" in query.lower()
+    ]
+    assert len(job_inserts) == 3
+    assert [params[1] for params in job_inserts] == [
+        f"Engineer {number}" for number in range(1, 4)
+    ]
+
+@pytest.mark.asyncio
 async def test_discovery_requeues_failed_requirement_work_for_reused_job() -> None:
     from jobmatch_worker.handlers.discovery import handle_discover_jobs
 

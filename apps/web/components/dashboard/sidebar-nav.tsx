@@ -33,7 +33,6 @@ export function SidebarNav({ isCollapsed, onNavClick }: SidebarNavProps) {
           <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
         </svg>
       ),
-      badge: "Feed",
     },
     {
       label: t("tracker"),
@@ -146,10 +145,10 @@ export function SidebarNav({ isCollapsed, onNavClick }: SidebarNavProps) {
             key={item.href}
             href={item.href}
             onClick={onNavClick}
-            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl font-medium text-sm transition-colors ${
+            className={`flex items-center gap-3 px-3 py-2 rounded-xl text-sm transition-colors ${
               isActive
-                ? "bg-[#15212b] text-white shadow-xs"
-                : "text-[#53616a] hover:bg-[#eae7df] hover:text-[#15212b]"
+                ? "font-bold text-[#15212b]"
+                : "font-normal text-[#53616a] hover:text-[#15212b]"
             } ${isCollapsed ? "justify-center px-2" : ""}`}
             title={isCollapsed ? item.label : undefined}
             aria-current={isActive ? "page" : undefined}
@@ -159,20 +158,7 @@ export function SidebarNav({ isCollapsed, onNavClick }: SidebarNavProps) {
             </span>
 
             {!isCollapsed && (
-              <>
-                <span className="flex-1 truncate">{item.label}</span>
-                {item.badge && (
-                  <span
-                    className={`px-1.5 py-0.5 text-[10px] font-mono font-semibold rounded-md ${
-                      isActive
-                        ? "bg-[#263946] text-[#f7c3b3]"
-                        : "bg-[#eae7df] text-[#53616a]"
-                    }`}
-                  >
-                    {item.badge}
-                  </span>
-                )}
-              </>
+              <span className="flex-1 truncate">{item.label}</span>
             )}
           </Link>
         );

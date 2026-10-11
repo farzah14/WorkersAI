@@ -137,3 +137,18 @@ def test_tavily_api_key_is_loaded_from_environment(
     settings = Settings(_env_file=None)
 
     assert settings.tavily_api_key == "tavily-key"
+
+def test_max_jobs_per_run_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    _set_base_env(monkeypatch)
+    monkeypatch.setenv("NINEROUTER_MODEL", "gpt-4o-mini")
+    settings = Settings(_env_file=None)
+    assert settings.max_jobs_per_run == 5
+
+    monkeypatch.setenv("MAX_JOBS_PER_RUN", "10")
+    settings_custom = Settings(_env_file=None)
+    assert settings_custom.max_jobs_per_run == 10
+
+    monkeypatch.delenv("MAX_JOBS_PER_RUN", raising=False)
+    monkeypatch.setenv("MAX_JOBS", "8")
+    settings_alias = Settings(_env_file=None)
+    assert settings_alias.max_jobs_per_run == 8

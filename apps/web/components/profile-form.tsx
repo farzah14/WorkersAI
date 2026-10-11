@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { SENIORITIES, type CandidateProfile } from "@/lib/profile/schema";
 
 function listToArray(value: string): string[] {
@@ -17,6 +18,7 @@ type ProfileFormProps = {
 
 export function ProfileForm({ cvId, initial }: ProfileFormProps) {
   const router = useRouter();
+  const t = useTranslations("profile.form");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [values, setValues] = useState({
@@ -60,12 +62,12 @@ export function ProfileForm({ cvId, initial }: ProfileFormProps) {
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
       setError(
         data?.error === "active_cv_conflict"
-          ? "Another CV is being activated right now. Please try again."
+          ? t("activeConflict")
           : data?.error === "save_conflict"
-            ? "Another save happened at the same time. Please try again."
+            ? t("saveConflict")
             : data?.error === "validation_failed"
-              ? "Please check the form fields."
-              : (data?.error ?? "Could not save your profile."),
+              ? t("validationError")
+              : (data?.error ?? t("genericError")),
       );
       return;
     }
@@ -76,7 +78,7 @@ export function ProfileForm({ cvId, initial }: ProfileFormProps) {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-4">
       <label className="flex flex-col gap-1 text-sm">
-        Name
+        {t("name")}
         <input
           value={values.name}
           onChange={(event) => set("name", event.target.value)}
@@ -84,7 +86,7 @@ export function ProfileForm({ cvId, initial }: ProfileFormProps) {
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Current role
+        {t("currentRole")}
         <input
           value={values.current_role}
           onChange={(event) => set("current_role", event.target.value)}
@@ -92,7 +94,7 @@ export function ProfileForm({ cvId, initial }: ProfileFormProps) {
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Seniority
+        {t("seniority")}
         <select
           value={values.seniority}
           onChange={(event) => set("seniority", event.target.value)}
@@ -106,7 +108,7 @@ export function ProfileForm({ cvId, initial }: ProfileFormProps) {
         </select>
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Target roles (comma separated)
+        {t("targetRoles")}
         <input
           value={values.target_roles}
           onChange={(event) => set("target_roles", event.target.value)}
@@ -115,7 +117,7 @@ export function ProfileForm({ cvId, initial }: ProfileFormProps) {
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Skills (comma separated)
+        {t("skills")}
         <input
           value={values.skills}
           onChange={(event) => set("skills", event.target.value)}
@@ -124,7 +126,7 @@ export function ProfileForm({ cvId, initial }: ProfileFormProps) {
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Years of experience (0-80)
+        {t("experienceYears")}
         <input
           value={values.experience_years}
           onChange={(event) => set("experience_years", event.target.value)}
@@ -135,7 +137,7 @@ export function ProfileForm({ cvId, initial }: ProfileFormProps) {
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Languages (comma separated)
+        {t("languages")}
         <input
           value={values.languages}
           onChange={(event) => set("languages", event.target.value)}
@@ -143,7 +145,7 @@ export function ProfileForm({ cvId, initial }: ProfileFormProps) {
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
-        Education (comma separated)
+        {t("education")}
         <input
           value={values.education}
           onChange={(event) => set("education", event.target.value)}
@@ -156,7 +158,7 @@ export function ProfileForm({ cvId, initial }: ProfileFormProps) {
         disabled={saving}
         className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
       >
-        {saving ? "Saving…" : "Save profile"}
+        {saving ? t("savingButton") : t("saveButton")}
       </button>
     </form>
   );

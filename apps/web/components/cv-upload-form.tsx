@@ -1,26 +1,30 @@
 "use client";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 export function CvUploadForm() {
   const router = useRouter();
+  const t = useTranslations("profile");
   const formRef = useRef<HTMLFormElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
   async function onSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const file = new FormData(event.currentTarget).get("file");
+    const form = event.currentTarget;
+    const file = new FormData(form).get("file");
     if (!(file instanceof File) || file.size === 0) return;
     setUploading(true);
     setError(null);
     const body = new FormData();
     body.set("file", file);
+    body.set("retain_original", String((form.elements.namedItem("retain_original") as HTMLInputElement)?.checked ?? true));
     const response = await fetch("/api/cvs", { method: "POST", body });
     setUploading(false);
     if (!response.ok) {
       const data = (await response.json().catch(() => null)) as { error?: string } | null;
-      setError(data?.error ?? "Upload failed.");
+      setError(data?.error ?? t("uploadFailed"));
       return;
     }
     formRef.current?.reset();
@@ -37,13 +41,23 @@ export function CvUploadForm() {
         aria-label="Choose a CV file"
         className="flex-1 rounded border border-gray-300 px-3 py-2"
       />
+      <label className="flex items-center gap-2 text-sm text-[#53616a] cursor-pointer select-none">
+        <input
+          type="checkbox"
+          name="retain_original"
+          id="retain_original"
+          defaultChecked
+          className="h-4 w-4 rounded border-gray-300 accent-[#1f6b59] focus:ring-[#1f6b59]"
+        />
+        <span>{t("retainOriginalLabel")}</span>
+      </label>
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button
         type="submit"
         disabled={uploading}
         className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
       >
-        {uploading ? "Uploading…" : "Upload CV"}
+        {uploading ? t("uploadingButton") : t("uploadButton")}
       </button>
     </form>
   );

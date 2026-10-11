@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { createClient as createServerClient } from "@/lib/supabase/server";
 
 const JOB_STATUSES = ["new", "saved", "applied", "ignored"] as const;
@@ -57,4 +58,36 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ job_id: body.jobId, status });
+}
+
+export async function DELETE(request: Request) {
+  const supabase = await createServerClient();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError || !user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const url = new URL(request.url);
+  const jobId = url.searchParams.get("job_id");
+
+  if (!jobId || !UUID_RE.test(jobId)) {
+    return NextResponse.json({ error: "validation_failed" }, { status: 400 });
+  }
+
+  const serviceClient = createServiceClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { persistSession: false } },
+  );
+
+  await Promise.all([
+    serviceClient.from("job_matches").delete().eq("user_id", user.id).eq("job_id", jobId),
+    serviceClient.from("user_jobs").delete().eq("user_id", user.id).eq("job_id", jobId),
+  ]);
+
+  return NextResponse.json({ job_id: jobId, deleted: true });
 }

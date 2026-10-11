@@ -35,6 +35,24 @@ export function JobActions({ jobId, status }: { jobId: string; status: JobStatus
     }
   }
 
+  async function removeJob() {
+    setBusy(true);
+    setError(false);
+    try {
+      const response = await fetch(`/api/job-status?job_id=${encodeURIComponent(jobId)}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) {
+        setError(true);
+        return;
+      }
+      router.refresh();
+    } catch {
+      setError(true);
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
@@ -61,6 +79,14 @@ export function JobActions({ jobId, status }: { jobId: string; status: JobStatus
           className={`${buttonClass} ${status === "ignored" ? "bg-[#e8e6df] text-[#6d787e] hover:text-[#6d787e]" : ""}`}
         >
           {t("ignore")}
+        </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={removeJob}
+          className={`${buttonClass} border-rose-200 text-rose-700 hover:bg-rose-50 hover:border-rose-300`}
+        >
+          {t("remove")}
         </button>
       </div>
       {error && (

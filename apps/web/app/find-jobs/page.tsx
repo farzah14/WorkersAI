@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { candidateProfileSchema } from "@/lib/profile/schema";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -72,64 +74,71 @@ function seniorityEmploymentDefaults(seniority: string): EmploymentType[] {
 
 function LoadingState() {
   return (
-    <main className="min-h-screen bg-[#f4f1ea] px-5 py-10 text-[#15212b] sm:px-8">
-      <div className="mx-auto max-w-5xl animate-pulse space-y-5">
-        <div className="h-5 w-32 rounded-full bg-[#d9d5cc]" />
-        <div className="h-16 max-w-xl rounded bg-[#e5e1d8]" />
-        <div className="h-96 rounded-2xl bg-white/70" />
-      </div>
-    </main>
+    <DashboardShell>
+      <main className="min-h-screen bg-[#f4f1ea] px-5 py-10 text-[#15212b] sm:px-8">
+        <div className="mx-auto max-w-5xl animate-pulse space-y-5">
+          <div className="h-5 w-32 rounded-full bg-[#d9d5cc]" />
+          <div className="h-16 max-w-xl rounded bg-[#e5e1d8]" />
+          <div className="h-96 rounded-2xl bg-white/70" />
+        </div>
+      </main>
+    </DashboardShell>
   );
 }
 
 function EmptyState({ state }: { state: Exclude<LoadState, "loading" | "ready"> }) {
+  const t = useTranslations("findJobs");
   const content: Record<Exclude<LoadState, "loading" | "ready">, { title: string; body: string; href: string; link: string }> = {
     unauthorized: {
-      title: "Sign in to find your next role",
-      body: "Your search preferences are private and tied to your account.",
+      title: t("empty.unauthorizedTitle"),
+      body: t("empty.unauthorizedBody"),
       href: "/login",
-      link: "Sign in",
+      link: t("empty.unauthorizedLink"),
     },
     "missing-cv": {
-      title: "Start with an active CV",
-      body: "Upload a digital PDF or DOCX CV, then set it as active before configuring a search.",
-      href: "/cvs",
-      link: "Open My CVs",
+      title: t("empty.missingCvTitle"),
+      body: t("empty.missingCvBody"),
+      href: "/dashboard/profile",
+      link: t("empty.missingCvLink"),
     },
     unconfirmed: {
-      title: "Confirm your candidate profile first",
-      body: "Review the extracted profile and confirm it before we use it to discover jobs.",
+      title: t("empty.unconfirmedTitle"),
+      body: t("empty.unconfirmedBody"),
       href: "/onboarding/profile",
-      link: "Review candidate profile",
+      link: t("empty.unconfirmedLink"),
     },
     error: {
-      title: "Search preferences are unavailable",
-      body: "We could not load the active CV and candidate profile. Refresh the page and try again.",
+      title: t("empty.errorTitle"),
+      body: t("empty.errorBody"),
       href: "/find-jobs",
-      link: "Try again",
+      link: t("empty.errorLink"),
     },
   };
   const current = content[state];
 
   return (
-    <main className="min-h-screen bg-[#f4f1ea] px-5 py-16 text-[#15212b] sm:px-8">
-      <section className="mx-auto max-w-xl rounded-3xl border border-[#d9d5cc] bg-white p-8 shadow-[0_20px_60px_rgba(21,33,43,0.08)] sm:p-12">
-        <p className="mb-5 text-xs font-semibold uppercase tracking-[0.22em] text-[#d9623c]">Find jobs</p>
-        <h1 className="max-w-md text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">{current.title}</h1>
-        <p className="mt-4 leading-7 text-[#53616a]">{current.body}</p>
-        <Link
-          href={current.href}
-          className="mt-8 inline-flex rounded-full bg-[#15212b] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#263946] focus:outline-none focus:ring-2 focus:ring-[#d9623c] focus:ring-offset-2"
-        >
-          {current.link}
-        </Link>
-      </section>
-    </main>
+    <DashboardShell>
+      <main className="min-h-screen bg-[#f4f1ea] px-5 py-16 text-[#15212b] sm:px-8">
+        <section className="mx-auto max-w-xl rounded-3xl border border-[#d9d5cc] bg-white p-8 shadow-[0_20px_60px_rgba(21,33,43,0.08)] sm:p-12">
+          <p className="mb-5 text-xs font-semibold uppercase tracking-[0.22em] text-[#d9623c]">{t("empty.tag")}</p>
+          <h1 className="max-w-md text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">{current.title}</h1>
+          <p className="mt-4 leading-7 text-[#53616a]">{current.body}</p>
+          <Link
+            href={current.href}
+            className="mt-8 inline-flex rounded-full bg-[#15212b] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#263946] focus:outline-none focus:ring-2 focus:ring-[#d9623c] focus:ring-offset-2"
+          >
+            {current.link}
+          </Link>
+        </section>
+      </main>
+    </DashboardShell>
   );
 }
 
-export default function FindJobsPage() {
+function FindJobsContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const t = useTranslations("findJobs");
   const [loadState, setLoadState] = useState<LoadState>("loading");
   const [values, setValues] = useState<FormValues | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -198,7 +207,7 @@ export default function FindJobsPage() {
         candidateProfileId: profileRow.id,
         cvName: activeCv.original_name,
         seniority: profile.data.seniority,
-        region: "indonesia",
+        region: searchParams.get("region") === "global" ? "global" : "indonesia",
         targetRoles: profile.data.target_roles.join(", "),
         locations: "",
         workModes: [],
@@ -215,7 +224,7 @@ export default function FindJobsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [searchParams]);
 
   if (loadState === "loading") return <LoadingState />;
   if (loadState !== "ready") return <EmptyState state={loadState} />;
@@ -276,39 +285,40 @@ export default function FindJobsPage() {
 
       router.push("/dashboard");
     } catch {
-      setError("The search could not be started. Check your connection and try again.");
+      setError(t("searchFailed"));
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <main className="min-h-screen bg-[#f4f1ea] px-5 py-8 text-[#15212b] sm:px-8 sm:py-12">
-      <div className="mx-auto max-w-5xl">
+    <DashboardShell>
+      <main className="min-h-screen bg-[#f4f1ea] px-5 py-8 text-[#15212b] sm:px-8 sm:py-12">
+        <div className="mx-auto max-w-5xl">
         <header className="grid gap-8 border-b border-[#d9d5cc] pb-10 lg:grid-cols-[1fr_280px] lg:items-end">
           <div>
-            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-[#d9623c]">Search profile</p>
+            <p className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-[#d9623c]">{t("tag")}</p>
             <h1 className="max-w-2xl text-4xl font-semibold tracking-[-0.06em] sm:text-6xl">
-              Find work that fits the person behind your CV.
+              {t("title")}
             </h1>
             <p className="mt-5 max-w-xl text-base leading-7 text-[#53616a]">
-              Tune the brief before discovery starts. Your confirmed candidate profile stays the source of truth.
+              {t("subheading")}
             </p>
           </div>
           <aside className="border-l-2 border-[#d9623c] pl-5 text-sm leading-6 text-[#53616a]">
-            <p className="font-semibold text-[#15212b]">Active CV</p>
+            <p className="font-semibold text-[#15212b]">{t("activeCv")}</p>
             <p className="mt-1 break-words">{values.cvName}</p>
-            <p className="mt-4 font-semibold text-[#15212b]">Profile signal</p>
-            <p className="mt-1 capitalize">{values.seniority} seniority</p>
+            <p className="mt-4 font-semibold text-[#15212b]">{t("profileSignal")}</p>
+            <p className="mt-1 capitalize">{t("seniorityLevel", { seniority: values.seniority })}</p>
           </aside>
         </header>
 
         <form onSubmit={submitSearch} className="mt-10 space-y-8">
           <section className="rounded-3xl bg-[#15212b] p-6 text-white shadow-[0_20px_60px_rgba(21,33,43,0.16)] sm:p-8">
             <fieldset>
-              <legend className="text-lg font-semibold">Where should we look?</legend>
+              <legend className="text-lg font-semibold">{t("regionLegend")}</legend>
               <p className="mt-2 max-w-xl text-sm leading-6 text-[#b9c5c9]">
-                Choose one region. This changes the discovery sources and query language used by the worker.
+                {t("regionHint")}
               </p>
               <div className="mt-6 grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Search region">
                 {REGIONS.map((region) => (
@@ -336,29 +346,29 @@ export default function FindJobsPage() {
 
           <section className="grid gap-6 rounded-3xl border border-[#d9d5cc] bg-white p-6 shadow-[0_12px_40px_rgba(21,33,43,0.05)] sm:p-8 lg:grid-cols-2">
             <label className="flex flex-col gap-2 text-sm font-semibold lg:col-span-2">
-              Target roles
+              {t("targetRoles")}
               <input
                 value={values.targetRoles}
                 onChange={(event) => updateValue("targetRoles", event.target.value)}
-                placeholder="Data Engineer, Analytics Engineer"
+                placeholder={t("targetRolesPlaceholder")}
                 required
                 className="rounded-xl border border-[#c9c7c0] bg-[#faf9f6] px-4 py-3 font-normal outline-none transition placeholder:text-[#8b9599] focus:border-[#d9623c] focus:ring-2 focus:ring-[#f7c3b3]"
               />
-              <span className="font-normal text-xs text-[#6d787e]">Separate multiple roles with commas.</span>
+              <span className="font-normal text-xs text-[#6d787e]">{t("targetRolesHint")}</span>
             </label>
 
             <label className="flex flex-col gap-2 text-sm font-semibold">
-              Locations
+              {t("locations")}
               <input
                 value={values.locations}
                 onChange={(event) => updateValue("locations", event.target.value)}
-                placeholder="Jakarta, Bandung, or leave broad"
+                placeholder={t("locationsPlaceholder")}
                 className="rounded-xl border border-[#c9c7c0] bg-[#faf9f6] px-4 py-3 font-normal outline-none transition placeholder:text-[#8b9599] focus:border-[#d9623c] focus:ring-2 focus:ring-[#f7c3b3]"
               />
             </label>
 
             <fieldset>
-              <legend className="text-sm font-semibold">Work modes</legend>
+              <legend className="text-sm font-semibold">{t("workModes")}</legend>
               <div className="mt-3 flex flex-wrap gap-2">
                 {WORK_MODES.map((mode) => (
                   <label key={mode} className="cursor-pointer">
@@ -374,11 +384,11 @@ export default function FindJobsPage() {
                   </label>
                 ))}
               </div>
-              <p className="mt-2 text-xs font-normal text-[#6d787e]">Leave blank to keep all modes in scope.</p>
+              <p className="mt-2 text-xs font-normal text-[#6d787e]">{t("workModesHint")}</p>
             </fieldset>
 
             <fieldset className="lg:col-span-2">
-              <legend className="text-sm font-semibold">Employment types</legend>
+              <legend className="text-sm font-semibold">{t("employmentTypes")}</legend>
               <div className="mt-3 flex flex-wrap gap-2">
                 {EMPLOYMENT_TYPES.map((type) => (
                   <label key={type} className="cursor-pointer">
@@ -399,12 +409,12 @@ export default function FindJobsPage() {
 
           <section className="grid gap-6 rounded-3xl border border-[#d9d5cc] bg-white p-6 shadow-[0_12px_40px_rgba(21,33,43,0.05)] sm:p-8 lg:grid-cols-2">
             <div>
-              <p className="text-sm font-semibold">Compensation floor</p>
-              <p className="mt-2 text-sm leading-6 text-[#6d787e]">Optional. Jobs without salary data may still appear.</p>
+              <p className="text-sm font-semibold">{t("compensationFloor")}</p>
+              <p className="mt-2 text-sm leading-6 text-[#6d787e]">{t("compensationHint")}</p>
             </div>
             <div className="grid grid-cols-[1fr_110px] gap-3">
               <label className="flex flex-col gap-2 text-sm font-semibold">
-                Minimum salary
+                {t("minSalary")}
                 <input
                   type="number"
                   min="0"
@@ -415,7 +425,7 @@ export default function FindJobsPage() {
                 />
               </label>
               <label className="flex flex-col gap-2 text-sm font-semibold">
-                Currency
+                {t("currency")}
                 <input
                   value={values.salaryCurrency}
                   onChange={(event) => updateValue("salaryCurrency", event.target.value)}
@@ -427,22 +437,22 @@ export default function FindJobsPage() {
             </div>
 
             <label className="flex flex-col gap-2 text-sm font-semibold lg:col-span-2">
-              Excluded keywords
+              {t("excludedKeywords")}
               <input
                 value={values.excludedKeywords}
                 onChange={(event) => updateValue("excludedKeywords", event.target.value)}
-                placeholder="Sales, commission, unpaid"
+                placeholder={t("excludedKeywordsPlaceholder")}
                 className="rounded-xl border border-[#c9c7c0] bg-[#faf9f6] px-4 py-3 font-normal outline-none transition placeholder:text-[#8b9599] focus:border-[#d9623c] focus:ring-2 focus:ring-[#f7c3b3]"
               />
-              <span className="font-normal text-xs text-[#6d787e]">Separate keywords with commas.</span>
+              <span className="font-normal text-xs text-[#6d787e]">{t("excludedKeywordsHint")}</span>
             </label>
           </section>
 
           <section className="flex flex-col gap-5 rounded-3xl border border-[#d9d5cc] bg-[#e5f0ec] p-6 sm:flex-row sm:items-center sm:justify-between sm:p-8">
             <div>
-              <p className="text-sm font-semibold">Keep this search running</p>
+              <p className="text-sm font-semibold">{t("dailyTitle")}</p>
               <p className="mt-2 max-w-xl text-sm leading-6 text-[#53616a]">
-                Turn on daily discovery to refresh results using these preferences and your active CV.
+                {t("dailyHint")}
               </p>
             </div>
             <label className="inline-flex shrink-0 cursor-pointer items-center gap-3 text-sm font-semibold">
@@ -452,7 +462,7 @@ export default function FindJobsPage() {
                 onChange={(event) => updateValue("dailyEnabled", event.target.checked)}
                 className="h-5 w-5 rounded border-[#8ba59b] accent-[#1f6b59] focus:ring-2 focus:ring-[#1f6b59]"
               />
-              Enable daily search
+              {t("dailyEnabled")}
             </label>
           </section>
 
@@ -462,17 +472,26 @@ export default function FindJobsPage() {
             </p>
           )}
           <div className="flex flex-col gap-4 border-t border-[#d9d5cc] pt-8 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-[#6d787e]">You can adjust this brief each time you search.</p>
+            <p className="text-sm text-[#6d787e]">{t("briefNote")}</p>
             <button
               type="submit"
               disabled={submitting}
               className="inline-flex justify-center rounded-full bg-[#d9623c] px-7 py-3.5 text-sm font-semibold text-white shadow-[0_10px_20px_rgba(217,98,60,0.22)] transition hover:bg-[#bb4f2e] focus:outline-none focus:ring-2 focus:ring-[#d9623c] focus:ring-offset-2 disabled:cursor-wait disabled:opacity-60"
             >
-              {submitting ? "Starting search..." : "Find Jobs Now"}
+              {submitting ? t("submitting") : t("submitButton")}
             </button>
           </div>
         </form>
-      </div>
-    </main>
+        </div>
+      </main>
+    </DashboardShell>
+  );
+}
+
+export default function FindJobsPage() {
+  return (
+    <Suspense fallback={<LoadingState />}>
+      <FindJobsContent />
+    </Suspense>
   );
 }

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="440" height="370" viewBox="0 0 440 370" role="img" aria-label="WorkersAI logo"><defs><linearGradient id="ribbon" x1="60" y1="290" x2="366" y2="123" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="#0951BB"/><stop offset="44%" stop-color="#0878EF"/><stop offset="100%" stop-color="#209BFA"/></linearGradient></defs><g>
+        <g stroke="#11C1C6" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M 34 66 H 91 L 119 91"/><path d="M 20 103 H 79 L 103 127 H 119"/><path d="M 47 143 H 93 L 113 160 H 122"/>
+        </g>
+        <g fill="#0D9FAB"><circle cx="34" cy="66" r="13"/><circle cx="20" cy="103" r="13"/><circle cx="47" cy="143" r="13"/></g>
+        <path d="M 80 175 L 127 281 Q 135 299 146 279 L 201 175 Q 213 154 227 177 L 288 282 L 357 141" fill="none" stroke="url(#ribbon)" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M 334 119 L 385 118 L 371 169 Z" fill="#0878EF"/>
+        <circle cx="211" cy="102" r="34" fill="#0878EF"/>
+        <g transform="translate(300 240)">
+          <rect x="0" y="25" width="108" height="77" rx="12" fill="#FFFFFF"/>
+          <path d="M 31 28 V 16 Q 31 8 39 8 H 70 Q 78 8 78 16 V 28" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" fill="none"/>
+          <path d="M 0 52 L 42 75 H 66 L 108 52" stroke="#07172E" stroke-opacity=".72" stroke-width="5" fill="none"/>
+          <rect x="47" y="69" width="16" height="17" rx="4" fill="#07172E"/>
+        </g>
+      </g></svg>

@@ -2,9 +2,9 @@ import { bucketForScore, type MatchBucket } from "@/lib/jobs/buckets";
 
 const bucketStyles: Record<MatchBucket, string> = {
   best: "bg-[#1f6b59] text-white",
-  strong: "bg-[#e5f0ec] text-[#1f6b59]",
-  potential: "bg-[#fff0eb] text-[#a33c1d]",
-  low: "bg-[#e8e6df] text-[#6d787e]",
+  strong: "bg-[#d9623c] text-white",
+  potential: "bg-[#e5a93c] text-white",
+  low: "bg-[#6d787e] text-white",
 };
 
 export function ScoreBadge({ score }: { score: number }) {

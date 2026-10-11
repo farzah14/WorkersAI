@@ -4,6 +4,7 @@ import { getTranslations } from "next-intl/server";
 import { JobActions } from "@/components/jobs/job-actions";
 import { ScoreBadge } from "@/components/jobs/score-badge";
 import type { JobStatus } from "@/app/api/job-status/route";
+import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { createClient } from "@/lib/supabase/server";
 
 type MatchDetail = {
@@ -91,8 +92,9 @@ export default async function JobMatchPage({
   const status = (statusRows?.status as JobStatus | undefined) ?? "new";
 
   return (
-    <main className="min-h-screen bg-[#f4f1ea] px-5 py-10 text-[#15212b] sm:px-8">
-      <div className="mx-auto max-w-5xl space-y-8">
+    <DashboardShell>
+      <main className="min-h-screen bg-[#f4f1ea] px-5 py-10 text-[#15212b] sm:px-8">
+        <div className="mx-auto max-w-5xl space-y-8">
         <header className="border-b border-[#d9d5cc] pb-8">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#d9623c]">{t("match.title")}</p>
           <div className="flex flex-col gap-6 sm:flex-row sm:items-start sm:justify-between">
@@ -205,7 +207,8 @@ export default async function JobMatchPage({
             {t("match.backToDashboard")}
           </Link>
         </p>
-      </div>
-    </main>
+        </div>
+      </main>
+    </DashboardShell>
   );
 }

@@ -78,6 +78,7 @@ async def get_json_with_retry(
     headers: dict[str, str] | None = None,
     retries: int = 1,
     retry_delay: float = 0.05,
+    max_bytes: int = _JSON_MAX_BYTES,
 ) -> httpx.Response:
     """GET JSON with bounded retries, error classification, and a body cap.
 
@@ -100,7 +101,7 @@ async def get_json_with_retry(
             elif 400 <= status < 500:
                 raise SourceConfigError(source_key, f"HTTP {status}")
             else:
-                body = await _read_capped_body(source_key, response, _JSON_MAX_BYTES)
+                body = await _read_capped_body(source_key, response, max_bytes)
                 resp_headers = httpx.Headers(response.headers)
                 resp_headers.pop("content-encoding", None)
                 resp_headers.pop("content-length", None)

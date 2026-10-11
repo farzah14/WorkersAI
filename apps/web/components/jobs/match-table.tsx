@@ -23,6 +23,7 @@ const SORT_LABELS: Record<SortKey, string> = {
   publishedAt: "Published",
 };
 
+const INITIAL_VISIBLE_COUNT = 5;
 function formatDate(value: string | null): string {
   if (!value) return "—";
   return value.slice(0, 10);
@@ -55,21 +56,29 @@ export function MatchTable({
 }) {
   const [filters, setFilters] = useState<MatchFilters>(() => defaultMatchFilters());
   const [sort, setSort] = useState<SortState>({ key: "overallScore", direction: "desc" });
+  const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
   const [statuses, setStatuses] = useState<Record<string, MatchRow["status"]>>(() =>
     Object.fromEntries(rows.map((row) => [row.jobId, row.status])),
   );
   const [saving, setSaving] = useState<Record<string, boolean>>({});
+  const [removedJobIds, setRemovedJobIds] = useState<Set<string>>(() => new Set());
 
   const visibleRows = useMemo(() => {
-    const filtered = applyMatchFilters(rows, filters);
+    const filtered = applyMatchFilters(rows, filters).filter((row) => {
+      const currentStatus = statuses[row.jobId] ?? row.status;
+      if (removedJobIds.has(row.jobId)) return false;
+      if (filters.status === "all" && currentStatus === "ignored") return false;
+      return true;
+    });
     if (sort.key === "overallScore" && sort.direction === "desc") {
       return sortMatchesDefault(filtered);
     }
     return filtered
       .map((row) => ({ ...row, status: statuses[row.jobId] ?? row.status }))
       .sort((a, b) => compareRows(a, b, sort));
-  }, [rows, filters, sort, statuses]);
+  }, [rows, filters, sort, statuses, removedJobIds]);
 
+  const displayedRows = visibleRows.slice(0, visibleCount);
   function toggleSort(key: SortKey) {
     setSort((current) => {
       if (current.key === key) {
@@ -99,20 +108,38 @@ export function MatchTable({
     }
   }
 
+  async function removeJob(jobId: string) {
+    setRemovedJobIds((prev) => {
+      const next = new Set(prev);
+      next.add(jobId);
+      return next;
+    });
+    setSaving((current) => ({ ...current, [jobId]: true }));
+    try {
+      await fetch(`/api/job-status?job_id=${encodeURIComponent(jobId)}`, {
+        method: "DELETE",
+      });
+    } catch {
+      // Best-effort permanent removal
+    } finally {
+      setSaving((current) => ({ ...current, [jobId]: false }));
+    }
+  }
+
   return (
     <div className="space-y-4">
       <MatchFiltersBar filters={filters} onChange={setFilters} />
-      <div className="overflow-x-auto rounded-2xl border border-[#d9d5cc] bg-white">
+      <div className="overflow-x-auto overflow-y-auto max-h-[75vh] rounded-2xl border border-[#d9d5cc] bg-white">
         <table className="w-full min-w-[800px] text-left text-sm">
           <caption className="sr-only">Ranked job matches</caption>
-          <thead>
-            <tr className="border-b border-[#d9d5cc] text-xs uppercase tracking-[0.14em] text-[#6d787e]">
+          <thead className="sticky top-0 z-10 bg-white">
+            <tr className="border-b border-[#d9d5cc] text-xs uppercase tracking-[0.14em] text-[#6d787e] bg-white">
               {(["title", "company", "publishedAt", "overallScore"] as SortKey[]).map((key) => (
                 <th
                   key={key}
                   scope="col"
                   aria-sort={sort.key === key ? (sort.direction === "desc" ? "descending" : "ascending") : "none"}
-                  className="px-4 py-3 font-semibold"
+                  className="sticky top-0 z-10 bg-white px-4 py-3 font-semibold shadow-[inset_0_-1px_0_0_#d9d5cc]"
                 >
                   <button
                     type="button"
@@ -124,22 +151,16 @@ export function MatchTable({
                   </button>
                 </th>
               ))}
-              <th scope="col" className="px-4 py-3 font-semibold">
+              <th scope="col" className="sticky top-0 z-10 bg-white px-4 py-3 font-semibold shadow-[inset_0_-1px_0_0_#d9d5cc]">
                 Location
               </th>
-              <th scope="col" className="px-4 py-3 font-semibold">
-                Work mode
-              </th>
-              <th scope="col" className="px-4 py-3 font-semibold">
-                Status
-              </th>
-              <th scope="col" className="px-4 py-3 text-right font-semibold">
+              <th scope="col" className="sticky top-0 z-10 bg-white px-4 py-3 text-right font-semibold shadow-[inset_0_-1px_0_0_#d9d5cc]">
                 Actions
               </th>
             </tr>
           </thead>
           <tbody>
-            {visibleRows.map((row) => {
+            {displayedRows.map((row) => {
               const status = statuses[row.jobId] ?? row.status;
               return (
                 <tr key={row.matchId} className="border-b border-[#ece9e2] last:border-0 hover:bg-[#faf9f6]">
@@ -160,22 +181,8 @@ export function MatchTable({
                     <ScoreBadge score={row.overallScore} />
                   </td>
                   <td className="px-4 py-3 text-[#53616a]">{row.location ?? "—"}</td>
-                  <td className="px-4 py-3 capitalize text-[#53616a]">{row.workMode ?? "—"}</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-flex rounded-full border border-[#d9d5cc] px-2.5 py-1 text-xs font-semibold capitalize text-[#53616a]">
-                      {status}
-                    </span>
-                  </td>
                   <td className="whitespace-nowrap px-4 py-3 text-right">
                     <div className="inline-flex items-center gap-2">
-                      <a
-                        href={row.originalUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="rounded-full border border-[#d9d5cc] px-3 py-1.5 text-xs font-semibold text-[#53616a] transition hover:border-[#d9623c] hover:text-[#d9623c]"
-                      >
-                        View Job
-                      </a>
                       <button
                         type="button"
                         disabled={saving[row.jobId]}
@@ -184,6 +191,15 @@ export function MatchTable({
                       >
                         {status === "saved" ? "Unsave" : "Save"}
                       </button>
+                      <button
+                        type="button"
+                        disabled={saving[row.jobId]}
+                        onClick={() => removeJob(row.jobId)}
+                        className="rounded-full border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 hover:border-rose-300 disabled:opacity-60"
+                        title="Remove job from search results"
+                      >
+                        Remove
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -191,7 +207,7 @@ export function MatchTable({
             })}
             {visibleRows.length === 0 && (
               <tr>
-                <td colSpan={8} className="px-4 py-10 text-center text-sm text-[#6d787e]">
+                <td colSpan={6} className="px-4 py-10 text-center text-sm text-[#6d787e]">
                   {emptyMessage}
                 </td>
               </tr>
@@ -199,6 +215,27 @@ export function MatchTable({
           </tbody>
         </table>
       </div>
+      {visibleRows.length > INITIAL_VISIBLE_COUNT && (
+        <div className="flex items-center justify-center pt-2">
+          {visibleCount < visibleRows.length ? (
+            <button
+              type="button"
+              onClick={() => setVisibleCount((prev) => prev + 5)}
+              className="inline-flex items-center gap-2 rounded-full border border-[#d9d5cc] bg-white px-5 py-2.5 text-xs font-semibold text-[#15212b] shadow-xs transition hover:bg-[#faf9f6] hover:border-[#15212b]"
+            >
+              Show more ({visibleRows.length - visibleCount} more)
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setVisibleCount(INITIAL_VISIBLE_COUNT)}
+              className="inline-flex items-center gap-2 rounded-full border border-[#d9d5cc] bg-white px-5 py-2.5 text-xs font-semibold text-[#53616a] shadow-xs transition hover:bg-[#faf9f6]"
+            >
+              Show less
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

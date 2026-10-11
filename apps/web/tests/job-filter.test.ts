@@ -29,19 +29,23 @@ function row(overrides: Partial<MatchRow> = {}): MatchRow {
 }
 
 describe("bucketForScore", () => {
-  it("uses the locked match buckets", () => {
+  it("uses the updated match buckets", () => {
     expect(bucketForScore(95)).toBe("best");
+    expect(bucketForScore(90)).toBe("best");
     expect(bucketForScore(85)).toBe("strong");
-    expect(bucketForScore(75)).toBe("potential");
-    expect(bucketForScore(69)).toBe("low");
+    expect(bucketForScore(71)).toBe("strong");
+    expect(bucketForScore(70)).toBe("potential");
+    expect(bucketForScore(50)).toBe("potential");
+    expect(bucketForScore(49)).toBe("low");
   });
 
-  it("draws bucket boundaries at 90, 80 and 70", () => {
+  it("draws bucket boundaries at 90, 71 and 50", () => {
     expect(bucketForScore(90)).toBe("best");
     expect(bucketForScore(89)).toBe("strong");
-    expect(bucketForScore(80)).toBe("strong");
-    expect(bucketForScore(79)).toBe("potential");
+    expect(bucketForScore(71)).toBe("strong");
     expect(bucketForScore(70)).toBe("potential");
+    expect(bucketForScore(50)).toBe("potential");
+    expect(bucketForScore(49)).toBe("low");
     expect(bucketForScore(0)).toBe("low");
   });
 });

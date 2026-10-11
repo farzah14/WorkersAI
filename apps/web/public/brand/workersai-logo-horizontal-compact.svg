@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="250" viewBox="0 0 1040 250" role="img" aria-label="WorkersAI">
+<defs><linearGradient id="orange" x1="0" y1="250" x2="220" y2="30" gradientUnits="userSpaceOnUse"><stop stop-color="#b84620"/><stop offset="0.5" stop-color="#d9623c"/><stop offset="1" stop-color="#f28b68"/></linearGradient></defs>
+<g transform="translate(6 23) scale(.54)">
+<g stroke="#f28b68" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M34 66H91L119 91"/><path d="M20 103H79L103 127H119"/><path d="M47 143H93L113 160H122"/></g><g fill="#d9623c"><circle cx="34" cy="66" r="13"/><circle cx="20" cy="103" r="13"/><circle cx="47" cy="143" r="13"/></g>
+<path d="M80 175L127 281Q135 299 146 279L201 175Q213 154 227 177L288 282L357 141" fill="none" stroke="url(#orange)" stroke-width="48" stroke-linecap="round" stroke-linejoin="round"/>
+<path d="M334 119L385 118L371 169Z" fill="#d9623c"/><circle cx="211" cy="102" r="34" fill="#d9623c"/>
+<g transform="translate(300 240)"><rect x="0" y="25" width="108" height="77" rx="12" fill="#15212b"/><path d="M31 28V16Q31 8 39 8H70Q78 8 78 16V28" stroke="#15212b" stroke-width="12" fill="none"/><path d="M0 52L42 75H66L108 52" stroke="#FFFFFF" stroke-opacity=".7" stroke-width="5" fill="none"/><rect x="47" y="69" width="16" height="17" rx="4" fill="#FFFFFF"/></g>
+</g>
+<text x="258" y="174" font-family="Inter, Arial, sans-serif" font-size="112" font-weight="800" letter-spacing="-5" fill="#15212b">Workers</text>
+<text x="720" y="174" font-family="Inter, Arial, sans-serif" font-size="112" font-weight="800" letter-spacing="-5" fill="#d9623c">AI</text>
+</svg>

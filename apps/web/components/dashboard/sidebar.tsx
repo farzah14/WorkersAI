@@ -41,8 +41,50 @@ export function Sidebar({
         }`}
       >
         {/* Header Section */}
-        <div className="flex items-center justify-between p-4 border-b border-[#eae7df]">
+        <div
+          className={`p-4 border-b border-[#eae7df] transition-all duration-200 ${
+            isCollapsed && !isMobileOpen
+              ? "flex flex-col items-center gap-2"
+              : "flex items-center justify-between"
+          }`}
+        >
           <SidebarHeader isCollapsed={isCollapsed && !isMobileOpen} />
+
+          {/* Desktop Collapse Toggle */}
+          <button
+            type="button"
+            onClick={onToggleCollapse}
+            className="hidden lg:flex items-center justify-center p-1.5 rounded-lg text-[#6d787e] hover:bg-[#eae7df] hover:text-[#15212b] transition-colors"
+            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+          >
+            {isCollapsed ? (
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="9 18 15 12 9 6" />
+              </svg>
+            ) : (
+              <svg
+                className="w-4 h-4"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <polyline points="15 18 9 12 15 6" />
+              </svg>
+            )}
+          </button>
+
           {/* Mobile Close Button */}
           <button
             type="button"
@@ -74,46 +116,9 @@ export function Sidebar({
           />
         </div>
 
-        {/* Footer & Desktop Collapse Toggle */}
-        <div className="p-3 border-t border-[#eae7df] space-y-2">
+        {/* Footer Section */}
+        <div className="p-3 border-t border-[#eae7df]">
           <SidebarFooter isCollapsed={isCollapsed && !isMobileOpen} />
-
-          {/* Desktop Collapse Toggle */}
-          <button
-            type="button"
-            onClick={onToggleCollapse}
-            className="hidden lg:flex items-center justify-center w-full py-2 px-3 text-xs font-semibold text-[#6d787e] hover:text-[#15212b] hover:bg-[#eae7df] rounded-xl transition-colors"
-            aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {isCollapsed ? (
-              <svg
-                className="w-4 h-4"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <polyline points="9 18 15 12 9 6" />
-              </svg>
-            ) : (
-              <div className="flex items-center gap-2 w-full">
-                <svg
-                  className="w-4 h-4"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <polyline points="15 18 9 12 15 6" />
-                </svg>
-                <span>Collapse</span>
-              </div>
-            )}
-          </button>
         </div>
       </aside>
     </>

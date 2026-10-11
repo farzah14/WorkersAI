@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { DashboardRunStatus, SearchRunHistory } from "@/components/jobs/dashboard-run-controls";
+import { DashboardRunStatus } from "@/components/jobs/dashboard-run-controls";
 import { MatchTable } from "@/components/jobs/match-table";
 import { bucketForScore } from "@/lib/jobs/buckets";
 import {
@@ -87,30 +87,17 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const [
-    { data: run, error: runError },
-    { data: runRows, error: runRowsError },
-  ] = await Promise.all([
-    supabase
-      .from("job_search_runs")
-      .select(
-        `id, status, trigger, discovered_count, normalized_count, failed_count, created_at, ${SEARCH_RUN_REGION_EMBED}`,
-      )
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    supabase
-      .from("job_search_runs")
-      .select(
-        `id, status, trigger, discovered_count, normalized_count, failed_count, created_at, ${SEARCH_RUN_REGION_EMBED}`,
-      )
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(20),
-  ]);
+  const { data: run, error: runError } = await supabase
+    .from("job_search_runs")
+    .select(
+      `id, status, trigger, discovered_count, normalized_count, failed_count, created_at, ${SEARCH_RUN_REGION_EMBED}`,
+    )
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  if (runError || runRowsError) {
+  if (runError) {
     throw new Error("Unable to load dashboard search runs");
   }
 
@@ -140,26 +127,31 @@ export default async function DashboardPage() {
       .select(
         "id, overall_score, verdict, created_at, job_id, jobs(title, company, location, region, work_mode, employment_type, published_at, source_name, original_url)",
       )
-      .eq("search_run_id", run.id)
-      .order("overall_score", { ascending: false }),
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false }),
     supabase.from("user_jobs").select("job_id, status").eq("user_id", user.id),
   ]);
 
   const statusByJob = new Map((statusRows as StatusRow[] | null)?.map((row) => [row.job_id, row.status]));
-  const rows = ((matches as MatchWithJob[] | null) ?? []).map((match) =>
-    toMatchRow(match, statusByJob.get(match.job_id) ?? "new"),
-  );
+  const seenJobIds = new Set<string>();
+  const rows: MatchRow[] = [];
+  for (const match of (matches as MatchWithJob[] | null) ?? []) {
+    if (!seenJobIds.has(match.job_id)) {
+      seenJobIds.add(match.job_id);
+      rows.push(toMatchRow(match, statusByJob.get(match.job_id) ?? "new"));
+    }
+  }
 
   const today = new Date().toISOString().slice(0, 10);
+  const activeRows = rows.filter((r) => r.status !== "ignored");
   const cards = [
-    { label: t("dashboard.matchScore"), value: rows.length },
-    { label: t("buckets.best"), value: rows.filter((m) => bucketForScore(m.overallScore) === "best").length },
-    { label: t("buckets.strong"), value: rows.filter((m) => bucketForScore(m.overallScore) === "strong").length },
-    { label: t("dashboard.published"), value: rows.filter((m) => m.publishedAt?.slice(0, 10) === today).length },
+    { label: t("dashboard.matchScore"), value: activeRows.length },
+    { label: t("buckets.best"), value: activeRows.filter((m) => bucketForScore(m.overallScore) === "best").length },
+    { label: t("buckets.strong"), value: activeRows.filter((m) => bucketForScore(m.overallScore) === "strong").length },
+    { label: t("dashboard.published"), value: activeRows.filter((m) => m.publishedAt?.slice(0, 10) === today).length },
   ];
   const typedRun = run as SearchRun;
   const runRegion = searchRunRegion(typedRun);
-  const history = ((runRows as SearchRun[] | null) ?? []).filter((item) => item.id !== typedRun.id);
   const emptyMessage = t(
     dashboardEmptyMessageKey(typedRun.status, rows.length),
   );
@@ -185,7 +177,6 @@ export default async function DashboardPage() {
             <span className="capitalize">{t(processingMessageKey(typedRun.status))}</span>
           </p>
         </header>
-
         <DashboardRunStatus
           active={runActive}
           copy={{
@@ -214,24 +205,6 @@ export default async function DashboardPage() {
         )}
 
         <MatchTable rows={rows} emptyMessage={emptyMessage} />
-
-        <SearchRunHistory
-          runs={history}
-          copy={{
-            title: t("dashboard.historyTitle"),
-            hint: t("dashboard.historyHint"),
-            deleteAction: t("dashboard.deleteRun"),
-            deleteConfirm: t("dashboard.deleteRunConfirm"),
-            deleteError: t("dashboard.deleteRunError"),
-            status: {
-              queued: t("processing.queued"),
-              processing: t("processing.running"),
-              completed: t("processing.completed"),
-              partial: t("processing.partial"),
-              failed: t("processing.failed"),
-            },
-          }}
-        />
       </div>
     </main>
   );

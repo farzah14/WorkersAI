@@ -16,6 +16,12 @@ class Settings(BaseSettings):
     worker_poll_seconds: float = 1.0
     worker_id: str = "worker-1"
     max_attempts: int = 3
+    max_jobs_per_run: int = Field(
+        default=5,
+        ge=1,
+        le=50,
+        validation_alias=AliasChoices("MAX_JOBS_PER_RUN", "MAX_JOBS"),
+    )
     daily_discovery_hour_jakarta: int = Field(
         default=7,
         ge=0,

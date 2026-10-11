@@ -3,6 +3,9 @@
 import type { MatchFilters } from "@/lib/jobs/filter";
 
 const selectClass =
+  "rounded-xl border border-[#c9c7c0] bg-[#faf9f6] pl-3.5 pr-8 py-2 text-sm font-normal outline-none transition focus:border-[#d9623c] focus:ring-2 focus:ring-[#f7c3b3]";
+
+const inputClass =
   "rounded-xl border border-[#c9c7c0] bg-[#faf9f6] px-3 py-2 text-sm font-normal outline-none transition focus:border-[#d9623c] focus:ring-2 focus:ring-[#f7c3b3]";
 
 export function MatchFiltersBar({
@@ -26,7 +29,7 @@ export function MatchFiltersBar({
 
   return (
     <form
-      className="flex flex-wrap items-end gap-3 rounded-2xl border border-[#d9d5cc] bg-white p-4"
+      className="flex flex-wrap items-end gap-3"
       onSubmit={(event) => event.preventDefault()}
     >
       <label className="flex flex-col gap-1.5 text-xs font-semibold text-[#53616a]">
@@ -39,19 +42,6 @@ export function MatchFiltersBar({
           <option value="all">All regions</option>
           <option value="indonesia">Indonesia</option>
           <option value="global">Global</option>
-        </select>
-      </label>
-      <label className="flex flex-col gap-1.5 text-xs font-semibold text-[#53616a]">
-        Work mode
-        <select
-          value={filters.workMode}
-          onChange={(event) => update("workMode", event.target.value as MatchFilters["workMode"])}
-          className={selectClass}
-        >
-          <option value="all">All modes</option>
-          <option value="on-site">On-site</option>
-          <option value="hybrid">Hybrid</option>
-          <option value="remote">Remote</option>
         </select>
       </label>
       <label className="flex flex-col gap-1.5 text-xs font-semibold text-[#53616a]">
@@ -80,7 +70,7 @@ export function MatchFiltersBar({
             update("minScore", Number.isNaN(value) ? 0 : Math.max(0, Math.min(100, Math.round(value))));
           }}
           placeholder="0"
-          className={`${selectClass} w-20`}
+          className={`${inputClass} w-20`}
         />
       </label>
       {active && (
