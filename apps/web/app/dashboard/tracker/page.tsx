@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 import { JobActions } from "@/components/jobs/job-actions";
 import { createClient } from "@/lib/supabase/server";
-
 type TrackedJob = {
   job_id: string;
   status: "new" | "saved" | "applied" | "ignored";
@@ -20,6 +20,7 @@ type TrackedJob = {
 };
 
 export default async function TrackerPage() {
+  const t = await getTranslations();
   const supabase = await createClient();
   const {
     data: { user },
@@ -48,13 +49,13 @@ export default async function TrackerPage() {
       <div className="mx-auto max-w-5xl space-y-8">
         <header className="border-b border-[#d9d5cc] pb-8">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-[#d9623c]">
-            Pipeline
+            {t("tracker.tag")}
           </p>
           <h1 className="text-4xl font-semibold tracking-[-0.05em] sm:text-5xl">
-            Application Tracker
+            {t("tracker.title")}
           </h1>
           <p className="mt-2 text-[#53616a]">
-            Keep track of every opportunity from saved bookmark to submitted application.
+            {t("tracker.subheading")}
           </p>
         </header>
 
@@ -62,7 +63,7 @@ export default async function TrackerPage() {
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="rounded-2xl border border-[#d9d5cc] bg-white p-5 shadow-[0_12px_40px_rgba(21,33,43,0.05)]">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6d787e]">
-              Saved Roles
+              {t("tracker.saved")}
             </p>
             <p className="mt-2 text-3xl font-semibold tabular-nums tracking-[-0.03em] text-[#15212b]">
               {savedJobs.length}
@@ -70,7 +71,7 @@ export default async function TrackerPage() {
           </div>
           <div className="rounded-2xl border border-[#d9d5cc] bg-white p-5 shadow-[0_12px_40px_rgba(21,33,43,0.05)]">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1f6b59]">
-              Applied
+              {t("tracker.applied")}
             </p>
             <p className="mt-2 text-3xl font-semibold tabular-nums tracking-[-0.03em] text-[#1f6b59]">
               {appliedJobs.length}
@@ -78,7 +79,7 @@ export default async function TrackerPage() {
           </div>
           <div className="rounded-2xl border border-[#d9d5cc] bg-white p-5 shadow-[0_12px_40px_rgba(21,33,43,0.05)]">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6d787e]">
-              Archived / Ignored
+              {t("tracker.ignored")}
             </p>
             <p className="mt-2 text-3xl font-semibold tabular-nums tracking-[-0.03em] text-[#6d787e]">
               {ignoredJobs.length}
@@ -89,15 +90,15 @@ export default async function TrackerPage() {
         {/* Tracked Jobs List */}
         {tracked.length === 0 ? (
           <section className="rounded-3xl border border-[#d9d5cc] bg-white p-8 text-center shadow-[0_20px_60px_rgba(21,33,43,0.08)]">
-            <h2 className="text-xl font-semibold">No tracked jobs yet</h2>
+            <h2 className="text-xl font-semibold">{t("tracker.empty")}</h2>
             <p className="mt-2 text-sm text-[#53616a]">
-              Save or mark jobs as applied from your main dashboard feed to track them here.
+              {t("tracker.emptyHint")}
             </p>
             <Link
               href="/dashboard"
               className="mt-6 inline-flex rounded-full bg-[#15212b] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#263946]"
             >
-              Go to Match Dashboard
+              {t("tracker.exploreMatches")}
             </Link>
           </section>
         ) : (
@@ -154,7 +155,7 @@ export default async function TrackerPage() {
                           rel="noopener noreferrer"
                           className="rounded-full border border-[#d9d5cc] px-4 py-2 text-sm font-semibold text-[#53616a] transition hover:border-[#d9623c] hover:text-[#d9623c]"
                         >
-                          View Job
+                          {t("match.viewOriginal")}
                         </a>
                       )}
                       <JobActions jobId={item.job_id} status={item.status} />

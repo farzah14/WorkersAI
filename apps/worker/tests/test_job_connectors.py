@@ -613,6 +613,28 @@ async def test_career_page_extracts_meta_job_metadata(httpx_mock: HTTPXMock) -> 
     assert content.is_closed is False
 
 
+
+@pytest.mark.asyncio
+async def test_career_page_extracts_og_published_time(httpx_mock: HTTPXMock) -> None:
+    httpx_mock.add_response(
+        url="https://careers.acme.com/robots.txt",
+        text="User-agent: *\nAllow: /",
+    )
+    httpx_mock.add_response(
+        url="https://careers.acme.com/jobs/og-date",
+        html="""
+        <html><head>
+          <title>Security Engineer at Acme</title>
+          <meta property="og:article:published_time" content="2026-09-01T14:00:00Z">
+          <meta property="og:site_name" content="Acme Corp">
+        </head><body><p>Build security systems.</p></body></html>
+        """,
+    )
+    fetcher = CareerPageFetcher(client=httpx.AsyncClient(), resolver=_public_resolver)
+    content = await fetcher.extract_content("https://careers.acme.com/jobs/og-date")
+    assert content.published_at == datetime(2026, 9, 1, 14, 0, tzinfo=UTC)
+    await fetcher.aclose()
+
 async def test_career_page_marks_closed_meta_job(httpx_mock: HTTPXMock) -> None:
     httpx_mock.add_response(
         url="https://careers.acme.com/robots.txt",

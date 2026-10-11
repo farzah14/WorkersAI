@@ -3,6 +3,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 
 interface SidebarNavProps {
   isCollapsed: boolean;
@@ -11,10 +12,11 @@ interface SidebarNavProps {
 
 export function SidebarNav({ isCollapsed, onNavClick }: SidebarNavProps) {
   const pathname = usePathname();
+  const t = useTranslations("nav");
 
   const navItems = [
     {
-      label: "Matches & Feed",
+      label: t("feed"),
       href: "/dashboard",
       exact: true,
       icon: (
@@ -34,7 +36,7 @@ export function SidebarNav({ isCollapsed, onNavClick }: SidebarNavProps) {
       badge: "Feed",
     },
     {
-      label: "Application Tracker",
+      label: t("tracker"),
       href: "/dashboard/tracker",
       icon: (
         <svg
@@ -52,7 +54,7 @@ export function SidebarNav({ isCollapsed, onNavClick }: SidebarNavProps) {
       ),
     },
     {
-      label: "Profile & CVs",
+      label: t("profile"),
       href: "/dashboard/profile",
       icon: (
         <svg
@@ -70,7 +72,7 @@ export function SidebarNav({ isCollapsed, onNavClick }: SidebarNavProps) {
       ),
     },
     {
-      label: "Skills & Insights",
+      label: t("insights"),
       href: "/dashboard/insights",
       icon: (
         <svg
@@ -94,7 +96,7 @@ export function SidebarNav({ isCollapsed, onNavClick }: SidebarNavProps) {
       ),
     },
     {
-      label: "Exports",
+      label: t("exports"),
       href: "/exports",
       icon: (
         <svg
@@ -113,7 +115,7 @@ export function SidebarNav({ isCollapsed, onNavClick }: SidebarNavProps) {
       ),
     },
     {
-      label: "Settings",
+      label: t("settings"),
       href: "/dashboard/settings",
       icon: (
         <svg

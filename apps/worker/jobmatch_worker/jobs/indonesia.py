@@ -14,6 +14,7 @@ DEFAULT_TRUSTED_DOMAINS = frozenset(
         "jobstreet.com",
         "glints.com",
         "kalibrr.com",
+        "kalibrr.id",
         "dealls.com",
         "kitalulus.com",
         "greenhouse.io",
@@ -21,6 +22,8 @@ DEFAULT_TRUSTED_DOMAINS = frozenset(
         "workable.com",
         "ashbyhq.com",
         "smartrecruiters.com",
+        "karir.com",
+        "foundit.id",
     }
 )
 _BLOCKED_DOMAINS = frozenset(
@@ -133,7 +136,6 @@ def is_indonesia_eligible(job: DiscoveredJob) -> bool:
         return country in {"id", "idn", "indonesia", "republic of indonesia"}
     if _contains_indonesia_term(job.location):
         return True
-
     description = job.description.casefold()
     for prefix in _LOCATION_PREFIXES:
         for match in re.finditer(re.escape(prefix), description):

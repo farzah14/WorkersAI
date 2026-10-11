@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   const { error } = await supabase
     .from("profiles")
     .update({ locale: body.locale })
-    .eq("id", user.id);
+    .eq("user_id", user.id);
 
   if (error) {
     return NextResponse.json({ error: "locale_update_failed" }, { status: 500 });
