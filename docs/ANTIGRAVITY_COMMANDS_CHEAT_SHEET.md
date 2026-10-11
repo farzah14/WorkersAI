@@ -1,6 +1,6 @@
 # 🚀 Google Antigravity CLI (`agy`) — Master Commands & Shortcuts Cheat Sheet
 
-> **Saved Location:** `docs/ANTIGRAVITY_COMMANDS_CHEAT_SHEET.md`  
+> **Saved Location:** `docs/ANTIGRAVITY_COMMANDS_CHEAT_SHEET.md`
 > **Last Updated:** 2026-08-17
 
 ---

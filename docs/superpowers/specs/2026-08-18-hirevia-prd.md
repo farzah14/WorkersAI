@@ -1,18 +1,18 @@
 # Hirevia — Product Requirements Document (PRD)
 
-**Date:** 2026-08-18  
-**Status:** Approved product baseline derived from the existing AI Job Matcher design  
-**Product phase:** MVP, architected for later recruiter/HR expansion  
+**Date:** 2026-08-18
+**Status:** Approved product baseline derived from the existing AI Job Matcher design
+**Product phase:** MVP, architected for later recruiter/HR expansion
 **Technical baseline:** Unchanged from `docs/superpowers/specs/2026-08-16-ai-job-matcher-saas-design.md`
 
 > **Non-negotiable compatibility rule:** This PRD does not change, replace, reinterpret, or supersede any technical architecture, infrastructure, provider, data-model, security, reliability, testing, or implementation decision already approved in the existing design specification. If wording in this PRD could be interpreted differently from the existing technical specification, the existing technical specification remains the source of truth for technical behavior.
 
 ## 1. Product Identity
 
-**Product name:** Hirevia  
-**Category:** AI-powered job matching SaaS  
-**Primary audience:** Individual job seekers  
-**Initial regions:** Indonesia and Global  
+**Product name:** Hirevia
+**Category:** AI-powered job matching SaaS
+**Primary audience:** Individual job seekers
+**Initial regions:** Indonesia and Global
 **Initial languages:** Bahasa Indonesia and English
 
 Hirevia helps an individual job seeker turn a CV into a structured candidate profile, discover relevant jobs automatically, understand how well each role matches their background, see evidence-backed strengths and gaps, decide what to do next, track job opportunities, and export results.
