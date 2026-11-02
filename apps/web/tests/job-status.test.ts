@@ -86,6 +86,7 @@ describe("POST /api/job-status", () => {
     expect(payload.job_id).toBe(JOB_ID);
     expect(payload.status).toBe("applied");
     expect(typeof payload.applied_at).toBe("string");
+    expect(typeof payload.updated_at).toBe("string");
   });
 
   it("clears applied_at when moving from applied to saved", async () => {
@@ -174,5 +175,32 @@ describe("DELETE /api/job-status", () => {
     expect(await response.json()).toEqual({ job_id: JOB_ID, deleted: true });
     expect(matchesDelete).toHaveBeenCalled();
     expect(userJobsDelete).toHaveBeenCalled();
+  });
+
+  it("returns 500 when Supabase delete fails", async () => {
+    setupAuthenticatedUser("test-user-id");
+
+    const matchesDelete = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ data: null, error: { message: "db error" } }),
+      }),
+    });
+    const userJobsDelete = vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+      }),
+    });
+
+    createServiceClientMock.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "job_matches") return { delete: matchesDelete };
+        if (table === "user_jobs") return { delete: userJobsDelete };
+        throw new Error(`unexpected table: ${table}`);
+      }),
+    });
+
+    const response = await DELETE(new Request(`http://localhost/api/job-status?job_id=${JOB_ID}`));
+    expect(response.status).toBe(500);
+    expect(await response.json()).toEqual({ error: "delete_failed" });
   });
 });

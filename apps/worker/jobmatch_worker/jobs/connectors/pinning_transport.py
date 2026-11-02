@@ -347,6 +347,7 @@ def _build_request_bytes(request: httpx.Request) -> bytes:
             continue
         headers.append(f"{name}: {value}")
     headers.append("Accept-Encoding: identity")
+    headers.append("Connection: close")
     body = request.content
     if body:
         headers.append(f"Content-Length: {len(body)}")

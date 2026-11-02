@@ -23,7 +23,19 @@ def _from_pdf(path: Path) -> str:
 
 def _from_docx(path: Path) -> str:
     doc = Document(str(path))
-    text = "\n".join(p.text for p in doc.paragraphs)
+    parts: list[str] = [p.text for p in doc.paragraphs if p.text]
+    seen_cells: set[int] = set()
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                cell_id = id(cell._tc)
+                if cell_id in seen_cells:
+                    continue
+                seen_cells.add(cell_id)
+                for paragraph in cell.paragraphs:
+                    if paragraph.text:
+                        parts.append(paragraph.text)
+    text = "\n".join(parts)
     if len(text.strip()) < MIN_TEXT_LENGTH:
         raise ValueError("DOCX contains no readable text")
     return text

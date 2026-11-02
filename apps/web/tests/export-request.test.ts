@@ -226,6 +226,52 @@ describe("POST /api/exports", () => {
       }),
     );
   });
+
+  it("accepts YYYY-MM-DD date strings in export filters", async () => {
+    const exportsInsert = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: EXPORT_ID }, error: null }),
+      }),
+    });
+    const exportsChain = { insert: exportsInsert };
+    createServerClientMock.mockResolvedValue({
+      auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }) },
+      rpc: vi.fn().mockResolvedValue({ data: 1, error: null }),
+      from: vi.fn((table: string) => {
+        if (table === "job_search_runs") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                eq: vi.fn().mockReturnValue({
+                  maybeSingle: vi.fn().mockResolvedValue({ data: { id: RUN_ID }, error: null }),
+                }),
+              }),
+            }),
+          };
+        }
+        return exportsChain;
+      }),
+    });
+    const workItemsInsert = vi.fn().mockResolvedValue({ data: null, error: null });
+    createServiceClientMock.mockReturnValue({
+      from: vi.fn().mockReturnValue({ insert: workItemsInsert }),
+    });
+
+    const response = await POST(
+      makePostRequest({
+        searchRunId: RUN_ID,
+        format: "xlsx",
+        scope: "current_filters",
+        filters: {
+          date_from: "2026-09-01",
+          date_to: "2026-09-30",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(202);
+    expect((await response.json()).id).toBe(EXPORT_ID);
+  });
 });
 
 describe("GET /api/exports", () => {

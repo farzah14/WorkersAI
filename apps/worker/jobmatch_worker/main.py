@@ -50,6 +50,11 @@ async def _download_cv(client: httpx.AsyncClient, bucket: str, path: str, dest: 
     response.raise_for_status()
     dest.write_bytes(response.content)
 
+async def _delete_cv(client: httpx.AsyncClient, bucket: str, path: str) -> None:
+    response = await client.delete(f"/object/{bucket}/{path}")
+    if response is not None and getattr(response, "status_code", 200) != 404:
+        response.raise_for_status()
+
 
 async def _set_cv_extracted(
     conn: AsyncConnection[Any], cv_id: str, text: str, storage_path: str | None
@@ -119,13 +124,13 @@ async def handle_extract_cv(
         storage_path = cv["storage_path"]
         if not cv["retain_original"]:
             async with _storage_client(settings) as client:
-                await client.delete(f"/object/{settings.cv_bucket}/{storage_path}")
+                await _delete_cv(client, settings.cv_bucket, storage_path)
             storage_path = None
 
         await _set_cv_extracted(conn, cv_id, text, storage_path)
         await _enqueue_profile_extraction(conn, cv_id, text)
         await complete_item(conn, str(item["id"]))
-    except UnsupportedScannedPdf as exc:
+    except (UnsupportedScannedPdf, ValueError) as exc:
         await _set_cv_failed(conn, cv_id, str(exc))
         await complete_item(conn, str(item["id"]))
     except Exception as exc:  # noqa: BLE001 - heterogeneous transient failures

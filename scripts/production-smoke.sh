@@ -13,7 +13,7 @@ docker compose -f "$COMPOSE_FILE" ps --status running --format json \
 echo "OK: worker and scheduler containers are running"
 
 echo "==> Checking database connectivity"
-docker compose -f "$COMPOSE_FILE" exec -T worker uv run python - <<'PY'
+docker compose -f "$COMPOSE_FILE" exec -T worker uv run --no-dev python - <<'PY'
 import asyncio
 import os
 
@@ -42,6 +42,10 @@ if [ "${SMOKE_LIVE_AI_CHECKS:-0}" = "1" ]; then
   NINEROUTER_URL="${NINEROUTER_BASE_URL:-http://localhost:20128/v1}/models"
   code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$NINEROUTER_URL" || echo "000")
   echo "9Router health: $NINEROUTER_URL -> HTTP $code"
+  if [ "$code" != "200" ]; then
+    echo "FAIL: 9Router health check returned HTTP $code"
+    exit 1
+  fi
 else
   echo "==> Skipping live AI checks (set SMOKE_LIVE_AI_CHECKS=1 to enable)"
 fi

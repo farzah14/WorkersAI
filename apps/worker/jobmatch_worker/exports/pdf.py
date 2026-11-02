@@ -23,9 +23,12 @@ _RED = colors.HexColor("#9b351c")
 def _safe(text: object) -> str:
     return escape(str(text))
 
+_URL_ENTITIES = {'"': "&quot;", "'": "&#39;"}
+
 
 def _link(url: str, label: str) -> str:
-    return f'<link href="{escape(url)}">{escape(label)}</link>'
+    escaped_url = escape(url, _URL_ENTITIES)
+    return f'<link href="{escaped_url}">{escape(label)}</link>'
 
 
 def _now() -> datetime:

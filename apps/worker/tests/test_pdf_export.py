@@ -77,3 +77,12 @@ def test_pdf_includes_aggregate_stats_and_all_exported_rows() -> None:
     assert "2" in text
     assert "92.0" in text
     assert "81.0" in text
+
+
+def test_pdf_escapes_double_quotes_in_job_url() -> None:
+    row = make_row(
+        job_title="Senior Python Engineer",
+        original_url='https://example.com/jobs?q="python"&level=\'senior\'',
+    )
+    blob = build_pdf_bytes([row], make_candidate(), make_criteria())
+    assert blob.startswith(b"%PDF-")

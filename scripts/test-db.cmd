@@ -10,8 +10,13 @@ if not exist "%TEST_FILE%" (
   exit /b 2
 )
 set "OUT_FILE=%TEMP%\test-db-out-%RANDOM%.txt"
-supabase db test "%TEST_FILE%" > "%OUT_FILE%" 2>&1
+supabase test db "%TEST_FILE%" > "%OUT_FILE%" 2>&1
+set "TEST_EXIT=%ERRORLEVEL%"
 type "%OUT_FILE%"
+if not "%TEST_EXIT%"=="0" (
+  del /Q "%OUT_FILE%" >nul 2>&1
+  exit /b %TEST_EXIT%
+)
 findstr /C:"not ok" /C:"Failed" /C:"Result: FAIL" /C:"error running container" "%OUT_FILE%" >nul
 if errorlevel 1 (
   del /Q "%OUT_FILE%" >nul 2>&1

@@ -49,6 +49,7 @@ export async function POST(request: Request) {
         job_id: body.jobId,
         status,
         applied_at: status === "applied" ? new Date().toISOString() : null,
+        updated_at: new Date().toISOString(),
       },
       { onConflict: "user_id,job_id" },
     );
@@ -84,10 +85,13 @@ export async function DELETE(request: Request) {
     { auth: { persistSession: false } },
   );
 
-  await Promise.all([
+  const [matchesDelete, userJobsDelete] = await Promise.all([
     serviceClient.from("job_matches").delete().eq("user_id", user.id).eq("job_id", jobId),
     serviceClient.from("user_jobs").delete().eq("user_id", user.id).eq("job_id", jobId),
   ]);
 
+  if (matchesDelete.error || userJobsDelete.error) {
+    return NextResponse.json({ error: "delete_failed" }, { status: 500 });
+  }
   return NextResponse.json({ job_id: jobId, deleted: true });
 }

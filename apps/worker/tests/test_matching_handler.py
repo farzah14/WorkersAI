@@ -228,6 +228,44 @@ async def test_match_job_handler_keeps_run_pending_when_siblings_remain() -> Non
     ]
     assert run_updates == []
 
+@pytest.mark.asyncio
+async def test_match_job_handler_retry_does_not_complete_run() -> None:
+    from jobmatch_worker.handlers.matching import handle_match_job
+
+    connection = _Connection(
+        run_row={"user_id": "user-1", "candidate_profile_id": "prof-1", "locations": ["Jakarta"]},
+        profile_row={"profile": PROFILE_JSON, "confirmed_at": "2026-08-16T00:00:00Z"},
+        job_row={"description": "Python required"},
+        pending=0,
+        failed=0,
+    )
+
+    await handle_match_job(
+        connection,
+        {
+            "id": "item-retry",
+            "attempts": 1,
+            "payload": {"search_run_id": "run-retry", "job_id": "job-retry"},
+        },
+        _settings(max_attempts=3),
+        router=_FailingRouter(),
+    )
+
+    requeued_items = [
+        params
+        for query, params in connection.executed
+        if "update public.work_items" in query.lower() and "queued" in query.lower()
+    ]
+    assert len(requeued_items) == 1
+    assert requeued_items[0][2] == "item-retry"
+
+    run_updates = [
+        params
+        for query, params in connection.executed
+        if "update public.job_search_runs" in query.lower()
+    ]
+    assert run_updates == []
+
 
 @pytest.mark.asyncio
 async def test_match_job_handler_fails_without_confirmed_profile() -> None:

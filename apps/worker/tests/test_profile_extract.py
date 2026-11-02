@@ -497,6 +497,53 @@ async def test_extract_cv_failure_does_not_enqueue_profile(
 
 
 @pytest.mark.asyncio
+async def test_extract_cv_unreadable_docx_fails_without_retry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from jobmatch_worker import main as worker_main
+
+    class FakeResponse:
+        content = b"fake bytes"
+
+        def raise_for_status(self) -> None:
+            return None
+
+    class FakeStorage:
+        async def get(self, url: str) -> FakeResponse:
+            return FakeResponse()
+
+        async def delete(self, url: str) -> None:
+            return None
+
+        async def __aenter__(self) -> Self:
+            return self
+
+        async def __aexit__(self, *exc: object) -> bool:
+            return False
+
+    monkeypatch.setattr(worker_main, "_storage_client", lambda settings: FakeStorage())
+    monkeypatch.setattr(
+        worker_main,
+        "extract_cv_text",
+        lambda path: (_ for _ in ()).throw(ValueError("DOCX contains no readable text")),
+    )
+
+    conn = FakeConn(
+        [{"original_name": "blank.docx", "storage_path": "u1/cv-1/blank.docx", "retain_original": True}]
+    )
+    item = {"id": "item-1", "kind": "extract_cv", "payload": {"cv_id": "cv-1"}, "attempts": 0}
+    await worker_main.handle_extract_cv(conn, item, SimpleNamespace(cv_bucket="cvs", max_attempts=3))
+
+    enqueued = [params for sql, params in conn.executed if "insert into public.work_items" in sql]
+    assert enqueued == []
+    assert any("status = 'completed'" in sql for sql, _ in conn.executed)
+    failed_cvs = [
+        params for sql, params in conn.executed if "extraction_status = 'failed'" in sql
+    ]
+    assert len(failed_cvs) == 1
+    assert "DOCX contains no readable text" in failed_cvs[0][0]
+
+@pytest.mark.asyncio
 async def test_extract_cv_enqueue_failure_requeues_item(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -249,9 +249,9 @@ async def handle_extract_job_requirements(
             attempt = int(item.get("attempts") or 0)
             if attempt >= settings.max_attempts:
                 await fail_item(conn, item_id, _failure_message("requirement extraction failed", exc))
+                await _complete_runs_for_job_if_terminal(conn, str(job_id))
             else:
                 await retry_item(conn, item_id, str(exc), attempt)
-            await _complete_runs_for_job_if_terminal(conn, str(job_id))
     finally:
         if owned_router:
             await router.aclose()
@@ -338,9 +338,9 @@ async def handle_match_job(
             attempt = int(item.get("attempts") or 0)
             if attempt >= settings.max_attempts:
                 await fail_item(conn, item_id, _failure_message("job match failed", exc))
+                await _complete_run_if_terminal(conn, str(run_id), current_item_id=item_id)
             else:
                 await retry_item(conn, item_id, str(exc), attempt)
-            await _complete_run_if_terminal(conn, str(run_id), current_item_id=item_id)
     finally:
         if owned_router:
             await router.aclose()

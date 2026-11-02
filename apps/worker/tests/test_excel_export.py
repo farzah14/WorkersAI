@@ -129,3 +129,9 @@ def test_candidate_and_criteria_sheets_contain_summary() -> None:
     assert criteria["Scope"] == "best_and_strong"
     assert criteria["Minimum Score"] == "80"
     assert criteria["Region"] == "indonesia"
+
+
+def test_empty_rows_omits_invalid_autofilter() -> None:
+    wb = build_excel_workbook([], make_candidate(), make_criteria())
+    ws = wb["Job Matches"]
+    assert ws.auto_filter.ref is None

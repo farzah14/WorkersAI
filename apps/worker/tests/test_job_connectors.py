@@ -1185,6 +1185,13 @@ async def test_pinned_transport_rejects_oversized_header_block() -> None:
     await client.aclose()
 
 
+def test_pinned_transport_build_request_bytes_includes_connection_close() -> None:
+    from jobmatch_worker.jobs.connectors.pinning_transport import _build_request_bytes
+
+    req = httpx.Request("GET", "https://careers.acme.com/jobs")
+    raw = _build_request_bytes(req)
+    assert b"Connection: close\r\n" in raw
+
 async def test_career_page_fetches_through_pinned_transport_by_default() -> None:
     connected: list[tuple[str, str | None]] = []
     responses = [

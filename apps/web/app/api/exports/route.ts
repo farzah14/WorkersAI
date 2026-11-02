@@ -13,8 +13,8 @@ const exportFiltersSchema = z
     work_mode: z.array(z.enum(["remote", "hybrid", "on-site"])).optional(),
     min_score: z.number().int().min(0).max(100).optional(),
     status: z.array(z.enum(["new", "saved", "applied", "ignored"])).optional(),
-    date_from: z.string().datetime().optional(),
-    date_to: z.string().datetime().optional(),
+    date_from: z.union([z.string().date(), z.string().datetime()]).optional(),
+    date_to: z.union([z.string().date(), z.string().datetime()]).optional(),
   })
   .strict();
 

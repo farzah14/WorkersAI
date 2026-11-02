@@ -64,18 +64,17 @@ export function MatchTable({
   const [removedJobIds, setRemovedJobIds] = useState<Set<string>>(() => new Set());
 
   const visibleRows = useMemo(() => {
-    const filtered = applyMatchFilters(rows, filters).filter((row) => {
-      const currentStatus = statuses[row.jobId] ?? row.status;
-      if (removedJobIds.has(row.jobId)) return false;
-      if (filters.status === "all" && currentStatus === "ignored") return false;
+    const currentRows = rows
+      .filter((row) => !removedJobIds.has(row.jobId))
+      .map((row) => ({ ...row, status: statuses[row.jobId] ?? row.status }));
+    const filtered = applyMatchFilters(currentRows, filters).filter((row) => {
+      if (filters.status === "all" && row.status === "ignored") return false;
       return true;
     });
     if (sort.key === "overallScore" && sort.direction === "desc") {
       return sortMatchesDefault(filtered);
     }
-    return filtered
-      .map((row) => ({ ...row, status: statuses[row.jobId] ?? row.status }))
-      .sort((a, b) => compareRows(a, b, sort));
+    return filtered.sort((a, b) => compareRows(a, b, sort));
   }, [rows, filters, sort, statuses, removedJobIds]);
 
   const displayedRows = visibleRows.slice(0, visibleCount);
@@ -116,11 +115,22 @@ export function MatchTable({
     });
     setSaving((current) => ({ ...current, [jobId]: true }));
     try {
-      await fetch(`/api/job-status?job_id=${encodeURIComponent(jobId)}`, {
+      const response = await fetch(`/api/job-status?job_id=${encodeURIComponent(jobId)}`, {
         method: "DELETE",
       });
+      if (!response.ok) {
+        setRemovedJobIds((prev) => {
+          const next = new Set(prev);
+          next.delete(jobId);
+          return next;
+        });
+      }
     } catch {
-      // Best-effort permanent removal
+      setRemovedJobIds((prev) => {
+        const next = new Set(prev);
+        next.delete(jobId);
+        return next;
+      });
     } finally {
       setSaving((current) => ({ ...current, [jobId]: false }));
     }

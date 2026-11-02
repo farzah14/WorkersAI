@@ -82,4 +82,37 @@ describe("MatchTable", () => {
     );
     expect(screen.queryByText("Security Analyst")).not.toBeInTheDocument();
   });
+
+  it("rolls back removed job if DELETE fails", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+    });
+
+    render(<MatchTable rows={[match]} />);
+
+    expect(screen.getByText("Security Analyst")).toBeInTheDocument();
+    const removeButton = screen.getByRole("button", { name: /remove/i });
+    fireEvent.click(removeButton);
+
+    expect(await screen.findByText("Security Analyst")).toBeInTheDocument();
+  });
+
+  it("updates status filter visibility after saving a job", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ jobId: "job-1", status: "saved" }),
+    });
+
+    render(<MatchTable rows={[match]} />);
+
+    const saveButton = screen.getByRole("button", { name: /save/i });
+    fireEvent.click(saveButton);
+    expect(await screen.findByRole("button", { name: /unsave/i })).toBeInTheDocument();
+
+    const statusSelect = screen.getByRole("combobox", { name: "Status" });
+    fireEvent.change(statusSelect, { target: { value: "saved" } });
+
+    expect(screen.getByText("Security Analyst")).toBeInTheDocument();
+  });
 });

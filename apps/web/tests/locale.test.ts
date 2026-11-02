@@ -72,7 +72,7 @@ describe("POST /api/locale", () => {
     const response = await POST(makeRequest({ locale: "en" }));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ locale: "en" });
-
+    expect(response.cookies.get("locale")?.value).toBe("en");
     expect(from).toHaveBeenCalledWith("profiles");
     expect(update).toHaveBeenCalledWith({ locale: "en" });
     expect(eq).toHaveBeenCalledWith("user_id", userId);

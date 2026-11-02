@@ -35,5 +35,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "locale_update_failed" }, { status: 500 });
   }
 
-  return NextResponse.json({ locale: body.locale });
+  const response = NextResponse.json({ locale: body.locale });
+  response.cookies.set("locale", body.locale, {
+    path: "/",
+    maxAge: 31536000,
+    sameSite: "lax",
+  });
+  return response;
 }
