@@ -226,6 +226,27 @@ describe("POST /api/exports", () => {
       }),
     );
   });
+
+  it("accepts YYYY-MM-DD date strings in export filters", async () => {
+    const { exportsInsert } = setupExportCapture();
+
+    const response = await POST(
+      makePostRequest({
+        searchRunId: RUN_ID,
+        format: "xlsx",
+        scope: "current_filters",
+        filters: { date_from: "2026-09-01", date_to: "2026-09-30" },
+      }),
+    );
+
+    expect(response.status).toBe(202);
+    expect((await response.json()).id).toBe(EXPORT_ID);
+    expect(exportsInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filter_json: { date_from: "2026-09-01", date_to: "2026-09-30" },
+      }),
+    );
+  });
 });
 
 describe("GET /api/exports", () => {

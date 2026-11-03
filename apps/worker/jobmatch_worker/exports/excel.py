@@ -102,7 +102,8 @@ def build_excel_workbook(
         url_cell.style = "Hyperlink"
 
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = f"A1:{get_column_letter(_URL_COLUMN)}{len(rows) + 1}"
+    if rows:
+        ws.auto_filter.ref = f"A1:{get_column_letter(_URL_COLUMN)}{len(rows) + 1}"
     ws.column_dimensions[get_column_letter(_URL_COLUMN)].width = 48
     for col in range(1, 11):
         ws.column_dimensions[get_column_letter(col)].width = 18

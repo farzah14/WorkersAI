@@ -235,7 +235,7 @@ async def _upload_report(
         response = await client.post(
             f"/object/{settings.exports_bucket}/{path}",
             content=blob,
-            headers={"Content-Type": "application/octet-stream"},
+            headers={"Content-Type": "application/octet-stream", "x-upsert": "true"},
         )
         response.raise_for_status()
 
