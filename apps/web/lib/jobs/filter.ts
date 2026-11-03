@@ -1,8 +1,12 @@
+import { EMPLOYMENT_TYPES } from "@/lib/search/schema";
+
 export type JobStatus = "new" | "saved" | "applied" | "ignored";
 
 export type RegionValue = "indonesia" | "global";
 
 export type WorkModeValue = "on-site" | "hybrid" | "remote";
+
+export type EmploymentType = (typeof EMPLOYMENT_TYPES)[number];
 
 export type MatchRow = {
   matchId: string;
@@ -21,8 +25,11 @@ export type MatchRow = {
 };
 
 export type MatchFilters = {
+  query: string;
   region: "all" | RegionValue;
   workMode: "all" | WorkModeValue;
+  employmentType: "all" | EmploymentType;
+  sourceName: string | null;
   minScore: number;
   status: "all" | JobStatus;
   dateFrom: string | null;
@@ -30,8 +37,11 @@ export type MatchFilters = {
 };
 
 export const MATCH_FILTER_KEYS = [
+  "query",
   "region",
   "work_mode",
+  "employment_type",
+  "source_name",
   "min_score",
   "status",
   "date_from",
@@ -41,7 +51,10 @@ export const MATCH_FILTER_KEYS = [
 const REGIONS: ReadonlySet<string> = new Set(["indonesia", "global"]);
 const WORK_MODES: ReadonlySet<string> = new Set(["on-site", "hybrid", "remote"]);
 const STATUSES: ReadonlySet<string> = new Set(["new", "saved", "applied", "ignored"]);
+const EMPLOYMENT_TYPE_SET: ReadonlySet<string> = new Set(EMPLOYMENT_TYPES);
 
+const MAX_QUERY_CODE_POINTS = 200;
+const MAX_SOURCE_CODE_POINTS = 200;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function isDateString(value: unknown): value is string {
@@ -50,10 +63,28 @@ function isDateString(value: unknown): value is string {
   return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
 }
 
+/**
+ * Normalize query text for cross-runtime literal matching.
+ *
+ * Uses NFC, whitespace collapse, and JavaScript `toLowerCase()` only. This
+ * intentionally does not casefold (`Straße` != `strasse`) or remove accents,
+ * because the worker must apply the identical comparison.
+ */
+export function normalizeQuery(value: string): string {
+  return value.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function codePointLength(value: string): number {
+  return Array.from(value).length;
+}
+
 export function defaultMatchFilters(): MatchFilters {
   return {
+    query: "",
     region: "all",
     workMode: "all",
+    employmentType: "all",
+    sourceName: null,
     minScore: 0,
     status: "all",
     dateFrom: null,
@@ -71,6 +102,12 @@ export function parseMatchFilters(input: unknown): MatchFilters | null {
 
   const filters = defaultMatchFilters();
 
+  if (record.query !== undefined) {
+    if (typeof record.query !== "string") return null;
+    const normalized = normalizeQuery(record.query);
+    if (codePointLength(normalized) > MAX_QUERY_CODE_POINTS) return null;
+    filters.query = normalized;
+  }
   if (record.region !== undefined) {
     if (typeof record.region !== "string" || !REGIONS.has(record.region)) return null;
     filters.region = record.region as RegionValue;
@@ -78,6 +115,18 @@ export function parseMatchFilters(input: unknown): MatchFilters | null {
   if (record.work_mode !== undefined) {
     if (typeof record.work_mode !== "string" || !WORK_MODES.has(record.work_mode)) return null;
     filters.workMode = record.work_mode as WorkModeValue;
+  }
+  if (record.employment_type !== undefined) {
+    if (typeof record.employment_type !== "string" || !EMPLOYMENT_TYPE_SET.has(record.employment_type)) {
+      return null;
+    }
+    filters.employmentType = record.employment_type as EmploymentType;
+  }
+  if (record.source_name !== undefined) {
+    if (typeof record.source_name !== "string") return null;
+    const source = record.source_name.trim();
+    if (!source || codePointLength(source) > MAX_SOURCE_CODE_POINTS) return null;
+    filters.sourceName = source;
   }
   if (record.min_score !== undefined) {
     if (typeof record.min_score !== "number" || !Number.isInteger(record.min_score)) return null;
@@ -96,6 +145,9 @@ export function parseMatchFilters(input: unknown): MatchFilters | null {
     if (!isDateString(record.date_to)) return null;
     filters.dateTo = record.date_to;
   }
+  if (filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo) {
+    return null;
+  }
   return filters;
 }
 
@@ -108,14 +160,52 @@ function inDateRange(publishedAt: string | null, filters: MatchFilters): boolean
   return true;
 }
 
+function matchesQuery(row: MatchRow, query: string): boolean {
+  if (!query) return true;
+  return (
+    normalizeQuery(row.title).includes(query) ||
+    normalizeQuery(row.company).includes(query)
+  );
+}
+
 export function applyMatchFilters(rows: MatchRow[], filters: MatchFilters): MatchRow[] {
+  const query = normalizeQuery(filters.query);
   return rows.filter((row) => {
+    // All status means the active dashboard view, which hides ignored rows.
+    // Selecting Ignored explicitly is the only way to see them.
+    if (filters.status === "all" && row.status === "ignored") return false;
+    if (!matchesQuery(row, query)) return false;
     if (filters.region !== "all" && row.region !== filters.region) return false;
     if (filters.workMode !== "all" && row.workMode !== filters.workMode) return false;
+    if (filters.employmentType !== "all" && row.employmentType !== filters.employmentType) {
+      return false;
+    }
+    if (filters.sourceName !== null && row.sourceName !== filters.sourceName) return false;
     if (row.overallScore < filters.minScore) return false;
     if (filters.status !== "all" && row.status !== filters.status) return false;
     return inDateRange(row.publishedAt, filters);
   });
+}
+
+/**
+ * Convert dashboard single selections into the export API's array contract.
+ * Unrestricted fields are omitted; ignored rows are explicitly excluded when
+ * the dashboard is showing its default All status view.
+ */
+export function toExportFilters(filters: MatchFilters): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  const query = normalizeQuery(filters.query);
+  if (query) payload.query = query;
+  if (filters.region !== "all") payload.region = [filters.region];
+  if (filters.workMode !== "all") payload.work_mode = [filters.workMode];
+  if (filters.employmentType !== "all") payload.employment_type = [filters.employmentType];
+  if (filters.sourceName !== null) payload.source_name = [filters.sourceName];
+  if (filters.minScore > 0) payload.min_score = filters.minScore;
+  if (filters.status !== "all") payload.status = [filters.status];
+  if (filters.dateFrom) payload.date_from = filters.dateFrom;
+  if (filters.dateTo) payload.date_to = filters.dateTo;
+  payload.exclude_ignored = filters.status === "all";
+  return payload;
 }
 
 export function sortMatchesDefault(rows: MatchRow[]): MatchRow[] {
@@ -124,6 +214,8 @@ export function sortMatchesDefault(rows: MatchRow[]): MatchRow[] {
     const aTime = a.publishedAt ? new Date(a.publishedAt).getTime() : -Infinity;
     const bTime = b.publishedAt ? new Date(b.publishedAt).getTime() : -Infinity;
     if (bTime !== aTime) return bTime - aTime;
-    return a.title.localeCompare(b.title);
+    const byTitle = a.title.localeCompare(b.title);
+    if (byTitle !== 0) return byTitle;
+    return a.matchId.localeCompare(b.matchId);
   });
 }

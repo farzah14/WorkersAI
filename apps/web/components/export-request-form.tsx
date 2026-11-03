@@ -7,15 +7,23 @@ import { useState } from "react";
 export type ExportRequestFormProps = {
   runId: string;
   filters?: Record<string, unknown>;
+  disabled?: boolean;
+  disabledReason?: string;
 };
 
-export function ExportRequestForm({ runId, filters }: ExportRequestFormProps) {
+export function ExportRequestForm({
+  runId,
+  filters,
+  disabled = false,
+  disabledReason,
+}: ExportRequestFormProps) {
   const router = useRouter();
   const t = useTranslations("exports");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   async function requestExport(format: "xlsx" | "pdf") {
+    if (disabled) return;
     setBusy(true);
     setMessage(null);
 
@@ -56,7 +64,7 @@ export function ExportRequestForm({ runId, filters }: ExportRequestFormProps) {
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || disabled}
           onClick={() => requestExport("xlsx")}
           className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
@@ -65,13 +73,17 @@ export function ExportRequestForm({ runId, filters }: ExportRequestFormProps) {
 
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || disabled}
           onClick={() => requestExport("pdf")}
           className="inline-flex items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
         >
           {busy ? t("creating") : t("createPdf")}
         </button>
       </div>
+
+      {disabled && disabledReason && (
+        <p className="text-xs text-[#6d787e]">{disabledReason}</p>
+      )}
 
       {message && (
         <div

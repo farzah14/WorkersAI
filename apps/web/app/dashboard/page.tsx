@@ -128,6 +128,7 @@ export default async function DashboardPage() {
         "id, overall_score, verdict, created_at, job_id, jobs(title, company, location, region, work_mode, employment_type, published_at, source_name, original_url)",
       )
       .eq("user_id", user.id)
+      .eq("search_run_id", run.id)
       .order("created_at", { ascending: false }),
     supabase.from("user_jobs").select("job_id, status").eq("user_id", user.id),
   ]);
@@ -204,7 +205,7 @@ export default async function DashboardPage() {
           </p>
         )}
 
-        <MatchTable rows={rows} emptyMessage={emptyMessage} />
+        <MatchTable rows={rows} runId={run.id} emptyMessage={emptyMessage} />
       </div>
     </main>
   );
