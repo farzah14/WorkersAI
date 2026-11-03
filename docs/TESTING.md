@@ -7,7 +7,7 @@
 Web:
 
 - validation;
-- filtering;
+- filtering (including discovery/result preference parity fixtures);
 - display bucketing;
 - safe client/server schemas.
 
@@ -43,6 +43,19 @@ Cover:
 - AI router retry/fallback;
 - search run -> persisted ranked results.
 
+### Filter parity tests
+
+When changing discovery preferences or result filters, keep the web and worker
+contracts aligned:
+
+- discovery preference tests live in `apps/worker/tests/test_job_preferences.py`
+  and assert literal substring exclusions and unknown-metadata policy;
+- result/export parity uses named synthetic cases (P1–P10, F1–F9) in
+  `apps/web/tests/job-filter.test.ts`, `apps/web/tests/export-request.test.ts`,
+  and `apps/worker/tests/test_export_service.py`;
+- query comparison is NFC + whitespace collapse + `toLowerCase()`/`lower()` in
+  both runtimes. Do not switch one side to `casefold()` or accent removal.
+
 ### End-to-end tests
 
 Core Playwright journey:
@@ -58,7 +71,9 @@ Register/Login
 -> Export
 ```
 
-Also verify cross-user denial.
+Also verify cross-user denial, latest-run dashboard scoping, combined result
+filters, and that dashboard-filtered XLSX/PDF exports contain the same job
+membership as the active filters.
 
 ### Golden dataset
 

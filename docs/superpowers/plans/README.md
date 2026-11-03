@@ -24,6 +24,10 @@ The approved MVP specification spans independent subsystems, so implementation i
 
 ## Execution policy
 
+### Follow-up implementation
+
+- [Discovery preferences and result filters](2026-11-03-discovery-preferences-and-result-filters.md) — approved and implemented on `feat/discovery-preferences-and-result-filters`; local code gates pass, infrastructure-dependent browser/SQL acceptance remains blocked. Covers consistent discovery preferences, expanded dashboard filters, and filtered export parity. Does not change the six-milestone order above.
+
 Use TDD inside every plan: failing test, verify failure, minimal implementation, verify pass, commit. Do not begin a later plan while an earlier plan has failing acceptance tests.
 
 ## Specification coverage matrix

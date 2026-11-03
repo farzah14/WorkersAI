@@ -404,6 +404,7 @@ function FindJobsContent() {
                   </label>
                 ))}
               </div>
+              <p className="mt-2 text-xs font-normal text-[#6d787e]">{t("employmentTypesHint")}</p>
             </fieldset>
           </section>
 
