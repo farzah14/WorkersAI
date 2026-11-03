@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import date
 from typing import Any
 
 import httpx
@@ -14,6 +13,7 @@ from jobmatch_worker.exports.models import (
     ExportRequest,
     ExportRow,
     SearchCriteria,
+    normalize_query,
 )
 from jobmatch_worker.exports.pdf import build_pdf_bytes
 from jobmatch_worker.queue import complete_item, fail_item, retry_item
@@ -42,33 +42,48 @@ def criteria_from_request(request: ExportRequest) -> SearchCriteria:
     filters = request.filters
     return SearchCriteria(
         scope=request.scope,
+        query=filters.query if filters else None,
         region=filters.region if filters else None,
         work_mode=filters.work_mode if filters else None,
+        employment_type=list(filters.employment_type) if filters and filters.employment_type else None,
+        source_name=filters.source_name if filters else None,
         min_score=filters.min_score if filters else None,
         status=filters.status if filters else None,
+        exclude_ignored=filters.exclude_ignored if filters else False,
         date_from=filters.date_from if filters else None,
         date_to=filters.date_to if filters else None,
     )
 
 
 def _row_matches(row: ExportRow, filters: ExportFilters) -> bool:
+    if filters.query:
+        title = normalize_query(row.job_title)
+        company = normalize_query(row.company)
+        if filters.query not in title and filters.query not in company:
+            return False
     if filters.region and row.region not in filters.region:
         return False
     if filters.work_mode and row.work_mode not in filters.work_mode:
         return False
+    if filters.employment_type and row.employment_type not in filters.employment_type:
+        return False
+    if filters.source_name and row.source_name not in filters.source_name:
+        return False
     if filters.min_score is not None and row.overall_score < filters.min_score:
+        return False
+    # The boolean and explicit status predicates are AND; neither overrides.
+    if filters.exclude_ignored and row.status == "ignored":
         return False
     if filters.status and row.status not in filters.status:
         return False
-    if filters.date_from is not None:
-        published = row.published_at or date.min
-        if published < filters.date_from:
-            return False
-    if filters.date_to is not None:
-        published = row.published_at or date.max
-        if published > filters.date_to:
-            return False
-    return True
+    if filters.date_from is not None and (
+        row.published_at is None or row.published_at < filters.date_from
+    ):
+        return False
+    return not (
+        filters.date_to is not None
+        and (row.published_at is None or row.published_at > filters.date_to)
+    )
 
 
 def apply_scope_and_filters(

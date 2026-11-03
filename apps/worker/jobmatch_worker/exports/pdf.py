@@ -135,14 +135,22 @@ def build_pdf_bytes(
 
     story.append(Paragraph("Search Criteria", s["h2"]))
     criteria_lines = [f"Scope: {criteria.scope}"]
+    if criteria.query:
+        criteria_lines.append(f"Query: {_safe(criteria.query)}")
     if criteria.region:
         criteria_lines.append(f"Region: {_safe(', '.join(criteria.region))}")
     if criteria.work_mode:
         criteria_lines.append(f"Work mode: {_safe(', '.join(criteria.work_mode))}")
+    if criteria.employment_type:
+        criteria_lines.append(f"Employment type: {_safe(', '.join(criteria.employment_type))}")
+    if criteria.source_name:
+        criteria_lines.append(f"Source: {_safe(', '.join(criteria.source_name))}")
     if criteria.min_score is not None:
         criteria_lines.append(f"Minimum score: {criteria.min_score}")
     if criteria.status:
         criteria_lines.append(f"Status: {_safe(', '.join(criteria.status))}")
+    if criteria.exclude_ignored:
+        criteria_lines.append("Exclude ignored: yes")
     if criteria.date_from:
         criteria_lines.append(f"Date from: {criteria.date_from.isoformat()}")
     if criteria.date_to:

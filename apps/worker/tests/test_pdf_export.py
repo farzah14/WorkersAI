@@ -25,6 +25,10 @@ def test_pdf_contains_candidate_and_criteria_summary() -> None:
     assert "Backend Engineer, 5 years" in text
     assert "best_and_strong" in text
     assert "80" in text
+    assert "Query: engineer" in text
+    assert "Employment type: full-time" in text
+    assert "Source: jobstreet" in text
+    assert "Exclude ignored: yes" in text
 
 
 def test_pdf_contains_top_match_job_titles() -> None:
