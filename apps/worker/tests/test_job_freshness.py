@@ -123,7 +123,7 @@ class TestRecheckJobUrl:
             [make_response(200, '{"status": "closed"}')]
         )
         assert outcome.status == "expired"
-        assert outcome.reason == "ats_marker"
+        assert outcome.reason == "closed_marker"
 
     @pytest.mark.asyncio
     async def test_timeout_is_unknown(self) -> None:

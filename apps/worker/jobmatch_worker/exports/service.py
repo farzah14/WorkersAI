@@ -193,6 +193,7 @@ async def load_rows(
         left join public.user_jobs as uj
           on uj.job_id = m.job_id and uj.user_id = m.user_id
         where m.user_id = %s and m.search_run_id = %s
+          and j.status = 'active'
         order by m.overall_score desc, j.published_at desc nulls last, j.title
         """,
         (user_id, search_run_id),

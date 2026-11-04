@@ -202,6 +202,33 @@ async def test_tavily_candidate_rejects_closed_job_page() -> None:
 
 
 @pytest.mark.asyncio
+async def test_candidate_to_job_rejects_kalibrr_closed_pages() -> None:
+    from jobmatch_worker.handlers.discovery import _candidate_to_job
+    from jobmatch_worker.jobs.connectors.career_page import _extract_page_content
+
+    candidate = DiscoveryCandidateUrl(
+        url="https://www.kalibrr.com/c/bank-mandiri/jobs/123/odp",
+        title="ODP - Bank Mandiri",
+    )
+
+    html = b"""<html>
+    <head><title>ODP Bank Mandiri</title></head>
+    <body>
+      <div class="k-badge">Ditutup.</div>
+      <h1>ODP Bank Mandiri</h1>
+      <p>Company: Bank Mandiri</p>
+    </body>
+    </html>"""
+    content = _extract_page_content(html, source_key="career_page")
+    assert content.is_closed is True
+
+    async def fetch_page(_url: str) -> CareerPageContent:
+        return content
+
+    with pytest.raises(SourceDataError, match="job page is closed"):
+        await _candidate_to_job(candidate, fetch_page, "tavily")
+
+@pytest.mark.asyncio
 async def test_indonesia_candidate_requires_a_specific_job_page() -> None:
     from jobmatch_worker.handlers.discovery import _candidate_to_job
 
@@ -649,8 +676,8 @@ async def test_indonesia_deadline_preserves_jobs_verified_before_timeout() -> No
     )
 
     assert [job.title for job in outcome.jobs] == ["Data Engineer"]
-    assert outcome.status == "failed"
-    assert outcome.retryable is True
+    assert outcome.status == "success"
+    assert outcome.retryable is False
 
 
 @pytest.mark.asyncio
@@ -1138,6 +1165,50 @@ async def test_candidate_fetch_failure_is_recorded_as_source_failure() -> None:
         if "update public.job_sources" in query.lower()
     ]
     assert any(params[0] == "failed" and params[2] == "candidate_fetch" for params in source_updates)
+
+@pytest.mark.asyncio
+async def test_candidate_fetch_partial_failure_is_recorded_as_source_success() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-partial-candidate",
+        "status": "queued",
+        "region": "global",
+        "target_roles": ["Backend Engineer"],
+        "locations": [],
+        "work_modes": [],
+        "employment_types": [],
+        "excluded_keywords": [],
+    }
+    candidate_fail = DiscoveryCandidateUrl(url="https://careers.example.com/jobs/fail")
+    candidate_ok = DiscoveryCandidateUrl(url="https://careers.example.com/jobs/ok")
+    connection = _Connection(run_row)
+
+    async def fetch_page(url: str) -> CareerPageContent:
+        if "fail" in url:
+            raise SourceUnavailable("career_page", "timeout")
+        return CareerPageContent(
+            title="Backend Engineer",
+            company="Acme Corp",
+            text="Build backend APIs for our team.",
+            is_job_posting=True,
+        )
+
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-partial-candidate", "payload": {"search_run_id": "run-partial-candidate"}},
+        None,
+        connectors={"tavily": _Connector("tavily", [candidate_fail, candidate_ok])},
+        fetch_page=fetch_page,
+    )
+
+    source_updates = [
+        params
+        for query, params in connection.executed
+        if "update public.job_sources" in query.lower()
+    ]
+    assert any(params[0] == "success" and params[2] is None for params in source_updates)
+
 
 
 @pytest.mark.asyncio

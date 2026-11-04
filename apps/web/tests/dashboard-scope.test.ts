@@ -1,15 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
+import { render } from "@testing-library/react";
 const createClientMock = vi.hoisted(() => vi.fn());
 const redirectMock = vi.hoisted(() => vi.fn());
-
+const matchTableCalls = vi.hoisted(() => [] as Array<{ rows: Array<{ matchId: string; title: string }> }>);
 vi.mock("@/lib/supabase/server", () => ({ createClient: createClientMock }));
 vi.mock("next/navigation", () => ({ redirect: redirectMock }));
 vi.mock("next-intl/server", () => ({
   getTranslations: vi.fn().mockResolvedValue((key: string) => key),
 }));
 vi.mock("@/components/jobs/match-table", () => ({
-  MatchTable: () => null,
+  MatchTable: (props: { rows: Array<{ matchId: string; title: string }> }) => {
+    matchTableCalls.push(props);
+    return null;
+  },
 }));
 vi.mock("@/components/jobs/dashboard-run-controls", () => ({
   DashboardRunStatus: () => null,
@@ -77,7 +80,7 @@ function setupDashboard(options: {
   return { eqCalls, matchQueries };
 }
 
-function matchRow(matchId: string, jobId: string, score: number) {
+function matchRow(matchId: string, jobId: string, score: number, status: string = "active") {
   return {
     id: matchId,
     overall_score: score,
@@ -94,6 +97,7 @@ function matchRow(matchId: string, jobId: string, score: number) {
       published_at: "2026-11-01T00:00:00Z",
       source_name: "e2e",
       original_url: "https://example.test/jobs/shared",
+      status,
     },
   };
 }
@@ -132,5 +136,27 @@ describe("dashboard latest-run scope (D1)", () => {
     await DashboardPage();
 
     expect(matchQueries.every((query) => query.runId !== null)).toBe(true);
+  });
+
+  it("omits matches where jobs.status is expired or not active", async () => {
+    matchTableCalls.length = 0;
+    setupDashboard({
+      runs: [{ id: "run-latest", created_at: "2026-11-04T00:00:00Z" }],
+      matchesByRun: {
+        "run-latest": [
+          matchRow("match-active", "job-1", 90, "active"),
+          matchRow("match-expired", "job-2", 85, "expired"),
+          matchRow("match-closed", "job-3", 80, "closed"),
+        ],
+      },
+    });
+
+    render(await DashboardPage());
+
+    expect(matchTableCalls).toHaveLength(1);
+    const displayedMatchIds = matchTableCalls[0].rows.map((row) => row.matchId);
+    expect(displayedMatchIds).toEqual(["match-active"]);
+    expect(displayedMatchIds).not.toContain("match-expired");
+    expect(displayedMatchIds).not.toContain("match-closed");
   });
 });

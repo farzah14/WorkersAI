@@ -25,7 +25,7 @@ import urllib.parse
 import urllib.robotparser
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 import httpx
 from bs4 import BeautifulSoup
@@ -100,7 +100,7 @@ class CareerPageFetcher:
 
     source_key = "career_page"
     max_bytes = 2 * 1024 * 1024
-    timeout_seconds = 10.0
+    timeout_seconds = 25.0
     user_agent = "jobmatch-worker/0.1"
 
     def __init__(
@@ -301,6 +301,10 @@ def _extract_page_content(body: bytes, *, source_key: str) -> CareerPageContent:
 def _extract_job_posting_metadata(soup: BeautifulSoup) -> _JobPostingMetadata:
     is_closed = _is_closed_page(soup)
     for node in _iter_job_posting_nodes(soup):
+        node_is_closed = is_closed
+        valid_through = parse_iso_datetime(node.get("validThrough"))
+        if valid_through is not None and valid_through < datetime.now(UTC):
+            node_is_closed = True
         return _JobPostingMetadata(
             title=clean_optional_str(node.get("title")),
             company=_organization_name(node.get("hiringOrganization")),
@@ -308,7 +312,7 @@ def _extract_job_posting_metadata(soup: BeautifulSoup) -> _JobPostingMetadata:
             published_at=parse_iso_datetime(node.get("datePosted")),
             work_mode=_work_mode(node.get("jobLocationType"))
             or _work_mode(node.get("workplaceType")),
-            is_closed=is_closed,
+            is_closed=node_is_closed,
             is_job_posting=True,
         )
     next_data = _extract_next_data_metadata(soup, is_closed=is_closed)
@@ -354,6 +358,16 @@ def _extract_next_data_metadata(
     published_at = parse_iso_datetime(
         job.get("activationDate") or job.get("createdAt") or job.get("datePosted")
     )
+    application_end_date = parse_iso_datetime(
+        job.get("applicationEndDate") or job.get("deadline") or job.get("validThrough")
+    )
+    if application_end_date is not None and application_end_date < datetime.now(UTC):
+        is_closed = True
+    if (
+        job.get("active") is False
+        or str(job.get("status", "")).casefold() in ("closed", "expired", "archived")
+    ):
+        is_closed = True
     return _JobPostingMetadata(
         title=title,
         company=company_name,
@@ -529,6 +543,65 @@ def _work_mode_from_text(value: str) -> WorkMode | None:
     return None
 
 
+_CLOSED_PAGE_MARKERS: tuple[str, ...] = (
+    "job closed",
+    "job is closed",
+    "this job was closed",
+    "job was closed",
+    "(closed)",
+    "position closed",
+    "position is closed",
+    "position has been filled",
+    "this job was removed",
+    "this job has been removed",
+    "no longer available",
+    "no longer accepting applications",
+    "not accepting applications",
+    "no longer taking applications",
+    "job has expired",
+    "job expired",
+    "posting has expired",
+    "posting expired",
+    "listing has expired",
+    "listing expired",
+    "this role has been filled",
+    "applications are closed",
+    "applications closed",
+    "application closed",
+    "application is closed",
+    "vacancy closed",
+    "vacancy is closed",
+    "lowongan ditutup",
+    "lowongan telah ditutup",
+    "lowongan sudah ditutup",
+    "lowongan kerja ini sudah ditutup",
+    "lowongan ini telah berakhir",
+    "lowongan tidak aktif",
+    "pendaftaran ditutup",
+    "pendaftaran sudah ditutup",
+    "pendaftaran telah ditutup",
+    "posisi sudah terisi",
+    "posisi telah terisi",
+    "tidak lagi menerima lamaran",
+    "sudah tidak menerima lamaran",
+    "sudah tidak aktif",
+    "lowongan ini sudah tidak tersedia",
+)
+
+_EXACT_CLOSED_BADGES: frozenset[str] = frozenset(
+    {
+        "ditutup",
+        "ditutup.",
+        "closed",
+        "closed.",
+        "job closed",
+        "job closed.",
+        "lowongan ditutup",
+        "lowongan ditutup.",
+    }
+)
+
+
 def _is_closed_page(soup: BeautifulSoup) -> bool:
     title = soup.title.get_text(" ") if soup.title is not None else ""
     visible = soup.get_text(" ")
@@ -536,21 +609,14 @@ def _is_closed_page(soup: BeautifulSoup) -> bool:
     og_url = _meta_content(soup, "property", "og:url") or ""
     if "error=true" in og_url.casefold():
         return True
-    return any(
-        marker in normalized
-        for marker in (
-            "this job was closed",
-            "(closed)",
-            "job is closed",
-            "position has been filled",
-            "this job was removed",
-            "no longer available",
-            "no longer accepting applications",
-            "job has expired",
-            "posting has expired",
-            "this role has been filled",
-        )
-    )
+    if any(marker in normalized for marker in _CLOSED_PAGE_MARKERS):
+        return True
+    for el in soup.find_all(
+        ["div", "span", "p", "button", "h1", "h2", "h3", "h4", "h5", "h6", "strong", "b"]
+    ):
+        if el.get_text().strip().casefold() in _EXACT_CLOSED_BADGES:
+            return True
+    return False
 
 
 def _iter_job_posting_nodes(soup: BeautifulSoup) -> list[dict[str, object]]:

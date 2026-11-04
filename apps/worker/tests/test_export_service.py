@@ -332,3 +332,23 @@ def test_criteria_from_request_includes_expanded_fields() -> None:
     assert criteria.employment_type == ["full-time"]
     assert criteria.source_name == ["greenhouse"]
     assert criteria.exclude_ignored is True
+
+
+@pytest.mark.asyncio
+async def test_load_rows_filters_active_jobs_only() -> None:
+    from jobmatch_worker.exports.service import load_rows
+
+    executed_sql: list[str] = []
+
+    class FakeCursor:
+        async def fetchall(self) -> list[dict[str, Any]]:
+            return []
+
+    class FakeConnection:
+        async def execute(self, sql: str, params: tuple[Any, ...]) -> FakeCursor:
+            executed_sql.append(sql)
+            return FakeCursor()
+
+    await load_rows(FakeConnection(), "user-1", "run-1")  # type: ignore[arg-type]
+    assert len(executed_sql) == 1
+    assert "j.status = 'active'" in executed_sql[0]
