@@ -52,10 +52,14 @@ def make_candidate() -> CandidateSummary:
 def make_criteria() -> SearchCriteria:
     return SearchCriteria(
         scope="best_and_strong",
+        query="engineer",
         region=["indonesia"],
         work_mode=["hybrid"],
+        employment_type=["full-time"],
+        source_name=["jobstreet"],
         min_score=80,
         status=["new", "saved"],
+        exclude_ignored=True,
         date_from=date(2026, 8, 1),
         date_to=date(2026, 8, 31),
     )
@@ -125,7 +129,17 @@ def test_candidate_and_criteria_sheets_contain_summary() -> None:
     assert values["Years of Experience"] == "5.0"
     assert "Python\nFastAPI\nPostgreSQL" in values["Skills"]
     sc = wb["Search Criteria"]
-    criteria = {sc.cell(row=r, column=1).value: sc.cell(row=r, column=2).value for r in range(1, 8)}
+    criteria = {sc.cell(row=r, column=1).value: sc.cell(row=r, column=2).value for r in range(1, 14)}
     assert criteria["Scope"] == "best_and_strong"
     assert criteria["Minimum Score"] == "80"
     assert criteria["Region"] == "indonesia"
+    assert criteria["Query"] == "engineer"
+    assert criteria["Employment Type"] == "full-time"
+    assert criteria["Source"] == "jobstreet"
+    assert criteria["Exclude Ignored"] == "yes"
+
+
+def test_empty_rows_omits_invalid_autofilter() -> None:
+    wb = build_excel_workbook([], make_candidate(), make_criteria())
+    ws = wb["Job Matches"]
+    assert ws.auto_filter.ref is None

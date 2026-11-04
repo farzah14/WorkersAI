@@ -226,6 +226,27 @@ describe("POST /api/exports", () => {
       }),
     );
   });
+
+  it("accepts YYYY-MM-DD date strings in export filters", async () => {
+    const { exportsInsert } = setupExportCapture();
+
+    const response = await POST(
+      makePostRequest({
+        searchRunId: RUN_ID,
+        format: "xlsx",
+        scope: "current_filters",
+        filters: { date_from: "2026-09-01", date_to: "2026-09-30" },
+      }),
+    );
+
+    expect(response.status).toBe(202);
+    expect((await response.json()).id).toBe(EXPORT_ID);
+    expect(exportsInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filter_json: { date_from: "2026-09-01", date_to: "2026-09-30" },
+      }),
+    );
+  });
 });
 
 describe("GET /api/exports", () => {
@@ -338,5 +359,169 @@ describe("GET /api/exports", () => {
     expect(body.exports[1].download_url).toBeNull();
     expect(createSignedUrl).toHaveBeenCalledTimes(1);
     expect(createSignedUrl).toHaveBeenCalledWith(`${USER_ID}/${EXPORT_ID}/report.pdf`, 3600);
+  });
+});
+function setupExportCapture() {
+  const exportsInsert = vi.fn().mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({ data: { id: EXPORT_ID }, error: null }),
+    }),
+  });
+  const exportsChain = { insert: exportsInsert };
+  createServerClientMock.mockResolvedValue({
+    auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: USER_ID } }, error: null }) },
+    rpc: vi.fn().mockResolvedValue({ data: 1, error: null }),
+    from: vi.fn((table: string) => {
+      if (table === "job_search_runs") {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({ data: { id: RUN_ID }, error: null }),
+              }),
+            }),
+          }),
+        };
+      }
+      return exportsChain;
+    }),
+  });
+  createServiceClientMock.mockReturnValue({
+    from: vi.fn().mockReturnValue({ insert: vi.fn().mockResolvedValue({ data: null, error: null }) }),
+  });
+  return { exportsInsert };
+}
+
+describe("POST /api/exports expanded filters", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "service-role-key";
+  });
+
+  it("accepts and normalizes dashboard query, employment type, source, and ignored handling", async () => {
+    const { exportsInsert } = setupExportCapture();
+
+    const response = await POST(
+      makePostRequest({
+        searchRunId: RUN_ID,
+        format: "xlsx",
+        scope: "current_filters",
+        filters: {
+          query: "  SENIOR   Engineer ",
+          employment_type: ["full-time"],
+          source_name: ["Greenhouse"],
+          work_mode: ["remote"],
+          min_score: 70,
+          exclude_ignored: true,
+        },
+      }),
+    );
+
+    expect(response.status).toBe(202);
+    expect(exportsInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filter_json: {
+          query: "senior engineer",
+          employment_type: ["full-time"],
+          source_name: ["Greenhouse"],
+          work_mode: ["remote"],
+          min_score: 70,
+          exclude_ignored: true,
+        },
+      }),
+    );
+  });
+
+  it("accepts legacy all-scope requests without new fields", async () => {
+    const { exportsInsert } = setupExportCapture();
+
+    const response = await POST(
+      makePostRequest({ searchRunId: RUN_ID, format: "pdf", scope: "all" }),
+    );
+
+    expect(response.status).toBe(202);
+    expect(exportsInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ filter_json: {}, scope: "all" }),
+    );
+  });
+
+  it("rejects unknown employment types and oversized or blank source names", async () => {
+    setupExportCapture();
+
+    for (const filters of [
+      { employment_type: ["permanent"] },
+      { source_name: ["   "] },
+      { source_name: ["s".repeat(201)] },
+      { query: "a".repeat(201) },
+    ]) {
+      const response = await POST(
+        makePostRequest({ searchRunId: RUN_ID, format: "xlsx", scope: "current_filters", filters }),
+      );
+      expect(response.status, JSON.stringify(filters)).toBe(400);
+    }
+  });
+
+  it("rejects reversed date ranges for both date-only and timestamp inputs", async () => {
+    setupExportCapture();
+
+    const dateOnly = await POST(
+      makePostRequest({
+        searchRunId: RUN_ID,
+        format: "xlsx",
+        scope: "current_filters",
+        filters: { date_from: "2026-09-30", date_to: "2026-09-01" },
+      }),
+    );
+    expect(dateOnly.status).toBe(400);
+
+    const timestamps = await POST(
+      makePostRequest({
+        searchRunId: RUN_ID,
+        format: "xlsx",
+        scope: "current_filters",
+        filters: {
+          date_from: "2026-09-30T23:00:00Z",
+          date_to: "2026-09-01T01:00:00Z",
+        },
+      }),
+    );
+    expect(timestamps.status).toBe(400);
+  });
+
+  it("normalizes legacy ISO datetimes to UTC calendar dates before persistence", async () => {
+    const { exportsInsert } = setupExportCapture();
+
+    const response = await POST(
+      makePostRequest({
+        searchRunId: RUN_ID,
+        format: "xlsx",
+        scope: "current_filters",
+        filters: {
+          date_from: "2026-09-01T23:30:00Z",
+          date_to: "2026-09-30T12:00:00Z",
+        },
+      }),
+    );
+
+    expect(response.status).toBe(202);
+    expect(exportsInsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filter_json: { date_from: "2026-09-01", date_to: "2026-09-30" },
+      }),
+    );
+  });
+
+  it("rejects non-boolean exclude_ignored values", async () => {
+    setupExportCapture();
+    const response = await POST(
+      makePostRequest({
+        searchRunId: RUN_ID,
+        format: "xlsx",
+        scope: "current_filters",
+        filters: { exclude_ignored: "true" },
+      }),
+    );
+    expect(response.status).toBe(400);
   });
 });

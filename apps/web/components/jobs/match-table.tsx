@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ScoreBadge } from "@/components/jobs/score-badge";
+import { useTranslations } from "next-intl";
 import { MatchFiltersBar } from "@/components/jobs/filters";
+import { ScoreBadge } from "@/components/jobs/score-badge";
 import {
   applyMatchFilters,
   defaultMatchFilters,
@@ -16,17 +17,19 @@ type SortKey = "overallScore" | "title" | "company" | "publishedAt";
 
 type SortState = { key: SortKey; direction: "asc" | "desc" };
 
-const SORT_LABELS: Record<SortKey, string> = {
-  overallScore: "Match",
-  title: "Job title",
-  company: "Company",
-  publishedAt: "Published",
-};
-
 const INITIAL_VISIBLE_COUNT = 5;
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 function formatDate(value: string | null): string {
   if (!value) return "—";
   return value.slice(0, 10);
+}
+
+function isValidDate(value: string): boolean {
+  if (!DATE_RE.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
 }
 
 function compareRows(a: MatchRow, b: MatchRow, state: SortState): number {
@@ -44,17 +47,26 @@ function compareRows(a: MatchRow, b: MatchRow, state: SortState): number {
     default:
       result = (a[state.key] ?? "").localeCompare(b[state.key] ?? "");
   }
+  if (result === 0) result = a.matchId.localeCompare(b.matchId);
   return state.direction === "asc" ? result : -result;
+}
+
+function sourceOptions(rows: MatchRow[]): string[] {
+  return Array.from(new Set(rows.map((row) => row.sourceName))).sort((a, b) =>
+    a.localeCompare(b),
+  );
 }
 
 export function MatchTable({
   rows,
-  emptyMessage = "No matches match the current filters.",
+  emptyMessage,
 }: {
   rows: MatchRow[];
-  emptyMessage?: string;
+  emptyMessage: string;
 }) {
+  const t = useTranslations("jobFilters");
   const [filters, setFilters] = useState<MatchFilters>(() => defaultMatchFilters());
+  const [dateDraft, setDateDraft] = useState({ from: "", to: "" });
   const [sort, setSort] = useState<SortState>({ key: "overallScore", direction: "desc" });
   const [visibleCount, setVisibleCount] = useState(INITIAL_VISIBLE_COUNT);
   const [statuses, setStatuses] = useState<Record<string, MatchRow["status"]>>(() =>
@@ -63,22 +75,54 @@ export function MatchTable({
   const [saving, setSaving] = useState<Record<string, boolean>>({});
   const [removedJobIds, setRemovedJobIds] = useState<Set<string>>(() => new Set());
 
+  const dateError =
+    (dateDraft.from !== "" && !isValidDate(dateDraft.from)) ||
+    (dateDraft.to !== "" && !isValidDate(dateDraft.to)) ||
+    (isValidDate(dateDraft.from) && isValidDate(dateDraft.to) && dateDraft.from > dateDraft.to);
+
+  const sources = useMemo(() => sourceOptions(rows), [rows]);
+
   const visibleRows = useMemo(() => {
-    const filtered = applyMatchFilters(rows, filters).filter((row) => {
-      const currentStatus = statuses[row.jobId] ?? row.status;
-      if (removedJobIds.has(row.jobId)) return false;
-      if (filters.status === "all" && currentStatus === "ignored") return false;
-      return true;
-    });
+    const currentRows = rows
+      .filter((row) => !removedJobIds.has(row.jobId))
+      .map((row) => ({ ...row, status: statuses[row.jobId] ?? row.status }));
+    const filtered = applyMatchFilters(currentRows, filters);
     if (sort.key === "overallScore" && sort.direction === "desc") {
       return sortMatchesDefault(filtered);
     }
-    return filtered
-      .map((row) => ({ ...row, status: statuses[row.jobId] ?? row.status }))
-      .sort((a, b) => compareRows(a, b, sort));
+    return filtered.sort((a, b) => compareRows(a, b, sort));
   }, [rows, filters, sort, statuses, removedJobIds]);
 
   const displayedRows = visibleRows.slice(0, visibleCount);
+
+  function changeFilters(next: MatchFilters) {
+    setFilters(next);
+    setVisibleCount(INITIAL_VISIBLE_COUNT);
+  }
+
+  function changeDates(next: { from: string; to: string }) {
+    setDateDraft(next);
+    setVisibleCount(INITIAL_VISIBLE_COUNT);
+    if (
+      (next.from !== "" && !isValidDate(next.from)) ||
+      (next.to !== "" && !isValidDate(next.to)) ||
+      (isValidDate(next.from) && isValidDate(next.to) && next.from > next.to)
+    ) {
+      return;
+    }
+    setFilters((current) => ({
+      ...current,
+      dateFrom: next.from === "" ? null : next.from,
+      dateTo: next.to === "" ? null : next.to,
+    }));
+  }
+
+  function clearFilters() {
+    setFilters(defaultMatchFilters());
+    setDateDraft({ from: "", to: "" });
+    setVisibleCount(INITIAL_VISIBLE_COUNT);
+  }
+
   function toggleSort(key: SortKey) {
     setSort((current) => {
       if (current.key === key) {
@@ -116,11 +160,22 @@ export function MatchTable({
     });
     setSaving((current) => ({ ...current, [jobId]: true }));
     try {
-      await fetch(`/api/job-status?job_id=${encodeURIComponent(jobId)}`, {
+      const response = await fetch(`/api/job-status?job_id=${encodeURIComponent(jobId)}`, {
         method: "DELETE",
       });
+      if (!response.ok) {
+        setRemovedJobIds((prev) => {
+          const next = new Set(prev);
+          next.delete(jobId);
+          return next;
+        });
+      }
     } catch {
-      // Best-effort permanent removal
+      setRemovedJobIds((prev) => {
+        const next = new Set(prev);
+        next.delete(jobId);
+        return next;
+      });
     } finally {
       setSaving((current) => ({ ...current, [jobId]: false }));
     }
@@ -128,7 +183,18 @@ export function MatchTable({
 
   return (
     <div className="space-y-4">
-      <MatchFiltersBar filters={filters} onChange={setFilters} />
+      <p className="text-sm text-[#6d787e]">{t("latestRunNotice")}</p>
+      <MatchFiltersBar
+        filters={filters}
+        onChange={changeFilters}
+        onClear={clearFilters}
+        sources={sources}
+        dateDraft={dateDraft}
+        dateError={dateError}
+        onDateChange={changeDates}
+        shownCount={visibleRows.length}
+        totalCount={rows.filter((row) => !removedJobIds.has(row.jobId)).length}
+      />
       <div className="overflow-x-auto overflow-y-auto max-h-[75vh] rounded-2xl border border-[#d9d5cc] bg-white">
         <table className="w-full min-w-[800px] text-left text-sm">
           <caption className="sr-only">Ranked job matches</caption>
@@ -146,16 +212,16 @@ export function MatchTable({
                     onClick={() => toggleSort(key)}
                     className="inline-flex items-center gap-1 uppercase tracking-[0.14em] transition hover:text-[#d9623c]"
                   >
-                    {SORT_LABELS[key]}
+                    {t(key === "publishedAt" ? "published" : key === "overallScore" ? "match" : key === "title" ? "jobTitle" : "companyColumn")}
                     {sort.key === key && <span aria-hidden="true">{sort.direction === "desc" ? "↓" : "↑"}</span>}
                   </button>
                 </th>
               ))}
               <th scope="col" className="sticky top-0 z-10 bg-white px-4 py-3 font-semibold shadow-[inset_0_-1px_0_0_#d9d5cc]">
-                Location
+                {t("location")}
               </th>
               <th scope="col" className="sticky top-0 z-10 bg-white px-4 py-3 text-right font-semibold shadow-[inset_0_-1px_0_0_#d9d5cc]">
-                Actions
+                {t("actions")}
               </th>
             </tr>
           </thead>
@@ -189,16 +255,16 @@ export function MatchTable({
                         onClick={() => setStatus(row.jobId, status === "saved" ? "new" : "saved")}
                         className="rounded-full bg-[#15212b] px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-[#263946] disabled:opacity-60"
                       >
-                        {status === "saved" ? "Unsave" : "Save"}
+                        {status === "saved" ? t("unsave") : t("save")}
                       </button>
                       <button
                         type="button"
                         disabled={saving[row.jobId]}
                         onClick={() => removeJob(row.jobId)}
                         className="rounded-full border border-rose-200 px-3 py-1.5 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 hover:border-rose-300 disabled:opacity-60"
-                        title="Remove job from search results"
+                        title={t("removeTitle")}
                       >
-                        Remove
+                        {t("remove")}
                       </button>
                     </div>
                   </td>
@@ -223,7 +289,7 @@ export function MatchTable({
               onClick={() => setVisibleCount((prev) => prev + 5)}
               className="inline-flex items-center gap-2 rounded-full border border-[#d9d5cc] bg-white px-5 py-2.5 text-xs font-semibold text-[#15212b] shadow-xs transition hover:bg-[#faf9f6] hover:border-[#15212b]"
             >
-              Show more ({visibleRows.length - visibleCount} more)
+              {t("showMore", { count: visibleRows.length - visibleCount })}
             </button>
           ) : (
             <button
@@ -231,11 +297,12 @@ export function MatchTable({
               onClick={() => setVisibleCount(INITIAL_VISIBLE_COUNT)}
               className="inline-flex items-center gap-2 rounded-full border border-[#d9d5cc] bg-white px-5 py-2.5 text-xs font-semibold text-[#53616a] shadow-xs transition hover:bg-[#faf9f6]"
             >
-              Show less
+              {t("showLess")}
             </button>
           )}
         </div>
       )}
+
     </div>
   );
 }

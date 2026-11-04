@@ -202,6 +202,33 @@ async def test_tavily_candidate_rejects_closed_job_page() -> None:
 
 
 @pytest.mark.asyncio
+async def test_candidate_to_job_rejects_kalibrr_closed_pages() -> None:
+    from jobmatch_worker.handlers.discovery import _candidate_to_job
+    from jobmatch_worker.jobs.connectors.career_page import _extract_page_content
+
+    candidate = DiscoveryCandidateUrl(
+        url="https://www.kalibrr.com/c/bank-mandiri/jobs/123/odp",
+        title="ODP - Bank Mandiri",
+    )
+
+    html = b"""<html>
+    <head><title>ODP Bank Mandiri</title></head>
+    <body>
+      <div class="k-badge">Ditutup.</div>
+      <h1>ODP Bank Mandiri</h1>
+      <p>Company: Bank Mandiri</p>
+    </body>
+    </html>"""
+    content = _extract_page_content(html, source_key="career_page")
+    assert content.is_closed is True
+
+    async def fetch_page(_url: str) -> CareerPageContent:
+        return content
+
+    with pytest.raises(SourceDataError, match="job page is closed"):
+        await _candidate_to_job(candidate, fetch_page, "tavily")
+
+@pytest.mark.asyncio
 async def test_indonesia_candidate_requires_a_specific_job_page() -> None:
     from jobmatch_worker.handlers.discovery import _candidate_to_job
 
@@ -237,6 +264,8 @@ def _job(
     location: str | None = "Jakarta",
     country: str | None = None,
     work_mode: str | None = None,
+    employment_type: str | None = None,
+    description: str | None = None,
     published_at: datetime | None = None,
 ) -> DiscoveredJob:
     return DiscoveredJob(
@@ -247,7 +276,8 @@ def _job(
         location=location,
         country=country,
         work_mode=work_mode,
-        description=f"Description for {title}",
+        employment_type=employment_type,
+        description=description or f"Description for {title}",
         original_url=url,
         published_at=published_at or datetime.now(UTC),
     )
@@ -264,6 +294,7 @@ async def test_indonesia_candidate_rejects_untrusted_domain_without_fetch() -> N
         "target_roles": ["Data Engineer"],
         "locations": ["Jakarta"],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     candidate = DiscoveryCandidateUrl(
@@ -310,6 +341,7 @@ async def test_indonesia_candidate_rejects_non_job_content_without_fetch() -> No
         "target_roles": ["Information Technology Specialist"],
         "locations": ["Jakarta"],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     candidate = DiscoveryCandidateUrl(
@@ -351,6 +383,7 @@ async def test_indonesia_filters_foreign_jobs_and_ranks_before_five_job_limit() 
         "target_roles": ["Data Engineer"],
         "locations": ["Jakarta"],
         "work_modes": ["hybrid"],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     jobs = [
@@ -397,6 +430,7 @@ async def test_global_discovery_keeps_foreign_job_behavior() -> None:
         "target_roles": ["Data Engineer"],
         "locations": [],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     connection = _Connection(run_row)
@@ -428,6 +462,7 @@ async def test_discovery_enforces_thirty_day_publication_window(region: str) -> 
         "target_roles": ["Data Engineer"],
         "locations": ["Jakarta"] if region == "indonesia" else [],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     jobs = [
@@ -500,6 +535,7 @@ async def test_indonesia_zero_valid_jobs_completes_when_sources_succeed() -> Non
         "target_roles": ["Data Engineer"],
         "locations": [],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     connection = _Connection(run_row)
@@ -529,6 +565,7 @@ async def test_zero_valid_jobs_is_partial_when_one_source_succeeds() -> None:
         "target_roles": ["Data Engineer"],
         "locations": [],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     connection = _Connection(run_row)
@@ -564,6 +601,7 @@ async def test_indonesia_verifies_at_most_twenty_trusted_web_candidates() -> Non
         "target_roles": ["Data Engineer"],
         "locations": ["Jakarta"],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     candidates = [
@@ -638,8 +676,8 @@ async def test_indonesia_deadline_preserves_jobs_verified_before_timeout() -> No
     )
 
     assert [job.title for job in outcome.jobs] == ["Data Engineer"]
-    assert outcome.status == "failed"
-    assert outcome.retryable is True
+    assert outcome.status == "success"
+    assert outcome.retryable is False
 
 
 @pytest.mark.asyncio
@@ -660,6 +698,7 @@ async def test_discovery_run_keeps_successful_sources_when_one_fails(
         "target_roles": ["Data Engineer"],
         "locations": [],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     duplicate_url = "https://jobs.example.com/data-engineer?utm_source=tracker"
@@ -784,6 +823,7 @@ async def test_discovery_run_persists_at_most_five_distinct_jobs() -> None:
         "target_roles": ["Engineer"],
         "locations": [],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     jobs = [
@@ -845,6 +885,7 @@ async def test_discovery_run_respects_custom_max_jobs_per_run() -> None:
         "target_roles": ["Engineer"],
         "locations": [],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     jobs = [
@@ -897,7 +938,8 @@ async def test_discovery_requeues_failed_requirement_work_for_reused_job() -> No
             "target_roles": ["Engineer"],
             "locations": [],
             "work_modes": [],
-            "excluded_keywords": [],
+            "employment_types": [],
+        "excluded_keywords": [],
         },
         work_item_statuses={dedupe_key: "failed"},
     )
@@ -923,6 +965,7 @@ async def test_discovery_enqueues_match_for_cached_requirements() -> None:
         "target_roles": ["Data Engineer"],
         "locations": [],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     connection = _Connection(
@@ -971,6 +1014,7 @@ async def test_search_candidates_become_jobs_with_search_provenance() -> None:
         "target_roles": ["Backend Engineer"],
         "locations": [],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     candidate = DiscoveryCandidateUrl(
@@ -1026,6 +1070,7 @@ async def test_discovery_run_is_failed_when_every_source_fails() -> None:
         "target_roles": ["Data Engineer"],
         "locations": [],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     connection = _Connection(run_row)
@@ -1063,6 +1108,7 @@ async def test_transient_source_failure_retries_the_work_item() -> None:
         "target_roles": ["Data Engineer"],
         "locations": [],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     connection = _Connection(run_row)
@@ -1096,6 +1142,7 @@ async def test_candidate_fetch_failure_is_recorded_as_source_failure() -> None:
         "target_roles": ["Backend Engineer"],
         "locations": [],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     candidate = DiscoveryCandidateUrl(url="https://careers.example.com/jobs/backend")
@@ -1119,6 +1166,50 @@ async def test_candidate_fetch_failure_is_recorded_as_source_failure() -> None:
     ]
     assert any(params[0] == "failed" and params[2] == "candidate_fetch" for params in source_updates)
 
+@pytest.mark.asyncio
+async def test_candidate_fetch_partial_failure_is_recorded_as_source_success() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-partial-candidate",
+        "status": "queued",
+        "region": "global",
+        "target_roles": ["Backend Engineer"],
+        "locations": [],
+        "work_modes": [],
+        "employment_types": [],
+        "excluded_keywords": [],
+    }
+    candidate_fail = DiscoveryCandidateUrl(url="https://careers.example.com/jobs/fail")
+    candidate_ok = DiscoveryCandidateUrl(url="https://careers.example.com/jobs/ok")
+    connection = _Connection(run_row)
+
+    async def fetch_page(url: str) -> CareerPageContent:
+        if "fail" in url:
+            raise SourceUnavailable("career_page", "timeout")
+        return CareerPageContent(
+            title="Backend Engineer",
+            company="Acme Corp",
+            text="Build backend APIs for our team.",
+            is_job_posting=True,
+        )
+
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-partial-candidate", "payload": {"search_run_id": "run-partial-candidate"}},
+        None,
+        connectors={"tavily": _Connector("tavily", [candidate_fail, candidate_ok])},
+        fetch_page=fetch_page,
+    )
+
+    source_updates = [
+        params
+        for query, params in connection.executed
+        if "update public.job_sources" in query.lower()
+    ]
+    assert any(params[0] == "success" and params[2] is None for params in source_updates)
+
+
 
 @pytest.mark.asyncio
 async def test_unexpected_source_failure_does_not_discard_other_sources() -> None:
@@ -1131,6 +1222,7 @@ async def test_unexpected_source_failure_does_not_discard_other_sources() -> Non
         "target_roles": ["Data Engineer"],
         "locations": [],
         "work_modes": [],
+        "employment_types": [],
         "excluded_keywords": [],
     }
     connection = _Connection(run_row)
@@ -1164,3 +1256,361 @@ async def test_unexpected_source_failure_does_not_discard_other_sources() -> Non
         if "update public.job_search_runs" in query.lower()
     ]
     assert any(params[0] == "partial" for params in run_updates)
+
+
+@pytest.mark.asyncio
+async def test_discovery_applies_preferences_before_the_run_cap() -> None:
+    """P8: incompatible jobs cannot consume slots meant for eligible jobs."""
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-preferences-cap",
+        "status": "queued",
+        "region": "global",
+        "target_roles": ["Engineer"],
+        "locations": [],
+        "work_modes": ["remote"],
+        "employment_types": ["full-time"],
+        "excluded_keywords": ["unpaid"],
+    }
+    jobs = [
+        _job(
+            source_key="greenhouse",
+            url="https://jobs.example.com/on-site",
+            title="Engineer 1",
+            work_mode="on-site",
+        ),
+        _job(
+            source_key="greenhouse",
+            url="https://jobs.example.com/internship",
+            title="Engineer 2",
+            employment_type="internship",
+        ),
+        *[
+            _job(
+                source_key="greenhouse",
+                url=f"https://jobs.example.com/eligible-{number}",
+                title=f"Eligible Engineer {number}",
+                work_mode="remote",
+                employment_type="full-time",
+            )
+            for number in range(1, 8)
+        ],
+    ]
+    connection = _Connection(run_row)
+
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-preferences-cap", "payload": {"search_run_id": "run-preferences-cap"}},
+        SimpleNamespace(
+            max_attempts=3,
+            requirement_extraction_enabled=True,
+            max_jobs_per_run=5,
+        ),
+        connectors={"greenhouse": _Connector("greenhouse", jobs)},
+    )
+
+    job_inserts = [
+        params for query, params in connection.executed if "insert into public.jobs" in query.lower()
+    ]
+    requirement_items = [
+        params
+        for query, params in connection.executed
+        if "insert into public.work_items" in query.lower()
+        and params[0] == "extract_job_requirements"
+    ]
+    provenance = [
+        params
+        for query, params in connection.executed
+        if "insert into public.job_provenance" in query.lower()
+    ]
+    run_updates = [
+        params
+        for query, params in connection.executed
+        if "update public.job_search_runs" in query.lower()
+    ]
+    final_update = next(params for params in run_updates if params[0] == "processing")
+
+    assert [params[1] for params in job_inserts] == [
+        f"Eligible Engineer {number}" for number in range(1, 6)
+    ]
+    assert len(requirement_items) == 5
+    assert len(provenance) == 5
+    # discovered=9 source results; normalized=5 retained; duplicate=0
+    assert final_update[1:5] == (9, 5, 0, 0)
+
+
+@pytest.mark.asyncio
+async def test_discovery_exclusions_reject_matching_jobs_before_cap() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-exclusions",
+        "status": "queued",
+        "region": "global",
+        "target_roles": ["Engineer"],
+        "locations": [],
+        "work_modes": [],
+        "employment_types": [],
+        "excluded_keywords": ["SENIOR   ENGINEER"],
+    }
+    jobs = [
+        _job(
+            source_key="greenhouse",
+            url="https://jobs.example.com/excluded",
+            title="Senior Engineer",
+            description="SENIOR   ENGINEER required",
+        ),
+        _job(
+            source_key="greenhouse",
+            url="https://jobs.example.com/eligible",
+            title="Junior Engineer",
+        ),
+    ]
+    connection = _Connection(run_row)
+
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-exclusions", "payload": {"search_run_id": "run-exclusions"}},
+        SimpleNamespace(max_attempts=3, requirement_extraction_enabled=False),
+        connectors={"greenhouse": _Connector("greenhouse", jobs)},
+    )
+
+    inserted_titles = [
+        params[1]
+        for query, params in connection.executed
+        if "insert into public.jobs" in query.lower()
+    ]
+    assert inserted_titles == ["Junior Engineer"]
+
+
+@pytest.mark.asyncio
+async def test_discovery_keeps_unknown_metadata_eligible() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-unknown-metadata",
+        "status": "queued",
+        "region": "global",
+        "target_roles": ["Engineer"],
+        "locations": [],
+        "work_modes": ["remote"],
+        "employment_types": ["full-time"],
+        "excluded_keywords": [],
+    }
+    job = _job(
+        source_key="greenhouse",
+        url="https://jobs.example.com/unknown",
+        title="Engineer Without Metadata",
+        work_mode=None,
+        employment_type=None,
+    )
+    connection = _Connection(run_row)
+
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-unknown-metadata", "payload": {"search_run_id": "run-unknown-metadata"}},
+        SimpleNamespace(max_attempts=3, requirement_extraction_enabled=False),
+        connectors={"greenhouse": _Connector("greenhouse", [job])},
+    )
+
+    inserted_titles = [
+        params[1]
+        for query, params in connection.executed
+        if "insert into public.jobs" in query.lower()
+    ]
+    assert inserted_titles == ["Engineer Without Metadata"]
+
+
+@pytest.mark.asyncio
+async def test_discovery_all_rejected_is_completed_empty_run_without_retry() -> None:
+    """P9: preferences removing every result is a successful empty run."""
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-all-rejected",
+        "status": "queued",
+        "region": "global",
+        "target_roles": ["Engineer"],
+        "locations": [],
+        "work_modes": ["remote"],
+        "employment_types": ["full-time"],
+        "excluded_keywords": [],
+    }
+    connection = _Connection(run_row)
+
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-all-rejected", "payload": {"search_run_id": "run-all-rejected"}},
+        SimpleNamespace(max_attempts=3, requirement_extraction_enabled=False),
+        connectors={
+            "greenhouse": _Connector(
+                "greenhouse",
+                [
+                    _job(
+                        source_key="greenhouse",
+                        url="https://jobs.example.com/on-site",
+                        title="On-site Engineer",
+                        work_mode="on-site",
+                    )
+                ],
+            )
+        },
+    )
+
+    assert not any("insert into public.jobs" in query.lower() for query, _ in connection.executed)
+    assert not any("set status = 'queued'" in query.lower() for query, _ in connection.executed)
+    run_updates = [
+        params
+        for query, params in connection.executed
+        if "update public.job_search_runs" in query.lower()
+    ]
+    assert any(params[0] == "completed" and params[1:5] == (1, 0, 0, 0) for params in run_updates)
+
+
+@pytest.mark.asyncio
+async def test_discovery_all_rejected_with_failed_source_is_partial_empty_run() -> None:
+    """P10: a failed source still yields a partial empty run, not a retry."""
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-rejected-partial",
+        "status": "queued",
+        "region": "global",
+        "target_roles": ["Engineer"],
+        "locations": [],
+        "work_modes": ["remote"],
+        "employment_types": ["full-time"],
+        "excluded_keywords": [],
+    }
+    connection = _Connection(run_row)
+
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-rejected-partial", "payload": {"search_run_id": "run-rejected-partial"}},
+        SimpleNamespace(max_attempts=3, requirement_extraction_enabled=False),
+        connectors={
+            "greenhouse": _Connector(
+                "greenhouse",
+                [
+                    _job(
+                        source_key="greenhouse",
+                        url="https://jobs.example.com/hybrid",
+                        title="Hybrid Engineer",
+                        work_mode="hybrid",
+                    )
+                ],
+            ),
+            "lever": _Connector("lever", SourceConfigError("lever", "not configured")),
+        },
+    )
+
+    run_updates = [
+        params
+        for query, params in connection.executed
+        if "update public.job_search_runs" in query.lower()
+    ]
+    assert any(params[0] == "partial" and params[1:5] == (1, 0, 0, 1) for params in run_updates)
+
+
+@pytest.mark.asyncio
+async def test_discovery_eligible_duplicate_retains_provenance() -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": "run-eligible-duplicate",
+        "status": "queued",
+        "region": "global",
+        "target_roles": ["Engineer"],
+        "locations": [],
+        "work_modes": ["remote"],
+        "employment_types": ["full-time"],
+        "excluded_keywords": [],
+    }
+    ineligible = _job(
+        source_key="lever",
+        url="https://jobs.example.com/shared",
+        title="Remote Engineer",
+        work_mode="on-site",
+        employment_type="full-time",
+    )
+    eligible = _job(
+        source_key="greenhouse",
+        url="https://jobs.example.com/shared",
+        title="Remote Engineer",
+        work_mode="remote",
+        employment_type="full-time",
+    )
+    connection = _Connection(run_row)
+
+    await handle_discover_jobs(
+        connection,
+        {"id": "item-eligible-duplicate", "payload": {"search_run_id": "run-eligible-duplicate"}},
+        SimpleNamespace(max_attempts=3, requirement_extraction_enabled=False),
+        connectors={
+            "lever": _Connector("lever", [ineligible]),
+            "greenhouse": _Connector("greenhouse", [eligible]),
+        },
+    )
+
+    job_inserts = [
+        params
+        for query, params in connection.executed
+        if "insert into public.jobs" in query.lower()
+    ]
+    provenance = [
+        params
+        for query, params in connection.executed
+        if "insert into public.job_provenance" in query.lower()
+    ]
+    assert len(job_inserts) == 1
+    assert len(provenance) == 1
+    assert provenance[0][2:4] == ("ats", "greenhouse")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("region", ["indonesia", "global"])
+async def test_discovery_applies_preferences_in_both_regions(region: str) -> None:
+    from jobmatch_worker.handlers.discovery import handle_discover_jobs
+
+    run_row = {
+        "id": f"run-preferences-{region}",
+        "status": "queued",
+        "region": region,
+        "target_roles": ["Data Engineer"],
+        "locations": ["Jakarta"] if region == "indonesia" else [],
+        "work_modes": ["hybrid"],
+        "employment_types": ["full-time"],
+        "excluded_keywords": [],
+    }
+    jobs = [
+        _job(
+            source_key="greenhouse",
+            url=f"https://jobs.example.com/{region}/remote",
+            title="Remote Data Engineer",
+            work_mode="remote",
+        ),
+        _job(
+            source_key="greenhouse",
+            url=f"https://jobs.example.com/{region}/hybrid",
+            title="Hybrid Data Engineer",
+            location="Jakarta" if region == "indonesia" else "London",
+            work_mode="hybrid",
+            employment_type="full-time",
+        ),
+    ]
+    connection = _Connection(run_row)
+
+    await handle_discover_jobs(
+        connection,
+        {"id": f"item-preferences-{region}", "payload": {"search_run_id": run_row["id"]}},
+        SimpleNamespace(max_attempts=3, requirement_extraction_enabled=False),
+        connectors={"greenhouse": _Connector("greenhouse", jobs)},
+    )
+
+    inserted_titles = [
+        params[1]
+        for query, params in connection.executed
+        if "insert into public.jobs" in query.lower()
+    ]
+    assert inserted_titles == ["Hybrid Data Engineer"]

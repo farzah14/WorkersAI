@@ -43,6 +43,7 @@ from jobmatch_worker.jobs.indonesia import (
 )
 from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
 from jobmatch_worker.jobs.normalize import NormalizedJob, normalize_job
+from jobmatch_worker.jobs.preferences import matches_preferences
 from jobmatch_worker.jobs.query import SearchQuery, build_queries
 from jobmatch_worker.jobs.validity import is_recent_job
 from jobmatch_worker.matching.cache_key import (
@@ -67,7 +68,7 @@ _MAX_DESCRIPTION_CHARS = MAX_REQUIREMENT_TEXT_CHARS
 _RUN_SELECT_SQL = """
 select r.id, r.status, r.trigger, r.candidate_profile_id,
        sp.region, sp.target_roles, sp.locations, sp.work_modes,
-       sp.excluded_keywords
+       sp.employment_types, sp.excluded_keywords
 from public.job_search_runs r
 join public.search_profiles sp on sp.id = r.search_profile_id
 where r.id = %s
@@ -343,13 +344,15 @@ async def _run_source(
             discovered_count=discovered_count,
             retryable=True,
         )
+    has_jobs = bool(jobs)
+    is_failed = not has_jobs and candidate_failures > 0
     return _SourceOutcome(
         source_key=source_key,
-        status="failed" if candidate_failures else "success",
+        status="failed" if is_failed else "success",
         jobs=tuple(jobs),
-        error_code="candidate_fetch" if candidate_failures else None,
+        error_code="candidate_fetch" if is_failed else None,
         discovered_count=discovered_count,
-        retryable=candidate_retryable,
+        retryable=candidate_retryable if not has_jobs else False,
     )
 
 
@@ -651,14 +654,26 @@ async def handle_discover_jobs(
                 normalized.append(normalize_job(job, region=run["region"]))
             except (SourceError, ValueError):
                 continue
-        kept, duplicate_count = dedupe_jobs(normalized)
+        # Preferences are applied to normalized jobs before deduplication and
+        # the run cap so rejected jobs cannot consume slots or downstream work.
+        eligible = [
+            job
+            for job in normalized
+            if matches_preferences(
+                job,
+                work_modes=tuple(run["work_modes"] or ()),
+                employment_types=tuple(run["employment_types"] or ()),
+                excluded_keywords=tuple(run["excluded_keywords"] or ()),
+            )
+        ]
+        kept, duplicate_count = dedupe_jobs(eligible)
         max_jobs = getattr(settings, "max_jobs_per_run", 5)
         kept = kept[:max_jobs]
         upsert_result = await upsert_jobs(conn, search_run_id=run_id, jobs=kept)
         await _persist_provenance(
             conn,
             run_id=run_id,
-            all_jobs=normalized,
+            all_jobs=eligible,
             kept_jobs=kept,
             job_ids=upsert_result.job_ids,
         )

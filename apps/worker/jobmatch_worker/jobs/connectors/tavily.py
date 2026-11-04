@@ -48,6 +48,8 @@ _BLOCKED_HOST_DOMAINS = (
     "dailyremote.com",
     "learn4good.com",
     "remoterocketship.com",
+    "linkedin.com",
+    "jobleads.com",
 )
 _EXCLUDED_PATH_SUBSTRINGS = (
     "/search",

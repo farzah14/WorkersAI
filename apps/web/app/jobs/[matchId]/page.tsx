@@ -33,7 +33,19 @@ type MatchDetail = {
     published_at: string | null;
     source_name: string;
     original_url: string;
-  }>;
+    status?: string;
+  }> | {
+    title: string;
+    company: string;
+    location: string | null;
+    region: string;
+    work_mode: string | null;
+    employment_type: string | null;
+    published_at: string | null;
+    source_name: string;
+    original_url: string;
+    status?: string;
+  };
 };
 
 export default async function JobMatchPage({
@@ -70,7 +82,7 @@ export default async function JobMatchPage({
   const { data: match } = await supabase
     .from("job_matches")
     .select(
-      "id, overall_score, verdict, explanation, recommendations, strengths, gaps, critical_gaps, skills_score, experience_score, education_score, location_score, seniority_score, language_score, job_id, jobs(title, company, location, region, work_mode, employment_type, published_at, source_name, original_url)",
+      "id, overall_score, verdict, explanation, recommendations, strengths, gaps, critical_gaps, skills_score, experience_score, education_score, location_score, seniority_score, language_score, job_id, jobs(title, company, location, region, work_mode, employment_type, published_at, source_name, original_url, status)",
     )
     .eq("id", matchId)
     .maybeSingle();
@@ -82,7 +94,9 @@ export default async function JobMatchPage({
   const detail = match as unknown as MatchDetail;
   const jobs = Array.isArray(detail.jobs) ? detail.jobs : [detail.jobs];
   const job = jobs[0];
-
+  if (job?.status && job.status !== "active") {
+    notFound();
+  }
   const { data: statusRows } = await supabase
     .from("user_jobs")
     .select("status")

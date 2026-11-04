@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import httpx
+import psycopg
 from psycopg import AsyncConnection
 from psycopg.rows import dict_row
 from psycopg_pool import AsyncConnectionPool
@@ -155,14 +156,87 @@ async def _emit_run_counters(
 ) -> None:
     events.emit("run_counters", **await run_metrics(conn, run_id))
 
+async def _reap_stale_search_runs(
+    conn: AsyncConnection[Any], logger: logging.Logger | None = None
+) -> int:
+    cursor = await conn.execute(
+        """
+        select id from public.job_search_runs
+        where status in ('queued', 'processing')
+          and created_at <= now() - interval '30 minutes'
+          and not exists (
+            select 1 from public.work_items
+            where status in ('queued', 'processing')
+              and (
+                payload->>'search_run_id' = job_search_runs.id::text
+                or exists (
+                  select 1 from public.job_search_run_jobs jrj
+                  where jrj.search_run_id = job_search_runs.id
+                    and work_items.payload->>'job_id' = jrj.job_id::text
+                )
+              )
+          )
+        """
+    )
+    stale_runs = await cursor.fetchall()
+    reaped = 0
+    for row in stale_runs:
+        run_id = row["id"] if isinstance(row, dict) else row[0]
+        count_cursor = await conn.execute(
+            "select count(*) from public.job_matches where search_run_id = %s",
+            (run_id,),
+        )
+        count_row = await count_cursor.fetchone()
+        matches_count = (
+            count_row["count"] if isinstance(count_row, dict) else count_row[0]
+        ) if count_row else 0
+        final_status = "partial" if matches_count > 0 else "failed"
+        await conn.execute(
+            """
+            update public.job_search_runs
+            set status = %s, completed_at = now()
+            where id = %s
+            """,
+            (final_status, run_id),
+        )
+        if logger:
+            logger.info("Reaped stale search run %s as %s", run_id, final_status)
+        reaped += 1
+    return reaped
+
+
 
 async def worker_loop(settings: Settings, logger: EventLogger | None = None) -> None:
     events = logger or EventLogger()
     pool: AsyncConnectionPool = await create_pool(settings)
     events.emit("worker_started", worker_id=settings.worker_id)
+    log = logging.getLogger("jobmatch_worker")
+    try:
+        async with pool.connection() as conn:
+            await _reap_stale_search_runs(conn, log)
+    except Exception:
+        log.exception("Initial stale search run reap failed")
+    last_reap = time.monotonic()
+    reap_interval = 15 * 60  # 15 minutes
     try:
         while True:
-            item = await claim_next_item(pool, settings.worker_id)
+            if time.monotonic() - last_reap >= reap_interval:
+                last_reap = time.monotonic()
+                try:
+                    async with pool.connection() as conn:
+                        await _reap_stale_search_runs(conn, log)
+                except Exception:
+                    log.exception("Periodic stale search run reap failed")
+            try:
+                item = await claim_next_item(pool, settings.worker_id)
+            except psycopg.Error as exc:
+                log.warning(
+                    "Failed to claim work item (retrying in %ss): %s",
+                    settings.worker_poll_seconds,
+                    exc,
+                )
+                await asyncio.sleep(settings.worker_poll_seconds)
+                continue
             if item is None:
                 await asyncio.sleep(settings.worker_poll_seconds)
                 continue

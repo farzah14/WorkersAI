@@ -1500,6 +1500,111 @@ async def test_career_page_detects_removed_job() -> None:
     assert content.is_closed is True
 
 
+async def test_career_page_detects_kalibrr_english_job_closed() -> None:
+    html = b"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Global Analyst Program - Bank Mandiri | Kalibrr</title>
+    <meta property="og:title" content="Global Analyst Program" />
+    <meta property="og:site_name" content="Kalibrr" />
+</head>
+<body>
+    <div class="k-flex k-items-center k-text-white k-bg-red-500">Job closed.</div>
+    <h1>Global Analyst Program</h1>
+    <p>Bank Mandiri is seeking talented analysts in Jakarta.</p>
+</body>
+</html>"""
+    content = _extract_page_content(html, source_key="career_page")
+    assert content.is_closed is True
+
+
+async def test_career_page_detects_kalibrr_indonesian_ditutup() -> None:
+    html = b"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Global Analyst Program - Bank Mandiri | Kalibrr</title>
+    <meta property="og:title" content="Global Analyst Program" />
+    <meta property="og:site_name" content="Kalibrr" />
+</head>
+<body>
+    <div class="k-badge">Ditutup.</div>
+    <h1>Global Analyst Program</h1>
+    <p>Bank Mandiri membuka kesempatan berkarier di Jakarta.</p>
+</body>
+</html>"""
+    content = _extract_page_content(html, source_key="career_page")
+    assert content.is_closed is True
+
+
+async def test_career_page_detects_past_next_data_deadline() -> None:
+    html = b"""<!DOCTYPE html>
+<html>
+<head><title>Backend Engineer</title></head>
+<body>
+    <script id="__NEXT_DATA__" type="application/json">
+    {
+      "props": {
+        "pageProps": {
+          "job": {
+            "title": "Backend Engineer",
+            "company": {"name": "Acme Corp"},
+            "applicationEndDate": "2020-01-01T00:00:00Z"
+          }
+        }
+      }
+    }
+    </script>
+    <p>Backend Engineer at Acme Corp in Jakarta.</p>
+</body>
+</html>"""
+    content = _extract_page_content(html, source_key="career_page")
+    assert content.is_closed is True
+
+
+async def test_career_page_not_disclosed_salary_is_not_closed() -> None:
+    html = b"""<!DOCTYPE html>
+<html>
+<head>
+    <title>Data Scientist - Acme Corp</title>
+    <meta property="og:title" content="Data Scientist - Acme Corp" />
+    <meta property="og:site_name" content="Acme Corp" />
+</head>
+<body>
+    <h1>Data Scientist</h1>
+    <p>Company: Acme Corp</p>
+    <p>Salary: Not Disclosed</p>
+    <p>Location: Jakarta, Indonesia</p>
+    <p>Apply now for this exciting role.</p>
+</body>
+</html>"""
+    content = _extract_page_content(html, source_key="career_page")
+    assert content.is_closed is False
+    assert content.title == "Data Scientist"
+
+
+async def test_career_page_detects_past_json_ld_valid_through() -> None:
+    html = b"""<!DOCTYPE html>
+<html>
+<head>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "JobPosting",
+      "title": "DevOps Engineer",
+      "hiringOrganization": {"@type": "Organization", "name": "Acme Cloud"},
+      "validThrough": "2021-05-01T00:00:00Z",
+      "datePosted": "2021-01-01T00:00:00Z"
+    }
+    </script>
+</head>
+<body>
+    <h1>DevOps Engineer</h1>
+    <p>Work on cloud infrastructure at Acme Cloud.</p>
+</body>
+</html>"""
+    content = _extract_page_content(html, source_key="career_page")
+    assert content.is_closed is True
+
 def test_tavily_rejects_aggregator_urls() -> None:
     from jobmatch_worker.jobs.connectors.tavily import _is_allowed_job_result
 
@@ -1543,7 +1648,7 @@ def test_tavily_allows_employer_domain_suffixes(host: str) -> None:
     )
 
 
-@pytest.mark.parametrize("host", ["x.com", "www.x.com", "x.com."])
+@pytest.mark.parametrize("host", ["x.com", "www.x.com", "x.com.", "linkedin.com", "www.linkedin.com", "jobleads.com"])
 def test_tavily_rejects_blocked_domain_and_subdomains(host: str) -> None:
     from jobmatch_worker.jobs.connectors.tavily import _is_allowed_job_result
 

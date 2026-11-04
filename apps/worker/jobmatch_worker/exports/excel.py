@@ -102,7 +102,8 @@ def build_excel_workbook(
         url_cell.style = "Hyperlink"
 
     ws.freeze_panes = "A2"
-    ws.auto_filter.ref = f"A1:{get_column_letter(_URL_COLUMN)}{len(rows) + 1}"
+    if rows:
+        ws.auto_filter.ref = f"A1:{get_column_letter(_URL_COLUMN)}{len(rows) + 1}"
     ws.column_dimensions[get_column_letter(_URL_COLUMN)].width = 48
     for col in range(1, 11):
         ws.column_dimensions[get_column_letter(col)].width = 18
@@ -129,10 +130,14 @@ def build_excel_workbook(
         sc,
         [
             ("Scope", criteria.scope),
+            ("Query", criteria.query or ""),
             ("Region", _serialize(criteria.region or [])),
             ("Work Mode", _serialize(criteria.work_mode or [])),
+            ("Employment Type", _serialize(criteria.employment_type or [])),
+            ("Source", _serialize(criteria.source_name or [])),
             ("Minimum Score", str(criteria.min_score) if criteria.min_score is not None else ""),
             ("Status", _serialize(criteria.status or [])),
+            ("Exclude Ignored", "yes" if criteria.exclude_ignored else "no"),
             ("Date From", _fmt_date(criteria.date_from)),
             ("Date To", _fmt_date(criteria.date_to)),
         ],

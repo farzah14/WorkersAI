@@ -25,6 +25,11 @@ _ATS_EXPIRED_MARKERS = (
     '"closed_at"',
     '"state": "closed"',
     '"state": "archived"',
+    "job closed",
+    "ditutup.",
+    "lowongan ditutup",
+    "position has been filled",
+    "no longer accepting applications",
 )
 
 _STALE_SELECT_SQL = """
@@ -104,7 +109,7 @@ async def recheck_job_url(
     if method == "HEAD":
         return FreshnessOutcome(status="active", reason="head_ok")
     if has_expired_marker(response.text):
-        return FreshnessOutcome(status="expired", reason="ats_marker")
+        return FreshnessOutcome(status="expired", reason="closed_marker")
     return FreshnessOutcome(status="active", reason="page_ok")
 
 

@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
-import { DashboardRunStatus } from "@/components/jobs/dashboard-run-controls";
+import {
+  DashboardFailedAlert,
+  DashboardRunStatus,
+} from "@/components/jobs/dashboard-run-controls";
 import { MatchTable } from "@/components/jobs/match-table";
 import { bucketForScore } from "@/lib/jobs/buckets";
 import {
@@ -30,7 +33,19 @@ type MatchWithJob = {
     published_at: string | null;
     source_name: string;
     original_url: string;
-  }>;
+    status?: string;
+  }> | {
+    title: string;
+    company: string;
+    location: string | null;
+    region: string;
+    work_mode: string | null;
+    employment_type: string | null;
+    published_at: string | null;
+    source_name: string;
+    original_url: string;
+    status?: string;
+  };
 };
 
 type StatusRow = { job_id: string; status: MatchRow["status"] };
@@ -125,9 +140,10 @@ export default async function DashboardPage() {
     supabase
       .from("job_matches")
       .select(
-        "id, overall_score, verdict, created_at, job_id, jobs(title, company, location, region, work_mode, employment_type, published_at, source_name, original_url)",
+        "id, overall_score, verdict, created_at, job_id, jobs(title, company, location, region, work_mode, employment_type, published_at, source_name, original_url, status)",
       )
       .eq("user_id", user.id)
+      .eq("search_run_id", run.id)
       .order("created_at", { ascending: false }),
     supabase.from("user_jobs").select("job_id, status").eq("user_id", user.id),
   ]);
@@ -136,6 +152,8 @@ export default async function DashboardPage() {
   const seenJobIds = new Set<string>();
   const rows: MatchRow[] = [];
   for (const match of (matches as MatchWithJob[] | null) ?? []) {
+    const job = Array.isArray(match.jobs) ? match.jobs[0] : match.jobs;
+    if (job?.status && job.status !== "active") continue;
     if (!seenJobIds.has(match.job_id)) {
       seenJobIds.add(match.job_id);
       rows.push(toMatchRow(match, statusByJob.get(match.job_id) ?? "new"));
@@ -185,6 +203,15 @@ export default async function DashboardPage() {
             refresh: t("dashboard.refresh"),
           }}
         />
+        {typedRun.status === "failed" && (
+          <DashboardFailedAlert
+            copy={{
+              title: t("dashboard.failedAlertTitle"),
+              message: t("dashboard.failedAlertBody"),
+              action: t("dashboard.editPreferences"),
+            }}
+          />
+        )}
 
         <section aria-label="Match summary" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {cards.map((card) => (

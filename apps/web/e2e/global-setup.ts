@@ -193,7 +193,7 @@ async function seedMatches(
       title: "Data Engineer (Airflow)",
       company: "Acme Data",
       description: "Build data pipelines with Airflow and SQL.",
-      source_name: "e2e",
+      source_name: "Greenhouse",
       original_url: "https://example.test/jobs/best",
       canonical_url: "https://example.test/jobs/best",
       region: "indonesia",
@@ -207,7 +207,7 @@ async function seedMatches(
       title: "Senior Data Analyst",
       company: "Beta Labs",
       description: "Analyze product metrics with SQL and Python.",
-      source_name: "e2e",
+      source_name: "Lever",
       original_url: "https://example.test/jobs/strong",
       canonical_url: "https://example.test/jobs/strong",
       region: "indonesia",
@@ -221,12 +221,12 @@ async function seedMatches(
       title: "BI Developer",
       company: "Gamma Retail",
       description: "Build dashboards for retail analytics.",
-      source_name: "e2e",
+      source_name: "Greenhouse",
       original_url: "https://example.test/jobs/potential",
       canonical_url: "https://example.test/jobs/potential",
       region: "indonesia",
       work_mode: "on-site",
-      employment_type: "full-time",
+      employment_type: "contract",
       published_at: "2026-07-15T09:00:00Z",
       status: "active",
     },
@@ -235,7 +235,7 @@ async function seedMatches(
       title: "Receptionist",
       company: "Gamma Retail",
       description: "Welcome guests and manage the front desk.",
-      source_name: "e2e",
+      source_name: "Lever",
       original_url: "https://example.test/jobs/low",
       canonical_url: "https://example.test/jobs/low",
       region: "indonesia",
@@ -304,6 +304,44 @@ async function seedMatches(
       recommendations: ["Consider roles aligned with data engineering."],
     },
   ];
+
+  const { data: olderRun, error: olderRunError } = await client
+    .from("job_search_runs")
+    .insert({
+      user_id: userId,
+      search_profile_id: searchProfile.id,
+      candidate_profile_id: candidate.id,
+      trigger: "manual",
+      status: "completed",
+      discovered_count: 1,
+      normalized_count: 1,
+      completed_at: new Date(Date.now() - 86_400_000).toISOString(),
+      created_at: new Date(Date.now() - 86_400_000).toISOString(),
+    })
+    .select("id")
+    .single();
+  if (olderRunError || !olderRun) throw olderRunError ?? new Error("older run insert failed");
+
+  const { error: olderMatchError } = await client.from("job_matches").insert({
+    user_id: userId,
+    search_run_id: olderRun.id,
+    candidate_profile_id: candidate.id,
+    job_id: insertedJobs[0].id,
+    overall_score: 61,
+    skills_score: 60,
+    experience_score: 62,
+    education_score: 65,
+    location_score: 60,
+    seniority_score: 60,
+    language_score: 61,
+    strengths: ["SQL"],
+    gaps: ["Airflow"],
+    critical_gaps: [],
+    verdict: "potential",
+    explanation: "Older-run score for the same canonical job.",
+    recommendations: [],
+  });
+  if (olderMatchError) throw olderMatchError;
 
   let bestMatchId = "";
   for (const spec of specs) {

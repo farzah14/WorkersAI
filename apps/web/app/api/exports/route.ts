@@ -7,16 +7,83 @@ import { createClient as createServerClient } from "@/lib/supabase/server";
 const exportScopeSchema = z.enum(["all", "current_filters", "best_and_strong"]);
 const exportFormatSchema = z.enum(["xlsx", "pdf"]);
 
+const EMPLOYMENT_TYPES = [
+  "full-time",
+  "part-time",
+  "contract",
+  "temporary",
+  "internship",
+  "apprenticeship",
+  "volunteer",
+  "freelance",
+] as const;
+
+const MAX_QUERY_CODE_POINTS = 200;
+const MAX_SOURCE_CODE_POINTS = 200;
+const MAX_SOURCE_FILTERS = 20;
+
+/** Normalize query text exactly like the dashboard and worker. */
+function normalizeExportQuery(value: string): string {
+  return value.normalize("NFC").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+function codePointLength(value: string): number {
+  return Array.from(value).length;
+}
+
 const exportFiltersSchema = z
   .object({
+    query: z
+      .string()
+      .optional()
+      .transform((value) => (value === undefined ? undefined : normalizeExportQuery(value)))
+      .refine(
+        (value) => value === undefined || codePointLength(value) <= MAX_QUERY_CODE_POINTS,
+        { message: "query_too_long" },
+      ),
     region: z.array(z.enum(["indonesia", "global"])).max(2).optional(),
     work_mode: z.array(z.enum(["remote", "hybrid", "on-site"])).optional(),
+    employment_type: z.array(z.enum(EMPLOYMENT_TYPES)).max(8).optional(),
+    source_name: z
+      .array(
+        z
+          .string()
+          .trim()
+          .min(1)
+          .refine((value) => codePointLength(value) <= MAX_SOURCE_CODE_POINTS, {
+            message: "source_name_too_long",
+          }),
+      )
+      .max(MAX_SOURCE_FILTERS)
+      .optional(),
     min_score: z.number().int().min(0).max(100).optional(),
     status: z.array(z.enum(["new", "saved", "applied", "ignored"])).optional(),
-    date_from: z.string().datetime().optional(),
-    date_to: z.string().datetime().optional(),
+    exclude_ignored: z.boolean().optional(),
+    date_from: z.union([z.string().date(), z.string().datetime()]).optional(),
+    date_to: z.union([z.string().date(), z.string().datetime()]).optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (value) => {
+      if (!value.date_from || !value.date_to) return true;
+      return toCalendarDate(value.date_from) <= toCalendarDate(value.date_to);
+    },
+    { message: "reversed_date_range" },
+  );
+
+/** Convert legacy ISO datetime inputs to UTC calendar dates. */
+function toCalendarDate(value: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return new Date(value).toISOString().slice(0, 10);
+}
+
+function normalizeFilterDates<T extends { date_from?: string; date_to?: string }>(filters: T): T {
+  return {
+    ...filters,
+    ...(filters.date_from ? { date_from: toCalendarDate(filters.date_from) } : {}),
+    ...(filters.date_to ? { date_to: toCalendarDate(filters.date_to) } : {}),
+  };
+}
 
 const exportRequestSchema = z
   .object({
@@ -79,7 +146,8 @@ export async function POST(request: Request): Promise<NextResponse> {
   if (!parsed.success) {
     return NextResponse.json({ error: "validation_failed" }, { status: 400 });
   }
-  const { searchRunId, format, scope, filters } = parsed.data;
+  const { searchRunId, format, scope } = parsed.data;
+  const filters = parsed.data.filters ? normalizeFilterDates(parsed.data.filters) : undefined;
 
   const supabase = await createServerClient();
   const {
