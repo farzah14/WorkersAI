@@ -344,13 +344,15 @@ async def _run_source(
             discovered_count=discovered_count,
             retryable=True,
         )
+    has_jobs = bool(jobs)
+    is_failed = not has_jobs and candidate_failures > 0
     return _SourceOutcome(
         source_key=source_key,
-        status="failed" if candidate_failures else "success",
+        status="failed" if is_failed else "success",
         jobs=tuple(jobs),
-        error_code="candidate_fetch" if candidate_failures else None,
+        error_code="candidate_fetch" if is_failed else None,
         discovered_count=discovered_count,
-        retryable=candidate_retryable,
+        retryable=candidate_retryable if not has_jobs else False,
     )
 
 

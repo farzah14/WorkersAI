@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -54,6 +55,34 @@ export function DashboardRunStatus({
     </section>
   );
 }
+export function DashboardFailedAlert({
+  copy,
+}: {
+  copy: {
+    title: string;
+    message: string;
+    action: string;
+  };
+}) {
+  return (
+    <section
+      role="alert"
+      className="flex flex-col gap-4 rounded-2xl border border-[#f7c3b3] bg-[#fff5f2] p-5 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <div className="max-w-2xl">
+        <h2 className="font-semibold text-[#a33c1d]">{copy.title}</h2>
+        <p className="mt-1 text-sm leading-6 text-[#6d787e]">{copy.message}</p>
+      </div>
+      <Link
+        href="/find-jobs"
+        className="inline-flex shrink-0 justify-center rounded-full bg-[#d9623c] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#b84e2c] focus:outline-none focus:ring-2 focus:ring-[#d9623c] focus:ring-offset-2"
+      >
+        {copy.action}
+      </Link>
+    </section>
+  );
+}
+
 
 export function SearchRunHistory({
   runs,

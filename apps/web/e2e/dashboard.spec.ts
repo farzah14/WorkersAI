@@ -59,7 +59,7 @@ test("dashboard tracking and export journey", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /Excel/ })).toBeVisible();
   await expect(page.getByText("Queued").first()).toBeVisible();
 });
-test("dashboard result filters combine, clear, and serialize for export", async ({ page }) => {
+test("dashboard result filters combine and clear", async ({ page }) => {
   await page.context().addCookies([{ name: "locale", value: "en", domain: "localhost", path: "/" }]);
   await page.goto("/login");
   await page.getByLabel("Email").fill("e2e@example.test");
@@ -68,6 +68,9 @@ test("dashboard result filters combine, clear, and serialize for export", async 
   await page.waitForURL("**/dashboard");
 
   await expect(page.getByText("Results are for your latest search run.")).toBeVisible();
+  await expect(page.getByRole("region", { name: "Export these results" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Export Excel (.xlsx)" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Export PDF (.pdf)" })).toHaveCount(0);
   // D1: only the latest run is shown; the older run's duplicate job is absent.
   await expect(page.locator("tbody tr")).toHaveCount(4);
 
@@ -81,37 +84,18 @@ test("dashboard result filters combine, clear, and serialize for export", async 
   await page.getByRole("combobox", { name: "Source" }).selectOption("Greenhouse");
   await expect(page.locator("tbody tr")).toHaveCount(1);
 
-  // Date range keeps the same job (published today) and exports stay enabled.
+  // Date range keeps the same job (published today).
   const today = new Date().toISOString().slice(0, 10);
   await page.getByLabel("Published from").fill(today);
   await page.getByLabel("Published to").fill(today);
   await expect(page.getByText("Showing 1 of 1 matching jobs.")).toBeVisible();
 
-  // Reversed dates are visibly rejected and disable export without swapping.
+  // Reversed dates are visibly rejected without replacing the last valid filters.
   await page.getByLabel("Published from").fill("2099-01-02");
   await expect(page.getByRole("alert")).toContainText("start date must be on or before");
-  await expect(page.getByRole("button", { name: "Export Excel (.xlsx)" })).toBeDisabled();
+  await expect(page.locator("tbody tr")).toHaveCount(1);
   await page.getByLabel("Published from").fill(today);
-  await expect(page.getByRole("button", { name: "Export Excel (.xlsx)" })).toBeEnabled();
-
-  const request = page.waitForRequest(
-    (req) => req.url().includes("/api/exports") && req.method() === "POST",
-  );
-  await page.getByRole("button", { name: "Export Excel (.xlsx)" }).click();
-  const payload = (await request).postDataJSON() as {
-    searchRunId: string;
-    scope: string;
-    filters: Record<string, unknown>;
-  };
-  expect(payload.searchRunId).toBe(state.runId);
-  expect(payload.scope).toBe("current_filters");
-  expect(payload.filters).toMatchObject({
-    query: "acme",
-    employment_type: ["full-time"],
-    source_name: ["Greenhouse"],
-    work_mode: ["remote"],
-    exclude_ignored: true,
-  });
+  await expect(page.locator("tbody tr")).toHaveCount(1);
 
   // Explicit Ignored status shows only ignored rows and clears the exclusion.
   await page.getByRole("combobox", { name: "Status" }).selectOption("ignored");
@@ -120,20 +104,6 @@ test("dashboard result filters combine, clear, and serialize for export", async 
   await expect(query).toHaveValue("");
   await expect(page.locator("tbody tr")).toHaveCount(4);
 
-  // The export form in the table is bound to the selected run id.
-  const tableExport = page.getByRole("button", { name: "Export PDF (.pdf)" });
-  await expect(tableExport).toBeEnabled();
-  const pdfRequest = page.waitForRequest(
-    (req) => req.url().includes("/api/exports") && req.method() === "POST",
-  );
-  await tableExport.click();
-  const pdfPayload = (await pdfRequest).postDataJSON() as {
-    searchRunId: string;
-    scope: string;
-    filters: Record<string, unknown>;
-  };
-  expect(pdfPayload.searchRunId).toBe(state.runId);
-  expect(pdfPayload.filters).toEqual({ exclude_ignored: true });
 });
 
 test("dashboard filter controls are localized in Bahasa Indonesia", async ({ page }) => {

@@ -187,27 +187,6 @@ export function applyMatchFilters(rows: MatchRow[], filters: MatchFilters): Matc
   });
 }
 
-/**
- * Convert dashboard single selections into the export API's array contract.
- * Unrestricted fields are omitted; ignored rows are explicitly excluded when
- * the dashboard is showing its default All status view.
- */
-export function toExportFilters(filters: MatchFilters): Record<string, unknown> {
-  const payload: Record<string, unknown> = {};
-  const query = normalizeQuery(filters.query);
-  if (query) payload.query = query;
-  if (filters.region !== "all") payload.region = [filters.region];
-  if (filters.workMode !== "all") payload.work_mode = [filters.workMode];
-  if (filters.employmentType !== "all") payload.employment_type = [filters.employmentType];
-  if (filters.sourceName !== null) payload.source_name = [filters.sourceName];
-  if (filters.minScore > 0) payload.min_score = filters.minScore;
-  if (filters.status !== "all") payload.status = [filters.status];
-  if (filters.dateFrom) payload.date_from = filters.dateFrom;
-  if (filters.dateTo) payload.date_to = filters.dateTo;
-  payload.exclude_ignored = filters.status === "all";
-  return payload;
-}
-
 export function sortMatchesDefault(rows: MatchRow[]): MatchRow[] {
   return [...rows].sort((a, b) => {
     if (b.overallScore !== a.overallScore) return b.overallScore - a.overallScore;

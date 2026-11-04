@@ -9,9 +9,9 @@ This record separates code-level evidence from infrastructure-dependent acceptan
 ## Implemented behavior
 
 - Discovery applies normalized work-mode, employment-type, and literal excluded-keyword preferences before deduplication and the five-job cap. Unknown work-mode/employment-type metadata remains eligible during discovery.
-- Dashboard filters add title/company query, employment type, exact source, work mode, publication dates, and explicit ignored visibility. Dates are inclusive; invalid or reversed ranges keep the last valid filters, show a localized error, and disable export.
-- The dashboard match query is scoped to the latest run (decision D1) and passes that run ID to the table export action.
-- Dashboard exports serialize the active filters into the existing array-based export contract, including `exclude_ignored` for the default All-status view.
+- Dashboard filters add title/company query, employment type, exact source, work mode, publication dates, and explicit ignored visibility. Dates are inclusive; invalid or reversed ranges keep the last valid filters and show a localized error.
+- The results table no longer renders an export section. Export requests and history remain available on `/exports`.
+- The dashboard match query is scoped to the latest run (decision D1).
 - Web and worker export filters share NFC + whitespace-collapse + lowercase query matching, with a regression proving `strasse` does not match `Straße`.
 - XLSX and PDF criteria summaries record query, employment type, source, and ignored-row handling.
 

@@ -71,9 +71,9 @@ Register/Login
 -> Export
 ```
 
-Also verify cross-user denial, latest-run dashboard scoping, combined result
-filters, and that dashboard-filtered XLSX/PDF exports contain the same job
-membership as the active filters.
+Also verify cross-user denial, latest-run dashboard scoping, and combined result
+filters. Export request and history behavior remain available on the dedicated
+exports page; export filter contracts are covered by API and worker tests.
 
 ### Golden dataset
 

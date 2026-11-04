@@ -1,5 +1,5 @@
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
@@ -45,11 +45,8 @@ vi.mock("next-intl", () => ({
       clear: "Clear filters",
       filteredCount: "Showing {shown} of {total} matching jobs.",
       unknownMetadataHint: "Jobs with missing metadata appear only when filters are set to All.",
-      invalidDateRange: "The start date must be on or before the end date. Export is disabled until this is fixed.",
+      invalidDateRange: "The start date must be on or before the end date.",
       exportTitle: "Export these results",
-      exportHint: "Exports include every matching job in this search.",
-      exportDisabled: "No matching jobs to export.",
-      exportPending: "Wait for the status update to finish before exporting.",
       latestRunNotice: "Results are for your latest search run.",
       showMore: "Show more ({count} more)",
       showLess: "Show less",
@@ -63,11 +60,6 @@ vi.mock("next-intl", () => ({
       unsave: "Unsave",
       remove: "Remove",
       removeTitle: "Remove job from search results",
-      createXlsx: "Export Excel (.xlsx)",
-      createPdf: "Export PDF (.pdf)",
-      creating: "Requesting export…",
-      requestAccepted: "Export request accepted. Processing in background.",
-      requestFailed: "Could not create export request. Please try again.",
     };
     const text = messages[key] ?? key;
     if (!values) return text;
@@ -99,15 +91,23 @@ const match: MatchRow = {
 
 describe("MatchTable", () => {
   it("does not expose discovery sources in the matches table", () => {
-    render(<MatchTable rows={[match]} runId="run-1" emptyMessage="No matches." />);
+    render(<MatchTable rows={[match]} emptyMessage="No matches." />);
 
     expect(screen.queryByRole("columnheader", { name: "Source" })).not.toBeInTheDocument();
     expect(screen.getAllByRole("columnheader")).toHaveLength(6);
     expect(screen.getByRole("combobox", { name: "Source" })).toHaveValue("");
   });
 
+  it("keeps export requests off the results view", () => {
+    render(<MatchTable rows={[match]} emptyMessage="No matches." />);
+
+    expect(screen.queryByRole("region", { name: "Export these results" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Export Excel (.xlsx)" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Export PDF (.pdf)" })).not.toBeInTheDocument();
+  });
+
   it("spans every visible column when there are no matches", () => {
-    render(<MatchTable rows={[]} runId="run-1" emptyMessage="No matches for this run." />);
+    render(<MatchTable rows={[]} emptyMessage="No matches for this run." />);
 
     expect(screen.getByText("No matches for this run.")).toHaveAttribute("colspan", "6");
   });
@@ -121,7 +121,7 @@ describe("MatchTable", () => {
       overallScore: 80 - i,
     }));
 
-    render(<MatchTable rows={matches} runId="run-1" emptyMessage="No matches." />);
+    render(<MatchTable rows={matches} emptyMessage="No matches." />);
 
     expect(screen.getByText("Job 1")).toBeInTheDocument();
     expect(screen.getByText("Job 5")).toBeInTheDocument();
@@ -147,7 +147,7 @@ describe("MatchTable", () => {
       json: async () => ({ jobId: "job-1", status: "ignored" }),
     });
 
-    render(<MatchTable rows={[match]} runId="run-1" emptyMessage="No matches." />);
+    render(<MatchTable rows={[match]} emptyMessage="No matches." />);
 
     expect(screen.getByText("Security Analyst")).toBeInTheDocument();
     const removeButton = screen.getByRole("button", { name: /remove/i });
@@ -165,7 +165,7 @@ describe("MatchTable", () => {
       status: 500,
     });
 
-    render(<MatchTable rows={[match]} runId="run-1" emptyMessage="No matches." />);
+    render(<MatchTable rows={[match]} emptyMessage="No matches." />);
 
     expect(screen.getByText("Security Analyst")).toBeInTheDocument();
     const removeButton = screen.getByRole("button", { name: /remove/i });
@@ -180,7 +180,7 @@ describe("MatchTable", () => {
       json: async () => ({ jobId: "job-1", status: "saved" }),
     });
 
-    render(<MatchTable rows={[match]} runId="run-1" emptyMessage="No matches." />);
+    render(<MatchTable rows={[match]} emptyMessage="No matches." />);
 
     const saveButton = screen.getByRole("button", { name: /save/i });
     fireEvent.click(saveButton);
@@ -206,7 +206,7 @@ const secondMatch: MatchRow = {
 
 describe("MatchTable result filters", () => {
   it("combines query, source, and employment type filters", () => {
-    render(<MatchTable rows={[match, secondMatch]} runId="run-1" emptyMessage="Empty" />);
+    render(<MatchTable rows={[match, secondMatch]} emptyMessage="Empty" />);
 
     fireEvent.change(screen.getByRole("searchbox", { name: "Search title or company" }), {
       target: { value: "beta" },
@@ -220,7 +220,7 @@ describe("MatchTable result filters", () => {
   });
 
   it("offers sorted exact source options from all rows", () => {
-    render(<MatchTable rows={[match, secondMatch]} runId="run-1" emptyMessage="Empty" />);
+    render(<MatchTable rows={[match, secondMatch]} emptyMessage="Empty" />);
     const options = Array.from(
       screen.getByRole("combobox", { name: "Source" }).querySelectorAll("option"),
     ).map((option) => option.textContent);
@@ -229,7 +229,7 @@ describe("MatchTable result filters", () => {
 
   it("hides ignored rows by default and shows them when selected", () => {
     const ignored = { ...match, matchId: "match-ignored", jobId: "job-ignored", status: "ignored" as const };
-    render(<MatchTable rows={[match, ignored]} runId="run-1" emptyMessage="Empty" />);
+    render(<MatchTable rows={[match, ignored]} emptyMessage="Empty" />);
     expect(screen.getAllByText("Security Analyst")).toHaveLength(1);
 
     fireEvent.change(screen.getByRole("combobox", { name: "Status" }), {
@@ -246,7 +246,7 @@ describe("MatchTable result filters", () => {
       title: `Job ${i + 1}`,
       overallScore: 80 - i,
     }));
-    render(<MatchTable rows={matches} runId="run-1" emptyMessage="Empty" />);
+    render(<MatchTable rows={matches} emptyMessage="Empty" />);
     fireEvent.click(screen.getByRole("button", { name: /show more/i }));
     expect(screen.getByText("Job 7")).toBeInTheDocument();
 
@@ -261,75 +261,25 @@ describe("MatchTable result filters", () => {
     expect(screen.getByRole("searchbox", { name: "Search title or company" })).toHaveValue("");
   });
 
-  it("shows a date error, disables export, and keeps the last valid filters", () => {
-    render(<MatchTable rows={[match]} runId="run-1" emptyMessage="Empty" />);
+  it("shows a date error and keeps the last valid filters", () => {
+    const laterMatch = { ...secondMatch, publishedAt: "2026-09-20T00:00:00Z" };
+    render(<MatchTable rows={[match, laterMatch]} emptyMessage="Empty" />);
 
     fireEvent.change(screen.getByLabelText("Published from"), {
-      target: { value: "2026-09-20" },
+      target: { value: "2026-09-11" },
     });
     fireEvent.change(screen.getByLabelText("Published to"), {
-      target: { value: "2026-09-01" },
+      target: { value: "2026-09-11" },
+    });
+    expect(screen.queryByText("Data Analyst")).not.toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Published to"), {
+      target: { value: "2026-09-10" },
     });
 
-    expect(
-      screen.getByText("The start date must be on or before the end date. Export is disabled until this is fixed."),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Export Excel (.xlsx)" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Export PDF (.pdf)" })).toBeDisabled();
+    expect(screen.getByText("The start date must be on or before the end date.")).toBeInTheDocument();
+    expect(screen.getByText("Security Analyst")).toBeInTheDocument();
+    expect(screen.queryByText("Data Analyst")).not.toBeInTheDocument();
   });
 
-  it("exports the selected run with serialized active filters", async () => {
-    const fetchMock = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 202,
-      json: async () => ({ id: "export-1" }),
-    });
-    global.fetch = fetchMock;
-    render(<MatchTable rows={[match]} runId="run-A" emptyMessage="Empty" />);
-
-    fireEvent.change(screen.getByRole("searchbox", { name: "Search title or company" }), {
-      target: { value: "security" },
-    });
-    fireEvent.change(screen.getByRole("combobox", { name: "Employment type" }), {
-      target: { value: "full-time" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Export Excel (.xlsx)" }));
-
-    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
-    const [, init] = fetchMock.mock.calls[0];
-    expect(JSON.parse(init.body)).toEqual({
-      searchRunId: "run-A",
-      format: "xlsx",
-      scope: "current_filters",
-      filters: {
-        query: "security",
-        employment_type: ["full-time"],
-        exclude_ignored: true,
-      },
-    });
-  });
-
-  it("disables export while a status update is pending", () => {
-    let resolveFetch: ((value: unknown) => void) | undefined;
-    global.fetch = vi.fn().mockImplementation(
-      () => new Promise((resolve) => {
-        resolveFetch = resolve;
-      }),
-    );
-    render(<MatchTable rows={[match]} runId="run-1" emptyMessage="Empty" />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(screen.getByRole("button", { name: "Export Excel (.xlsx)" })).toBeDisabled();
-    expect(screen.getByText("Wait for the status update to finish before exporting.")).toBeInTheDocument();
-    resolveFetch?.({ ok: true, json: async () => ({}) });
-  });
-
-  it("disables export when filters match no rows", () => {
-    render(<MatchTable rows={[match]} runId="run-1" emptyMessage="Empty" />);
-    fireEvent.change(screen.getByRole("searchbox", { name: "Search title or company" }), {
-      target: { value: "nothing matches this" },
-    });
-    expect(screen.getByRole("button", { name: "Export Excel (.xlsx)" })).toBeDisabled();
-    expect(screen.getByText("No matching jobs to export.")).toBeInTheDocument();
-  });
 });

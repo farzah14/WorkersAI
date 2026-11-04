@@ -137,4 +137,16 @@ describe("FindJobsPage search navigation", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("Could not start the job search."));
     expect(pushMock).not.toHaveBeenCalled();
   });
+  it("displays a warning when a job role is entered into locations", async () => {
+    await renderReadyPage();
+    expect(screen.getByText(enMessages.findJobs.locationsHint)).toBeInTheDocument();
+
+    const locationInput = screen.getByPlaceholderText(enMessages.findJobs.locationsPlaceholder);
+    fireEvent.change(locationInput, { target: { value: "Ethical Hacker" } });
+
+    expect(screen.getByText(enMessages.findJobs.locationsRoleWarningDesc)).toBeInTheDocument();
+
+    fireEvent.change(locationInput, { target: { value: "Jakarta, Indonesia" } });
+    expect(screen.queryByText(enMessages.findJobs.locationsRoleWarningDesc)).not.toBeInTheDocument();
+  });
 });

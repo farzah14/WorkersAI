@@ -5,7 +5,6 @@ import {
   defaultMatchFilters,
   parseMatchFilters,
   sortMatchesDefault,
-  toExportFilters,
   type MatchFilters,
   type MatchRow,
 } from "@/lib/jobs/filter";
@@ -327,37 +326,4 @@ describe("expanded result filter contract", () => {
     ).toEqual(["composed", "decomposed"]);
   });
 
-  it("serializes dashboard selections into the export wire contract", () => {
-    const filters = {
-      ...defaultMatchFilters(),
-      query: "engineer",
-      region: "global" as const,
-      workMode: "remote" as const,
-      employmentType: "full-time" as const,
-      sourceName: "greenhouse",
-      minScore: 70,
-      dateFrom: "2026-08-01",
-      dateTo: "2026-08-31",
-    };
-    expect(toExportFilters(filters)).toEqual({
-      query: "engineer",
-      employment_type: ["full-time"],
-      source_name: ["greenhouse"],
-      work_mode: ["remote"],
-      min_score: 70,
-      exclude_ignored: true,
-      region: ["global"],
-      date_from: "2026-08-01",
-      date_to: "2026-08-31",
-    });
-  });
-
-  it("serializes an explicit status without the ignored exclusion", () => {
-    expect(
-      toExportFilters({ ...defaultMatchFilters(), status: "ignored" }),
-    ).toEqual({
-      status: ["ignored"],
-      exclude_ignored: false,
-    });
-  });
 });

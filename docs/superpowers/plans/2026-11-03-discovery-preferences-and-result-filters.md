@@ -6,6 +6,8 @@
 **Goal:** Respect existing discovery preferences and let users narrow matched results with consistent filtered exports.
 **Dependencies:** The six original MVP milestones remain authoritative and ordered. Before implementation, verify their applicable acceptance gates; this document does not certify milestone completion.
 
+> **User-directed UI change (2026-11-04):** The dashboard export card was removed. Export requests and history remain on `/exports`; this supersedes the dashboard filtered-export UI requirement below. API and worker export-filter contracts remain unchanged.
+
 ## 1. Authority and boundaries
 
 Follow `AGENTS.md`, the approved `2026-08-16-ai-job-matcher-saas-design.md`, and the approved `2026-09-09-five-job-search-limit-design.md`. The filtering semantics below are proposed clarifications for review, not an already approved replacement specification. Reconcile any conflict before coding.

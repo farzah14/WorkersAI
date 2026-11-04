@@ -3,14 +3,12 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ExportRequestForm } from "@/components/export-request-form";
 import { MatchFiltersBar } from "@/components/jobs/filters";
 import { ScoreBadge } from "@/components/jobs/score-badge";
 import {
   applyMatchFilters,
   defaultMatchFilters,
   sortMatchesDefault,
-  toExportFilters,
   type MatchFilters,
   type MatchRow,
 } from "@/lib/jobs/filter";
@@ -61,11 +59,9 @@ function sourceOptions(rows: MatchRow[]): string[] {
 
 export function MatchTable({
   rows,
-  runId,
   emptyMessage,
 }: {
   rows: MatchRow[];
-  runId: string;
   emptyMessage: string;
 }) {
   const t = useTranslations("jobFilters");
@@ -98,9 +94,6 @@ export function MatchTable({
   }, [rows, filters, sort, statuses, removedJobIds]);
 
   const displayedRows = visibleRows.slice(0, visibleCount);
-  const pendingStatus = Object.values(saving).some(Boolean);
-  const exportFilters = toExportFilters(filters);
-  const exportDisabled = pendingStatus || dateError || visibleRows.length === 0;
 
   function changeFilters(next: MatchFilters) {
     setFilters(next);
@@ -310,16 +303,6 @@ export function MatchTable({
         </div>
       )}
 
-      <section aria-label={t("exportTitle")} className="space-y-2 rounded-2xl border border-[#d9d5cc] bg-white p-4">
-        <h2 className="text-sm font-semibold text-[#15212b]">{t("exportTitle")}</h2>
-        <p className="text-xs leading-5 text-[#6d787e]">{t("exportHint")}</p>
-        <ExportRequestForm
-          runId={runId}
-          filters={exportFilters}
-          disabled={exportDisabled}
-          disabledReason={pendingStatus ? t("exportPending") : t("exportDisabled")}
-        />
-      </section>
     </div>
   );
 }

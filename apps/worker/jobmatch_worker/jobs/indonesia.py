@@ -24,11 +24,9 @@ DEFAULT_TRUSTED_DOMAINS = frozenset(
         "smartrecruiters.com",
         "karir.com",
         "foundit.id",
-        "jobleads.com",
         "pintarnya.com",
         "jakartakerja.com",
         "loker.id",
-        "linkedin.com",
     }
 )
 _BLOCKED_DOMAINS = frozenset(
@@ -37,6 +35,8 @@ _BLOCKED_DOMAINS = frozenset(
         "medium.com",
         "wordpress.com",
         "tumblr.com",
+        "linkedin.com",
+        "jobleads.com",
     }
 )
 _INDONESIA_TERMS = (

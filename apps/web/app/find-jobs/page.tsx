@@ -56,6 +56,9 @@ const employmentTypeLabels: Record<EmploymentType, string> = {
   volunteer: "Volunteer",
   freelance: "Freelance",
 };
+const ROLE_IN_LOCATION_PATTERN =
+  /\b(analyst|engineer|specialist|hacker|developer|manager|teacher|designer|architect|consultant|officer|intern)\b/i;
+
 
 function listToArray(value: string): string[] {
   return value
@@ -357,15 +360,29 @@ function FindJobsContent() {
               <span className="font-normal text-xs text-[#6d787e]">{t("targetRolesHint")}</span>
             </label>
 
-            <label className="flex flex-col gap-2 text-sm font-semibold">
-              {t("locations")}
-              <input
-                value={values.locations}
-                onChange={(event) => updateValue("locations", event.target.value)}
-                placeholder={t("locationsPlaceholder")}
-                className="rounded-xl border border-[#c9c7c0] bg-[#faf9f6] px-4 py-3 font-normal outline-none transition placeholder:text-[#8b9599] focus:border-[#d9623c] focus:ring-2 focus:ring-[#f7c3b3]"
-              />
-            </label>
+            <div className="flex flex-col gap-2">
+              <label className="flex flex-col gap-2 text-sm font-semibold">
+                {t("locations")}
+                <input
+                  value={values.locations}
+                  onChange={(event) => updateValue("locations", event.target.value)}
+                  placeholder={t("locationsPlaceholder")}
+                  className="rounded-xl border border-[#c9c7c0] bg-[#faf9f6] px-4 py-3 font-normal outline-none transition placeholder:text-[#8b9599] focus:border-[#d9623c] focus:ring-2 focus:ring-[#f7c3b3]"
+                />
+                <span className="font-normal text-xs text-[#6d787e]">{t("locationsHint")}</span>
+              </label>
+              {ROLE_IN_LOCATION_PATTERN.test(values.locations) && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"
+                >
+                  <div>
+                    <span className="font-semibold">{t("locationsRoleWarning")}: </span>
+                    <span>{t("locationsRoleWarningDesc")}</span>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <fieldset>
               <legend className="text-sm font-semibold">{t("workModes")}</legend>

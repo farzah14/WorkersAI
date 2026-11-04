@@ -46,6 +46,8 @@ def test_trusted_urls_reject_unknown_lookalike_and_content_hosts() -> None:
     assert not is_trusted_job_url("https://careers.unknown.example/jobs/123")
     assert not is_trusted_job_url("https://jobstreet.co.id.evil.example/jobs/123")
     assert not is_trusted_job_url("https://example.blogspot.com/jobs/123")
+    assert not is_trusted_job_url("https://www.linkedin.com/jobs/view/123")
+    assert not is_trusted_job_url("https://www.jobleads.com/job/123")
 
 
 def test_specific_job_urls_reject_advice_salary_and_listing_pages() -> None:
