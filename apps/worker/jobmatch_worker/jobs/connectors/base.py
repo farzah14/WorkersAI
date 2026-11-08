@@ -18,17 +18,83 @@ search snippets, or API keys.
 import asyncio
 import json
 import re
+import urllib.parse
 from datetime import UTC, datetime
 from typing import Any, Protocol
 
 import httpx
 from bs4 import BeautifulSoup
 
-from jobmatch_worker.jobs.models import DiscoveredJob, DiscoveryCandidateUrl
+from jobmatch_worker.jobs.models import (
+    DiscoveredJob,
+    DiscoveryCandidateUrl,
+    EmploymentType,
+    WorkMode,
+)
 from jobmatch_worker.jobs.query import SearchQuery
 
 _RETRYABLE_STATUSES = frozenset({408, 429})
 _JSON_MAX_BYTES = 4 * 1024 * 1024
+_SLUG_RE = re.compile(r"^[A-Za-z0-9._-]+$")
+
+_EMPLOYMENT_TYPE_MAP: dict[str, EmploymentType] = {
+    "full time": "full-time",
+    "full-time": "full-time",
+    "fulltime": "full-time",
+    "permanent": "full-time",
+    "regular": "full-time",
+    "karyawan tetap": "full-time",
+    "penuh waktu": "full-time",
+    "tetap": "full-time",
+    "part time": "part-time",
+    "part-time": "part-time",
+    "parttime": "part-time",
+    "paruh waktu": "part-time",
+    "contract": "contract",
+    "contractor": "contract",
+    "pkwt": "contract",
+    "kontrak": "contract",
+    "temporary": "temporary",
+    "temp": "temporary",
+    "seasonal": "temporary",
+    "musiman": "temporary",
+    "internship": "internship",
+    "intern": "internship",
+    "magang": "internship",
+    "trainee": "internship",
+    "apprenticeship": "apprenticeship",
+    "apprentice": "apprenticeship",
+    "volunteer": "volunteer",
+    "volunteering": "volunteer",
+    "relawan": "volunteer",
+    "freelance": "freelance",
+    "freelancer": "freelance",
+    "paruh-waktu lepas": "freelance",
+    "paruh waktu lepas": "freelance",
+    "lepas": "freelance",
+}
+
+_WORK_MODE_MAP: dict[str, WorkMode] = {
+    "remote": "remote",
+    "telecommute": "remote",
+    "work from home": "remote",
+    "wfh": "remote",
+    "work from anywhere": "remote",
+    "wfa": "remote",
+    "kerja dari rumah": "remote",
+    "jarak jauh": "remote",
+    "hybrid": "hybrid",
+    "hibrida": "hybrid",
+    "flexible": "hybrid",
+    "on site": "on-site",
+    "on-site": "on-site",
+    "onsite": "on-site",
+    "in office": "on-site",
+    "office": "on-site",
+    "wfo": "on-site",
+    "work from office": "on-site",
+    "di kantor": "on-site",
+}
 
 
 class SourceError(Exception):
@@ -244,6 +310,69 @@ def parse_ms_epoch(value: object) -> datetime | None:
         return None
 
 
+def is_https_url(value: str) -> bool:
+    """Return True if value is a valid https URL without embedded credentials."""
+    try:
+        parsed = urllib.parse.urlsplit(value)
+        return (
+            parsed.scheme == "https"
+            and bool(parsed.netloc)
+            and parsed.username is None
+            and parsed.password is None
+        )
+    except ValueError:
+        return False
+
+
+def parse_board_slugs(
+    raw: str,
+    *,
+    source_key: str,
+    setting_name: str,
+    blocked_slugs: frozenset[str] = frozenset(),
+) -> tuple[str, ...]:
+    """Parse comma-separated slugs, validating format, deduping, and checking denylist."""
+    seen: set[str] = set()
+    slugs: list[str] = []
+    for part in raw.split(","):
+        cleaned = part.strip()
+        if cleaned and cleaned.casefold() not in seen:
+            seen.add(cleaned.casefold())
+            slugs.append(cleaned)
+
+    if not slugs:
+        raise SourceConfigError(source_key, f"{setting_name} is not configured")
+
+    for slug in slugs:
+        if not _SLUG_RE.match(slug):
+            raise SourceConfigError(source_key, f"invalid {setting_name}")
+        if slug.casefold() in blocked_slugs:
+            raise SourceConfigError(source_key, f"demo {source_key} site is not allowed")
+
+    return tuple(slugs)
+
+
+def normalize_employment_type(value: object) -> EmploymentType | None:
+    """Normalize employment type string or sequence to canonical EmploymentType."""
+    if isinstance(value, (list, tuple)):
+        for item in value:
+            res = normalize_employment_type(item)
+            if res is not None:
+                return res
+        return None
+    if not isinstance(value, str) or not value.strip():
+        return None
+    collapsed = re.sub(r"[\s_-]+", " ", value.strip().casefold())
+    return _EMPLOYMENT_TYPE_MAP.get(collapsed) or _EMPLOYMENT_TYPE_MAP.get(value.strip().casefold())
+
+
+def normalize_work_mode(value: object) -> WorkMode | None:
+    """Normalize work mode string to canonical WorkMode."""
+    if not isinstance(value, str) or not value.strip():
+        return None
+    collapsed = re.sub(r"[\s_-]+", " ", value.strip().casefold())
+    return _WORK_MODE_MAP.get(collapsed) or _WORK_MODE_MAP.get(value.strip().casefold())
+
 __all__ = [
     "SourceConfigError",
     "SourceConnector",
@@ -253,6 +382,10 @@ __all__ = [
     "clean_optional_str",
     "collapse_whitespace",
     "get_json_with_retry",
+    "is_https_url",
+    "normalize_employment_type",
+    "normalize_work_mode",
+    "parse_board_slugs",
     "parse_iso_datetime",
     "parse_json",
     "parse_ms_epoch",
